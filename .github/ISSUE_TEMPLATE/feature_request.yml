@@ -1,0 +1,51 @@
+name: "Feature request"
+description: "Propose new functionality"
+title: ""
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem-statement
+    attributes:
+      label: Problem statement
+      description: What problem does this solve? Who is affected?
+      placeholder: |
+        Describe the real problem, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed solution
+      description: What do you propose to build or change?
+      placeholder: |
+        Describe the proposed approach at a high level.
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part(s) of the system does this affect?
+      multiple: true
+      options:
+        - web
+        - api
+        - cli
+        - docs
+        - infra
+        - core
+        - database
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How urgent is this feature?
+      options:
+        - "P0 - Critical"
+        - "P1 - High"
+        - "P2 - Medium"
+        - "P3 - Low"
+    validations:
+      required: true

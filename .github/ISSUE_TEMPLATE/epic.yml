@@ -1,0 +1,42 @@
+name: "Epic"
+description: "A multi-issue initiative"
+title: "Epic: "
+labels: ["epic"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What outcome does this epic deliver, and why does it matter?
+      placeholder: |
+        Describe the desired end state and the value it provides.
+    validations:
+      required: true
+  - type: textarea
+    id: background
+    attributes:
+      label: Background
+      description: Context, prior discussion, or constraints that motivate this epic.
+      placeholder: |
+        Links to related issues, discussions, or design docs.
+    validations:
+      required: false
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: "Checklist of child issues, filled in as they're created: `- [ ] #123 short title`"
+      placeholder: |
+        - [ ] #123 short title
+        - [ ] #124 short title
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What this epic explicitly does not cover.
+      placeholder: |
+        List anything that might be assumed to be in scope but isn't.
+    validations:
+      required: false
