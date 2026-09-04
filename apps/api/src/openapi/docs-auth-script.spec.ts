@@ -46,7 +46,7 @@ function harness(): Harness {
   let reloads = 0;
 
   const documentStub = {
-    getElementById: (id: string) => (id === 'eaf-status' ? statusEl : buttonEl),
+    getElementById: (id: string) => (id === 'ep-status' ? statusEl : buttonEl),
   };
   const windowStub: Record<string, unknown> = {
     Scalar: {
@@ -66,7 +66,7 @@ function harness(): Harness {
       // eslint-disable-next-line no-new-func
       const evaluate = new Function('window', 'document', 'fetch', script);
       evaluate(windowStub, documentStub, fetchImpl);
-      return windowStub.__eafDocsAuth;
+      return windowStub.__epDocsAuth;
     },
     status: () => ({ text: statusEl.textContent, kind: statusEl.className }),
     mountedConfig: () => mountedConfig,
@@ -92,7 +92,7 @@ describe('docs page bootstrap script', () => {
       preferredSecurityScheme: SCHEME,
       securitySchemes: { [SCHEME]: { token: 'tok-123' } },
     });
-    expect(h.status()).toEqual({ text: 'Authorized with your session', kind: 'eaf-ok' });
+    expect(h.status()).toEqual({ text: 'Authorized with your session', kind: 'ep-ok' });
   });
 
   it('also accepts an unwrapped body, so it survives the envelope changing', async () => {
@@ -124,7 +124,7 @@ describe('docs page bootstrap script', () => {
     expect(h.mountedConfig()).toBeDefined();
     expect(h.mountedConfig()?.authentication).toBeUndefined();
     expect(h.status().text).toContain('Not signed in');
-    expect(h.status().kind).toBe('eaf-warn');
+    expect(h.status().kind).toBe('ep-warn');
   });
 
   it('still mounts when the refresh request itself fails', async () => {
@@ -132,7 +132,7 @@ describe('docs page bootstrap script', () => {
     await h.run(jest.fn().mockRejectedValue(new Error('offline')));
 
     expect(h.mountedConfig()).toBeDefined();
-    expect(h.status().kind).toBe('eaf-warn');
+    expect(h.status().kind).toBe('ep-warn');
   });
 
   it('preserves the rest of the configuration when authorizing', async () => {
@@ -159,7 +159,7 @@ describe('docs page bootstrap script', () => {
       specUrl: '/api/openapi.json',
       cdn: 'https://example.test/bundle.js',
     });
-    expect(html).toContain('window.__eafDocsAuth');
+    expect(html).toContain('window.__epDocsAuth');
     expect(html).toContain('(body && body.data) || body');
   });
 });

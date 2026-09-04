@@ -56,12 +56,12 @@ describe('renderDocsPage', () => {
     const html = renderDocsPage(options);
 
     it('embeds the bootstrap', () => {
-      expect(html).toContain('window.__eafDocsAuth');
+      expect(html).toContain('window.__epDocsAuth');
     });
 
     it('loads the Scalar bundle before the script that calls into it', () => {
       expect(html.indexOf('<script src=')).toBeLessThan(
-        html.indexOf('window.__eafDocsAuth'),
+        html.indexOf('window.__epDocsAuth'),
       );
     });
 

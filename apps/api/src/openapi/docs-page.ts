@@ -93,32 +93,32 @@ export function renderDocsPage(options: DocsPageOptions): string {
     <link rel="icon" href="${FAVICON}" />
     <style>
       body { margin: 0; }
-      #eaf-authbar {
+      #ep-authbar {
         display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
         padding: 8px 16px; font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
         background: #11131e; color: #e7e7e7; border-bottom: 1px solid rgba(255,255,255,.12);
       }
-      #eaf-authbar strong { font-weight: 600; }
-      #eaf-authbar .eaf-version { color: #8e93a8; }
-      #eaf-authbar .eaf-spacer { flex: 1 1 auto; }
-      #eaf-authbar button {
+      #ep-authbar strong { font-weight: 600; }
+      #ep-authbar .ep-version { color: #8e93a8; }
+      #ep-authbar .ep-spacer { flex: 1 1 auto; }
+      #ep-authbar button {
         font: inherit; cursor: pointer; padding: 5px 12px; border-radius: 6px;
         border: 1px solid rgba(255,255,255,.2); background: #2f354a; color: inherit;
       }
-      #eaf-authbar button:hover { background: #3c435c; }
-      #eaf-status::before { content: '●'; margin-right: 6px; }
-      #eaf-status.eaf-ok { color: #30beb0; }
-      #eaf-status.eaf-warn { color: #ffc90d; }
-      #eaf-status.eaf-pending { color: #8e93a8; }
+      #ep-authbar button:hover { background: #3c435c; }
+      #ep-status::before { content: '●'; margin-right: 6px; }
+      #ep-status.ep-ok { color: #30beb0; }
+      #ep-status.ep-warn { color: #ffc90d; }
+      #ep-status.ep-pending { color: #8e93a8; }
     </style>
   </head>
   <body>
-    <div id="eaf-authbar">
+    <div id="ep-authbar">
       <strong>${escapeHtml(`${APP_NAME} API`)}</strong>
-      <span class="eaf-version">${escapeHtml(options.version)}</span>
-      <span class="eaf-spacer"></span>
-      <span id="eaf-status" class="eaf-pending">Checking your session…</span>
-      <button id="eaf-auth" type="button">Authorize with my session</button>
+      <span class="ep-version">${escapeHtml(options.version)}</span>
+      <span class="ep-spacer"></span>
+      <span id="ep-status" class="ep-pending">Checking your session…</span>
+      <button id="ep-auth" type="button">Authorize with my session</button>
       <a href="${escapeHtml(options.specUrl)}" style="color:#2cb6f6">openapi.json</a>
     </div>
     <div id="app"></div>
@@ -216,12 +216,12 @@ export function buildDocsAuthScript(config: unknown, scheme: string): string {
   return `      (function () {
         var CONFIG = ${jsonForScript(config)};
         var SCHEME = ${jsonForScript(scheme)};
-        var statusEl = document.getElementById('eaf-status');
-        var buttonEl = document.getElementById('eaf-auth');
+        var statusEl = document.getElementById('ep-status');
+        var buttonEl = document.getElementById('ep-auth');
 
         function setStatus(text, kind) {
           statusEl.textContent = text;
-          statusEl.className = 'eaf-' + kind;
+          statusEl.className = 'ep-' + kind;
         }
 
         // Exchanges the browser's refresh cookie for a short-lived access
@@ -269,7 +269,7 @@ export function buildDocsAuthScript(config: unknown, scheme: string): string {
         // Exposed so the spec can await the bootstrap, and so a reader
         // debugging an authorization problem in the console has something to
         // inspect.
-        window.__eafDocsAuth = fetchSessionToken().then(mount);
+        window.__epDocsAuth = fetchSessionToken().then(mount);
       })();`;
 }
 

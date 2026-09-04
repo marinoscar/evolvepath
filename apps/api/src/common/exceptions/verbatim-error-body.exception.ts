@@ -71,7 +71,7 @@ import { HttpException } from '@nestjs/common';
  * error anywhere. The global symbol registry is keyed by string, so every copy
  * of this module resolves to the same symbol.
  */
-const VERBATIM_ERROR_BODY = Symbol.for('EnterpriseAppBase.verbatimErrorBody');
+const VERBATIM_ERROR_BODY = Symbol.for('EvolvePath.verbatimErrorBody');
 
 /**
  * Mark an exception so `HttpExceptionFilter` sends its payload to the client
