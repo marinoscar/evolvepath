@@ -1324,8 +1324,24 @@ COOKIE_SECRET=your-cookie-secret-key-min-32-characters-long
 # `credentials` table. Does NOT apply to deploy-time secrets such as
 # JWT_SECRET or GOOGLE_CLIENT_SECRET, which stay in the environment.
 # Optional until a credential is stored; see section 14 below.
+# As of epic #20 it also protects the platform OpenAI key and every user's own
+# key, so any deployment running AI features must set it.
 # Generate with: openssl rand -base64 32
 SECRETS_ENCRYPTION_KEY=
+```
+
+**AI provider (epic #20):**
+```bash
+# Provider base URL. Normally unset; the e2e overlay points it at the fake
+# OpenAI server. An administrator can also override it per-installation in the
+# AI settings, which wins. NO KEY LIVES HERE — the platform key and every
+# user's key are in the encrypted `credentials` table (section 14).
+OPENAI_BASE_URL=https://api.openai.com/v1
+# Hard deadline for one generation, in milliseconds.
+AI_REQUEST_TIMEOUT_MS=60000
+# Attachment limits, bounding ONE AI call rather than one upload.
+AI_MAX_IMAGE_BYTES=20971520
+AI_MAX_IMAGES_PER_CALL=10
 ```
 
 **OAuth Providers:**
@@ -1808,6 +1824,66 @@ Notable properties of this behaviour:
 ### Read Paths Never Touch the Ciphertext
 
 `CredentialsService.describe(purpose, name)` and `.list(purpose)` — the presentation reads used to show what credentials exist — select only `{ purpose, name, hint, label, updatedByUserId, createdAt, updatedAt }` and never select the `secret` column at all. Consequently they work correctly with no encryption key configured, and would keep working even if the configured key could never decrypt a single row, because the ciphertext is never fetched. Only `getSecret(purpose, name)` — server-side only, never called from a controller — returns plaintext, and on a decrypt failure it throws rather than silently returning `null`, so a key change or corruption cannot silently disable a feature.
+
+### BYOK Lifecycle — OpenAI Keys (epic #20)
+
+Two kinds of OpenAI key are held in this store, at **two distinct purposes**:
+
+| Key | `purpose` | `name` | Used by |
+|---|---|---|---|
+| Platform | `ai:openai` | `platform` | The admin model catalog and the admin test — nothing else |
+| Per-user | `ai:openai:user` | the user's id | **Every product AI call**, on behalf of that user |
+
+**Two purposes rather than one with two names is a security property, not
+housekeeping.** `secret-cipher.ts` derives a distinct AES sub-key per purpose, so
+a row moved or copied between the two addresses does not decrypt. That is a
+mechanical barrier against a mix-up in which a user's key ends up serving the
+admin catalog or — far worse — one user's key ends up serving another user's
+call.
+
+**The gateway reads only the caller's own key.** There is deliberately no
+platform-key fallback for a keyless user: it would break cost attribution and
+would quietly break the promise the setup gate makes to somebody who has just
+been told their own key is required. A unit test asserts the platform address is
+never reached from `AiGatewayService`.
+
+#### Lifecycle
+
+| Stage | Mechanism | Audit action |
+|---|---|---|
+| **Creation** | `PUT /api/me/ai-key` → `setSecret('ai:openai:user', userId, …)` | `ai_user_key:set`, `meta: { replaced }` — never the key, never the hint |
+| **Use** | `UserAiKeyService.getSecretForUser` at the moment of the call, **never cached** | none (the `ai_invocations` row records the call, not the key) |
+| **Test** | `POST /api/me/ai-key/test` | `ai_user_key:test`, `meta: { success, checks, model, error }` |
+| **Removal** | `DELETE /api/me/ai-key`, idempotent | `ai_user_key:delete`, only when a row existed |
+| **Platform save** | `PUT /api/ai-settings` (key written **before** the settings row) | `ai_settings:replace`, `meta: { …, platformKeyReplaced }` |
+| **Platform test** | `POST /api/ai-settings/test` | `ai_settings:test` |
+
+The **hint is never written to an audit row**, only `replaced` /
+`platformKeyReplaced`. A hint in the audit trail narrows a brute force over a
+stored value for anyone who can read that trail.
+
+Key rotation for the master key that protects all of this is
+[`docs/runbooks/rotate-secrets-encryption-key.md`](runbooks/rotate-secrets-encryption-key.md).
+
+#### Where a key is redacted, and where it can never appear
+
+| Surface | Guarantee |
+|---|---|
+| Any HTTP response | **Structurally impossible.** `AiSettings`, the settings response DTO and the user key status DTO each carry a compile-time proof that no secret-bearing field exists on them |
+| `system_settings` | The key is destructured off before `aiSettingsSchema.parse`, which would strip it anyway |
+| Provider error messages | `AiKeyRedactor` — the exact key we hold, **plus** an `sk-…` pattern pass for a key echoed in a form we never registered — then capped at 2000 chars, **scrub-then-cap** so the cap cannot bisect a credential |
+| `ai_invocations` | `error_message` as above; `input`/`output` redacted **recursively**, object keys included |
+| Application logs | Ids and counts only. The provider logs `status`, `code` and `requestId` on failure — never the body, never the key |
+| OTel spans | Attributes only. No prompt, no completion, no key |
+| The network | The key appears **only** in the `Authorization` header — never in a URL, never in a request body |
+
+#### User deletion
+
+`credentials` has **no foreign key to `users`**, so deleting an account does not
+cascade to its OpenAI key. Any future hard-delete **must** call
+`UserAiKeyService.deleteForUser(userId)`; that method ships from day one for
+exactly this reason. Recorded here and in
+[`docs/specs/ai-configuration.md`](specs/ai-configuration.md).
 
 ---
 

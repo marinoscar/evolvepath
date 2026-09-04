@@ -414,6 +414,22 @@ above. Don't restate any of that here; extend those three instead.
 - `GET /api/pat` - List current user's tokens
 - `DELETE /api/pat/{id}` - Revoke a token
 
+### AI Settings (Admin)
+- `GET /api/ai-settings` - Provider, models and the masked platform-key status
+- `PUT /api/ai-settings` - Replace settings (`If-Match`; `platformApiKey` is write-only)
+- `GET /api/ai-settings/personas` - The personas a model can be assigned to
+- `GET /api/ai-settings/models?refresh=` - Live catalog, filtered to GPT >= 5.4 (200 always)
+- `POST /api/ai-settings/test` - Probe the platform key (200 always)
+
+### AI Key (current user)
+- `GET /api/me/ai-key` - Status, last test, and what the platform is missing
+- `PUT /api/me/ai-key` - Save or replace your key (write-only)
+- `DELETE /api/me/ai-key` - Remove your key (idempotent 204)
+- `POST /api/me/ai-key/test` - Probe your own key (200 always)
+
+Note: `GET /api/auth/me` also carries `aiKey: { configured, hint }`, so the web
+app can gate its shell without a second request on boot.
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)
@@ -449,7 +465,7 @@ above. Don't restate any of that here; extend those three instead.
 - `storage_objects` - File metadata, status, storage references
 - `storage_object_chunks` - Multipart upload chunk tracking
 - `personal_access_tokens` - User-created long-lived API tokens (hashed)
-- `ai_invocations` - AI call telemetry (model, tokens, latency, validation result, redacted I/O); no chain of thought
+- `ai_invocations` - AI call telemetry (model, prompt version, tokens, latency, validation result, redacted I/O); never chain of thought
 
 ## Access Control: Email Allowlist
 
@@ -484,6 +500,10 @@ The application uses an **email allowlist** to restrict access to pre-authorized
 - Input validation on all endpoints
 - File uploads: images only, size/type limits, randomized filenames
 - Email allowlist restricts application access to pre-authorized users
+- OpenAI keys (platform and per-user) are encrypted in `credentials` under two
+  distinct purposes, write-only through the API, and redacted from every error,
+  log line, audit row, OTel span and `ai_invocations` row. The gateway uses only
+  the caller's own key — there is deliberately no platform-key fallback
 
 ## Testing Requirements
 
@@ -522,6 +542,14 @@ Note: `DATABASE_URL` is constructed automatically from these variables at runtim
 - `DEVICE_TOKEN_EXPIRY_DAYS` - Token lifetime for device sessions in days (default: 7)
 - `DEVICE_PAT_EXPIRY_DAYS` - Lifetime of the PAT minted when a device (e.g. the CLI) requests `clientInfo.tokenType: "pat"`, in days; clamped to 1-999 (default: 90)
 - `SECRETS_ENCRYPTION_KEY` - Base64-encoded 32-byte AES-256 key (generate with `openssl rand -base64 32`) that encrypts runtime-configured credentials (e.g. an SMTP password an admin enters through the app) before they are stored in the `credentials` table. Optional until a credential is stored; see `docs/runbooks/rotate-secrets-encryption-key.md`. Note: credentials configured at runtime through the UI/API live encrypted in the database, not in the environment — unlike every other secret in this section.
+
+**AI (epic #20):**
+- `OPENAI_BASE_URL` - Provider base URL (default: `https://api.openai.com/v1`). Normally unset; the fake-server overlay sets `http://fake-openai:8089/v1`. An administrator can also override it per-installation in the AI settings, which wins.
+- `AI_REQUEST_TIMEOUT_MS` - Hard deadline for one generation (default: 60000)
+- `AI_MAX_IMAGE_BYTES` - Largest image the gateway will inline (default: 20971520). Bounds one AI call, not one upload.
+- `AI_MAX_IMAGES_PER_CALL` - Images per call, counted after a video expands to its sampled frames (default: 10)
+
+Note: `SECRETS_ENCRYPTION_KEY` now also protects the platform OpenAI key and every user's own key. Without it, saving either fails.
 
 **Observability:**
 - `OTEL_ENABLED` - Enable OpenTelemetry (default: true)
@@ -599,6 +627,65 @@ settings hub makes on its own axis (epic #109, wired end to end by #128).
 Live examples of all three steps: `AuthService.handleGoogleLogin`
 (`user.welcome`), `AllowlistService.addEmail` (`allowlist.invitation`), and
 `UsersService.updateUserRoles` (`security.role_changed`, mandatory).
+
+### Adding an AI persona
+
+Three steps, and no migration — the same "one registry entry" promise the
+settings hub and the notification registry each make on their own axis
+(epic #20). The full rationale is in
+[`docs/specs/ai-gateway.md`](docs/specs/ai-gateway.md) and
+[`docs/specs/ai-configuration.md`](docs/specs/ai-configuration.md).
+
+1. **Declare the persona** in `apps/api/src/ai/ai-personas.ts`: add the key to
+   `PERSONA_KEYS` **and** the entry to `AI_PERSONAS`, in the same position (a
+   spec asserts the two agree). `label` and `description` are user-facing copy
+   on the admin page; `tier` guides the administrator's model choice; declare
+   `capabilities: ['text', 'vision']` **only** if the persona will actually
+   receive attachments — the gateway refuses them for a persona that does not,
+   before a byte leaves storage. No migration: `GET /ai-settings/personas` and
+   the admin table pick it up, and `personaModels` is sparse so no stored
+   settings row needs updating.
+
+   **Never rename or reuse a key.** It is persisted on every `ai_invocations`
+   row and in every installation's `personaModels`; renaming one is a data
+   migration over telemetry, not a refactor.
+
+2. **Define the output contract** as a Zod object with **explicit keys** beside
+   the caller, and version the prompt (`'<persona>.v1'`). Strict mode cannot
+   express a record or a union of objects, and `toOpenAiStrictSchema` throws at
+   the call site rather than shipping a request OpenAI would reject — so model
+   alternatives as nullable keys on one object. Prefer `.nullable()` over
+   `.optional()`: the converter turns an optional property into a nullable
+   required one, so `.nullable()` round-trips losslessly.
+
+3. **Call the gateway** from a service whose module `imports: [AiModule]`:
+
+   ```ts
+   const result = await this.ai.invoke({
+     persona: 'planner',
+     userId,
+     promptVersion: 'planner.v1',
+     instructions: PLANNER_PROMPT,
+     input: userText,
+     schema: plannerOutputSchema,
+     schemaName: 'planner_output',
+   });
+
+   if (!result.ok) {
+     // PRD §120: the deterministic path must keep working. Branch, do not throw
+     // — `invoke` never rejects for a provider, key, model or schema problem.
+     return this.templateFallback();
+   }
+   ```
+
+   Bump `promptVersion` whenever `instructions` changes meaningfully; nothing
+   can detect that for you, and it is what makes "did the coach get worse after
+   we changed the prompt?" answerable. Where PRD §15 applies, never persist AI
+   output without user approval — the gateway returns structured output, and the
+   caller decides.
+
+   Live example of the smallest possible call: `AiAdminTestService`'s connection
+   probe (`apps/api/src/ai/connection-probe.ts`).
 
 ## Specialized Subagents (MANDATORY)
 
