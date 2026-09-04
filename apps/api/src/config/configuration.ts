@@ -159,6 +159,25 @@ export default () => {
       process.env.AI_REQUEST_TIMEOUT_MS || '60000',
       10,
     ),
+
+    // Attachment resolution for vision personas (#26, epic #20).
+    //
+    // `mode` is FIXED at 'inline': images travel as base64 inside the request
+    // the user's own key pays for. A 'signed-url' mode is declared in the type
+    // so E03 can add it deliberately; selecting it today throws AT BOOT, so a
+    // misconfiguration is a failed deploy rather than a broken coaching reply.
+    //
+    // The two limits bound one call, not one upload — storage has its own
+    // MAX_FILE_SIZE. 20 MiB is comfortably above OpenAI's own per-image ceiling,
+    // and 10 images is what a form-check video's sampled frames need.
+    attachments: {
+      maxImageBytes: parseInt(process.env.AI_MAX_IMAGE_BYTES || '20971520', 10),
+      maxImagesPerCall: parseInt(
+        process.env.AI_MAX_IMAGES_PER_CALL || '10',
+        10,
+      ),
+      mode: 'inline' as const,
+    },
   },
 
   logLevel: process.env.LOG_LEVEL || 'info',
