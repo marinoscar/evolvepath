@@ -671,3 +671,142 @@ export interface EmailTestResult {
   /** When the attempt was made. */
   attemptedAt?: string;
 }
+
+// =============================================================================
+// AI provider configuration (epic #20)
+// =============================================================================
+
+/**
+ * Providers this deployment can talk to.
+ *
+ * One entry, mirroring `AI_PROVIDER_KINDS` in
+ * `apps/api/src/ai/ai-settings.schema.ts`. A second provider is explicitly out
+ * of scope for epic #20; the union exists so adding one later widens every
+ * `switch` in the same edit.
+ */
+export type AiProviderKind = 'openai';
+
+/** How much reasoning a persona's work is worth paying for. A hint, not a rule. */
+export type AiPersonaTier = 'fast' | 'reasoning';
+
+/** What kinds of input a persona accepts. `vision` is a gate the API enforces. */
+export type AiPersonaCapability = 'text' | 'vision';
+
+/**
+ * One row of the admin persona table, from `GET /api/ai-settings/personas`.
+ *
+ * FETCHED, NOT DECLARED HERE. The web app renders the server's answer rather
+ * than keeping a second copy of the registry — the same rule
+ * `getNotificationEvents` follows, and for the same reason: two declarations
+ * drift, and the drift shows up as a model selector for a persona nothing
+ * invokes.
+ */
+export interface AiPersona {
+  key: string;
+  label: string;
+  description: string;
+  tier: AiPersonaTier;
+  capabilities: AiPersonaCapability[];
+}
+
+/**
+ * What the page knows about the stored platform key without being told the key.
+ *
+ * `hint` is the credential store's own mask (`••••` plus at most the last four
+ * characters). The key itself is never returned by any endpoint.
+ */
+export interface AiPlatformKeyStatus {
+  configured: boolean;
+  hint: string | null;
+  updatedAt: string | null;
+  updatedByUserId: string | null;
+}
+
+/** `GET /api/ai-settings` — the configuration plus what the page cannot derive. */
+export interface AiSettings {
+  /** `null` is "no provider chosen" — a persisted state, not a missing key. */
+  provider: AiProviderKind | null;
+  /** The master switch. A separate axis from `provider`, exactly as for email. */
+  enabled: boolean;
+  /** Override for the provider base URL. Absent means the deployment default. */
+  baseUrl?: string;
+  defaultModel: string | null;
+  /**
+   * Sparse per-persona overrides: an absent key means "use `defaultModel`", and
+   * an explicit `null` means the same thing after a round trip through the form.
+   */
+  personaModels: Partial<Record<string, string | null>>;
+  platformKeyStatus: AiPlatformKeyStatus;
+  /** Why a stored row would not parse. FIELD PATHS ONLY. Null normally. */
+  settingsError: string | null;
+  version: number;
+  updatedAt: string | null;
+  updatedBy: { id: string; email: string } | null;
+}
+
+/**
+ * `PUT /api/ai-settings`.
+ *
+ * A full replacement plus the version the caller believed it was replacing
+ * (sent as `If-Match`, not in this body).
+ *
+ * BLANK PRESERVES, exactly as for the SMTP password: `platformApiKey` omitted
+ * leaves the stored key alone, and there is deliberately no way to erase one by
+ * clearing the field — "I left the box alone" and "I want no key" are the same
+ * gesture, and guessing wrong in the destructive direction silently breaks AI
+ * for the whole deployment.
+ */
+export interface AiSettingsInput {
+  provider: AiProviderKind | null;
+  enabled: boolean;
+  baseUrl?: Blankable<string>;
+  defaultModel: string | null;
+  personaModels: Partial<Record<string, string | null>>;
+  platformApiKey?: string;
+}
+
+/** One entry of the provider's catalog, already filtered to GPT >= 5.4. */
+export interface AiModelInfo {
+  id: string;
+  created: number;
+}
+
+/**
+ * `GET /api/ai-settings/models` — 200 in every configuration.
+ *
+ * RESOLVES ON FAILURE, like the test endpoints: read `success`, never the HTTP
+ * status. `models` can be non-empty on a failure, with `source: 'cache'`, which
+ * the page must render as stale rather than as live.
+ */
+export interface AiModelsResult {
+  success: boolean;
+  models: AiModelInfo[];
+  fetchedAt: string | null;
+  source: 'live' | 'cache' | null;
+  error: string | null;
+}
+
+/** One probe's outcome. `skipped` is a first-class, non-failing state. */
+export type AiTestCheck = 'passed' | 'failed' | 'skipped';
+
+/**
+ * `POST /api/ai-settings/test` and `POST /api/me/ai-key/test` — one shape.
+ *
+ * The two endpoints answer different questions with different keys, but the
+ * component rendering the answer is the same in both variants, and two shapes
+ * would mean two renderers for one sentence.
+ *
+ * Every field except `error` is optional so a client-side failure (a 403, a
+ * dropped connection) can be represented in the same object without inventing
+ * values the server never sent.
+ */
+export interface AiTestResult {
+  success: boolean;
+  providerKind?: AiProviderKind | null;
+  model?: string | null;
+  latencyMs?: number | null;
+  /** The provider's verbatim message, already redacted server-side. */
+  error: string | null;
+  attemptedAt?: string;
+  checks?: { listModels: AiTestCheck; generate: AiTestCheck };
+}

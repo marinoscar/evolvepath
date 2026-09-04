@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { isValidElement } from 'react';
 import TuneIcon from '@mui/icons-material/Tune';
 import {
   ADMIN_SECTIONS,
@@ -226,5 +227,62 @@ describe('settingsPageTitle', () => {
         settingsPageTitle(USER_SETTINGS_SECTIONS, USER_HUB_PATH, USER_HUB_TITLE, '/admin/settings/users'),
       ).toBeNull();
     });
+  });
+});
+
+/**
+ * Epic #20's cards, asserted against the REAL registries rather than a fixture.
+ *
+ * The permission string is the load-bearing one: CLAUDE.md rule 3 and
+ * `docs/specs/settings-ui.md` §2 both say a card mirrors a permission the API
+ * enforces and never invents one, and the only way that can be checked here is
+ * against the actual value.
+ */
+describe('the AI cards (epic #20)', () => {
+  const adminCards = ADMIN_SECTIONS.flatMap((section) => section.cards);
+
+  it('declares the admin AI card under General with the controller\'s own permission', () => {
+    const general = ADMIN_SECTIONS.find((section) => section.label === 'General');
+    const ai = general?.cards.find((card) => card.title === 'AI');
+
+    expect(ai).toBeDefined();
+    expect(ai?.path).toBe('/admin/settings/ai');
+    // Exactly what `ai-settings.controller.ts` enforces on its GET. `:write` is
+    // gated inside the page, because the card gate is about REACHABILITY.
+    expect(ai?.permission).toBe('system_settings:read');
+  });
+
+  it('places the AI card between Email and Advanced (JSON)', () => {
+    const titles = ADMIN_SECTIONS.find((s) => s.label === 'General')!.cards.map(
+      (card) => card.title,
+    );
+
+    expect(titles.indexOf('AI')).toBe(titles.indexOf('Email') + 1);
+    expect(titles.indexOf('Advanced (JSON)')).toBe(titles.indexOf('AI') + 1);
+  });
+
+  it('resolves the AppBar title for the AI route from the registry', () => {
+    expect(
+      settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, '/admin/settings/ai'),
+    ).toBe('AI');
+  });
+
+  it('hides the AI card from a user without system_settings:read', () => {
+    const visible = visibleSettingsSections(
+      ADMIN_SECTIONS,
+      (permission) => permission !== 'system_settings:read',
+    );
+
+    expect(visible.flatMap((s) => s.cards).map((c) => c.title)).not.toContain('AI');
+  });
+
+  it('gives every admin card an Icon component, never a rendered element', () => {
+    // A rendered element would freeze the icon at the hub's size and force the
+    // rail to clone it — see `adminSections.tsx`'s header. `typeof` is not the
+    // check: MUI icons are `React.memo` objects, so both a component and an
+    // element report 'object'. `isValidElement` is the distinction that matters.
+    for (const card of adminCards) {
+      expect(isValidElement(card.Icon)).toBe(false);
+    }
   });
 });

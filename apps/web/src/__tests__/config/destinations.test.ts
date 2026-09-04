@@ -54,6 +54,7 @@ describe('destinations — route ownership', () => {
         '/admin/settings/general',
         '/admin/settings/appearance',
         '/admin/settings/feature-flags',
+        '/admin/settings/ai',
         '/admin/settings/advanced',
         '/admin/settings/users',
       ]),

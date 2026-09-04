@@ -215,6 +215,11 @@ import type {
   EmailSettings,
   EmailSettingsInput,
   EmailTestResult,
+  AiSettings,
+  AiSettingsInput,
+  AiPersona,
+  AiModelsResult,
+  AiTestResult,
   NotificationEventDef,
   AppNotification,
   NotificationListResponse,
@@ -403,6 +408,76 @@ export async function updateEmailSettings(
  */
 export async function sendTestEmail(): Promise<EmailTestResult> {
   return api.post<EmailTestResult>('/email-settings/test');
+}
+
+// -----------------------------------------------------------------------------
+// AI settings (epic #20, issue #24)
+// -----------------------------------------------------------------------------
+
+/** `GET /api/ai-settings` — the configuration plus the masked platform-key status. */
+export async function getAiSettings(): Promise<AiSettings> {
+  return api.get<AiSettings>('/ai-settings');
+}
+
+/**
+ * Replace the stored AI settings.
+ *
+ * PUT rather than PATCH, and `expectedVersion` becomes `If-Match`, for exactly
+ * the reasons `updateEmailSettings` documents above: one small document edited
+ * on one screen, and a version counter with no caller checking it is a
+ * lost-update waiting to happen. `0` is passed through as-is — it is the API's
+ * way of asserting "I believe nothing is stored yet", so the check is
+ * `=== undefined` and never a truthiness test.
+ */
+export async function updateAiSettings(
+  input: AiSettingsInput,
+  expectedVersion?: number,
+): Promise<AiSettings> {
+  return api.put<AiSettings>('/ai-settings', input, {
+    headers:
+      expectedVersion === undefined
+        ? undefined
+        : { 'If-Match': String(expectedVersion) },
+  });
+}
+
+/**
+ * `GET /api/ai-settings/personas` — the personas a model can be assigned to.
+ *
+ * The web app keeps NO copy of this list; it renders the server's answer, the
+ * same rule `getNotificationEvents` follows. The response is ordered and the
+ * order is the registry's own — do not sort it.
+ */
+export async function getAiPersonas(): Promise<AiPersona[]> {
+  return api.get<AiPersona[]>('/ai-settings/personas');
+}
+
+/**
+ * `GET /api/ai-settings/models` — the selectable catalog, filtered server-side
+ * to GPT 5.4 or newer.
+ *
+ * RESOLVES ON FAILURE. The endpoint answers 200 with `{ success: false, error }`
+ * when the provider could not be reached; it rejects only when the call itself
+ * fails. Callers MUST branch on `result.success`.
+ *
+ * `refresh` bypasses the API's 5-minute cache and is throttled to 10 per minute
+ * per user — a 429 rejects, and the hook turns it into `models.error`.
+ */
+export async function getAiModels(refresh = false): Promise<AiModelsResult> {
+  return api.get<AiModelsResult>(
+    refresh ? '/ai-settings/models?refresh=true' : '/ai-settings/models',
+  );
+}
+
+/**
+ * `POST /api/ai-settings/test` — probe the platform key.
+ *
+ * RESOLVES ON FAILURE, like the email test: a refused connection is a 200 with
+ * `{ success: false, error }` and is the diagnosis the button exists to
+ * produce. Branch on `result.success`, never on the promise settling.
+ */
+export async function testAiConnection(): Promise<AiTestResult> {
+  return api.post<AiTestResult>('/ai-settings/test');
 }
 
 /**

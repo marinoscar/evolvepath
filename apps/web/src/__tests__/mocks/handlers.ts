@@ -40,6 +40,107 @@ const mockProviders = [
   { name: 'google', authUrl: '/api/auth/google' },
 ];
 
+
+// -----------------------------------------------------------------------------
+// AI settings (epic #20)
+// -----------------------------------------------------------------------------
+//
+// MUTABLE, unlike most of the fixtures above, because the page under test does
+// a real edit cycle: load → change → PUT → adopt the response → save again with
+// the new version. A frozen fixture cannot express `If-Match`, so it cannot
+// exercise the 409 path — which is the one behaviour of the save that is worth
+// a test.
+//
+// `resetAiSettingsState()` must run in a spec's `beforeEach`; the handlers hold
+// process-wide state, and a spec that bumped `version` would otherwise change
+// what the next spec sees.
+
+interface AiSettingsState {
+  provider: 'openai' | null;
+  enabled: boolean;
+  baseUrl?: string;
+  defaultModel: string | null;
+  personaModels: Record<string, string | null>;
+  version: number;
+}
+
+const initialAiSettingsState = (): AiSettingsState => ({
+  provider: null,
+  enabled: false,
+  defaultModel: null,
+  personaModels: {},
+  version: 0,
+});
+
+let aiSettingsState: AiSettingsState = initialAiSettingsState();
+let aiPlatformKeyConfigured = false;
+
+/** Restore the "fresh deployment" state. Call from `beforeEach`. */
+export function resetAiSettingsState(): void {
+  aiSettingsState = initialAiSettingsState();
+  aiPlatformKeyConfigured = false;
+}
+
+/** Seed a stored configuration, e.g. to render a page that is already set up. */
+export function setAiSettingsState(patch: Partial<AiSettingsState>): void {
+  aiSettingsState = { ...aiSettingsState, ...patch };
+}
+
+/** Seed the masked platform-key status without ever holding a key. */
+export function setAiPlatformKeyConfigured(configured: boolean): void {
+  aiPlatformKeyConfigured = configured;
+}
+
+function aiSettingsResponse() {
+  return {
+    provider: aiSettingsState.provider,
+    enabled: aiSettingsState.enabled,
+    ...(aiSettingsState.baseUrl ? { baseUrl: aiSettingsState.baseUrl } : {}),
+    defaultModel: aiSettingsState.defaultModel,
+    personaModels: aiSettingsState.personaModels,
+    platformKeyStatus: {
+      configured: aiPlatformKeyConfigured,
+      hint: aiPlatformKeyConfigured ? '\u2022\u2022\u2022\u20220000' : null,
+      updatedAt: aiPlatformKeyConfigured ? new Date().toISOString() : null,
+      updatedByUserId: null,
+    },
+    settingsError: null,
+    version: aiSettingsState.version,
+    updatedAt: new Date().toISOString(),
+    updatedBy: null,
+  };
+}
+
+/** The catalog the API would have filtered to GPT >= 5.4 already. */
+const mockAiModels = [
+  { id: 'gpt-5.4', created: 1772000000 },
+  { id: 'gpt-5.4-mini', created: 1772000001 },
+];
+
+const mockAiPersonas = [
+  {
+    key: 'planner',
+    label: 'Planner',
+    description: 'Turns an aspiration into an outcome and a behavioural plan.',
+    tier: 'reasoning',
+    capabilities: ['text'],
+  },
+  {
+    key: 'coach',
+    label: 'Coach',
+    description: 'Day-to-day coaching replies, help starting, and decomposition.',
+    tier: 'fast',
+    capabilities: ['text'],
+  },
+  {
+    key: 'media_analyst',
+    label: 'Media analyst',
+    description: 'Describes workout form, equipment and meals from photos and video frames.',
+    tier: 'fast',
+    capabilities: ['text', 'vision'],
+  },
+];
+
 export const handlers = [
   // Auth endpoints
   http.get(`${API_BASE}/auth/providers`, () => {
@@ -239,6 +340,111 @@ export const handlers = [
         message: body.approve
           ? 'Device authorized successfully!'
           : 'Device access denied.',
+      },
+    });
+  }),
+  // --- AI settings (epic #20) ------------------------------------------------
+
+  http.get(`${API_BASE}/ai-settings`, () => {
+    return HttpResponse.json({ data: aiSettingsResponse() });
+  }),
+
+  http.put(`${API_BASE}/ai-settings`, async ({ request }) => {
+    const body = (await request.json()) as {
+      provider: 'openai' | null;
+      enabled: boolean;
+      baseUrl?: string | null;
+      defaultModel: string | null;
+      personaModels: Record<string, string | null>;
+      platformApiKey?: string;
+    };
+
+    // `If-Match` is honoured for real, so the 409 path is reachable.
+    const ifMatch = request.headers.get('if-match');
+    if (ifMatch !== null && Number(ifMatch) !== aiSettingsState.version) {
+      return HttpResponse.json(
+        { message: 'AI settings version mismatch', code: 'CONFLICT' },
+        { status: 409 },
+      );
+    }
+
+    // The API's model floor, reproduced so a spec can drive the 400.
+    const named = [
+      body.defaultModel,
+      ...Object.values(body.personaModels ?? {}),
+    ].filter((model): model is string => typeof model === 'string');
+
+    for (const model of named) {
+      const match = /^gpt-(\d+)(?:\.(\d+))?/i.exec(model);
+      const major = match ? Number(match[1]) : 0;
+      const minor = match && match[2] ? Number(match[2]) : 0;
+      if (!match || major < 5 || (major === 5 && minor < 4)) {
+        return HttpResponse.json(
+          {
+            message: `Model "${model}" is not supported: EvolvePath requires GPT 5.4 or newer.`,
+            code: 'BAD_REQUEST',
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    // BLANK PRESERVES: a request with no `platformApiKey` leaves the stored
+    // status alone. The mock never holds the key itself — there is nothing here
+    // that could return one.
+    if (body.platformApiKey) aiPlatformKeyConfigured = true;
+
+    aiSettingsState = {
+      provider: body.provider,
+      enabled: body.enabled,
+      ...(body.baseUrl ? { baseUrl: body.baseUrl } : {}),
+      defaultModel: body.defaultModel,
+      personaModels: body.personaModels ?? {},
+      version: aiSettingsState.version + 1,
+    };
+
+    return HttpResponse.json({ data: aiSettingsResponse() });
+  }),
+
+  http.get(`${API_BASE}/ai-settings/personas`, () => {
+    return HttpResponse.json({ data: mockAiPersonas });
+  }),
+
+  http.get(`${API_BASE}/ai-settings/models`, () => {
+    // 200 even with no key configured — the endpoint reports failure in the
+    // body, never through the status.
+    return HttpResponse.json({
+      data: aiPlatformKeyConfigured
+        ? {
+            success: true,
+            models: mockAiModels,
+            fetchedAt: new Date().toISOString(),
+            source: 'live',
+            error: null,
+          }
+        : {
+            success: false,
+            models: [],
+            fetchedAt: null,
+            source: null,
+            error: 'No platform API key is configured. Save one, then refresh.',
+          },
+    });
+  }),
+
+  http.post(`${API_BASE}/ai-settings/test`, () => {
+    return HttpResponse.json({
+      data: {
+        success: true,
+        providerKind: 'openai',
+        model: aiSettingsState.defaultModel,
+        latencyMs: 412,
+        error: null,
+        attemptedAt: new Date().toISOString(),
+        checks: {
+          listModels: 'passed',
+          generate: aiSettingsState.defaultModel ? 'passed' : 'skipped',
+        },
       },
     });
   }),

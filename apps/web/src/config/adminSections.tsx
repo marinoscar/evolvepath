@@ -36,6 +36,7 @@ import TuneIcon from '@mui/icons-material/Tune';
 import PaletteIcon from '@mui/icons-material/Palette';
 import FlagIcon from '@mui/icons-material/Flag';
 import EmailOutlinedIcon from '@mui/icons-material/EmailOutlined';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import DataObjectIcon from '@mui/icons-material/DataObject';
 import PeopleIcon from '@mui/icons-material/People';
 
@@ -136,6 +137,21 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
           'Choose how the application sends email, and send a test message to prove it works.',
         Icon: EmailOutlinedIcon,
         path: '/admin/settings/email',
+        permission: 'system_settings:read',
+      },
+      {
+        // Issue #27, epic #20. `system_settings:read` is the string
+        // `ai-settings.controller.ts` enforces on its GET — the registry
+        // mirrors a permission, it never invents one. Saving, refreshing the
+        // catalog and testing the connection need `system_settings:write`,
+        // which the PAGE gates internally with a stated reason: the card gate
+        // is about REACHABILITY, and a read-only admin asking "why is the coach
+        // quiet" is worth letting in to look.
+        title: 'AI',
+        description:
+          'Connect OpenAI, choose which model each coaching persona uses, and test the connection.',
+        Icon: SmartToyOutlinedIcon,
+        path: '/admin/settings/ai',
         permission: 'system_settings:read',
       },
       {
