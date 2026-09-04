@@ -27,6 +27,12 @@ export interface MockUser {
   permissions: string[];
   isActive: boolean;
   createdAt: string;
+  /**
+   * Epic #20. Required on the real `User`, so it is required here: `RequireAiKey`
+   * (#29) gates the whole shell on it, and a fixture without it would make every
+   * page test render the setup page instead of the page under test.
+   */
+  aiKey: { configured: boolean; hint: string | null };
 }
 
 export const mockUser: MockUser = {
@@ -38,6 +44,9 @@ export const mockUser: MockUser = {
   permissions: ['user_settings:read', 'user_settings:write'],
   isActive: true,
   createdAt: new Date().toISOString(),
+  // Configured, so a page test renders the page under test rather than the
+  // AI-key setup gate (#29). A spec that wants the keyless state overrides it.
+  aiKey: { configured: true, hint: '\u2022\u2022\u2022\u2022e2e1' },
 };
 
 export const mockAdminUser: MockUser = {
@@ -62,6 +71,7 @@ export const mockAdminUser: MockUser = {
   ],
   isActive: true,
   createdAt: new Date().toISOString(),
+  aiKey: { configured: true, hint: '\u2022\u2022\u2022\u2022e2e1' },
 };
 
 // Default mock providers

@@ -81,6 +81,7 @@ const UserSettingsHubPage = lazy(() => import('../src/pages/UserSettingsHubPage'
 const UserProfilePage = lazy(() => import('../src/pages/UserProfilePage'));
 const UserAppearancePage = lazy(() => import('../src/pages/UserAppearancePage'));
 const UserTokensPage = lazy(() => import('../src/pages/UserTokensPage'));
+const UserAiKeyPage = lazy(() => import('../src/pages/UserAiKeyPage'));
 const SettingsHubPage = lazy(() => import('../src/pages/Admin/SettingsHubPage'));
 const GeneralSettingsPage = lazy(() => import('../src/pages/Admin/GeneralSettingsPage'));
 const AppearanceSettingsPage = lazy(() => import('../src/pages/Admin/AppearanceSettingsPage'));
@@ -172,6 +173,9 @@ const harnessUser: User = {
   permissions,
   isActive: true,
   createdAt: new Date('2024-01-01T00:00:00.000Z').toISOString(),
+  // Configured, so the harness renders the app shell rather than the AI-key
+  // setup gate (#29) on every capture.
+  aiKey: { configured: true, hint: '\u2022\u2022\u2022\u20220000' },
 };
 
 const fakeAuth = {
@@ -203,6 +207,7 @@ function HarnessRoutes() {
           <Route path="/settings/profile" element={<UserProfilePage />} />
           <Route path="/settings/appearance" element={<UserAppearancePage />} />
           <Route path="/settings/tokens" element={<UserTokensPage />} />
+          <Route path="/settings/ai-key" element={<UserAiKeyPage />} />
 
           <Route path="/admin" element={<Navigate to="/admin/settings" replace />} />
           <Route

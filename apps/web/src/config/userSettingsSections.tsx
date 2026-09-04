@@ -23,6 +23,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import PaletteIcon from '@mui/icons-material/Palette';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
+import KeyIcon from '@mui/icons-material/Key';
 import type { SettingsSectionDef } from './adminSections';
 
 /**
@@ -76,6 +77,27 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
           'Choose which events notify you, and whether they arrive by email or in your browser.',
         Icon: NotificationsIcon,
         path: '/settings/notifications',
+      },
+    ],
+  },
+  {
+    // Epic #20. Its OWN group rather than a fourth card under `Account`,
+    // because it is not a preference: without a key the application does not
+    // work at all, and burying "the credential that powers everything" between
+    // a display name and a colour scheme misstates what it is. It sits above
+    // `Security` because it is something every user must do, where a personal
+    // access token is something most never will.
+    //
+    // NO `permission`, like every card here: a Viewer must be able to supply a
+    // key, since without one they cannot use the app.
+    label: 'AI',
+    cards: [
+      {
+        title: 'OpenAI API Key',
+        description:
+          'Add, test or remove the OpenAI API key that powers your coaching.',
+        Icon: KeyIcon,
+        path: '/settings/ai-key',
       },
     ],
   },
