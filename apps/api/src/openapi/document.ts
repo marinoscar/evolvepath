@@ -62,12 +62,12 @@ export function buildOpenApiConfig(version: string = resolveApiVersion()) {
     // name would point readers at a repository that does not exist.
     .setContact(
       APP_NAME,
-      'https://github.com/marinoscar/EnterpriseAppBase',
+      'https://github.com/marinoscar/evolvepath',
       '',
     )
     .setExternalDoc(
       'Architecture and operations documentation',
-      'https://github.com/marinoscar/EnterpriseAppBase/tree/main/docs',
+      'https://github.com/marinoscar/evolvepath/tree/main/docs',
     )
     // Same-origin: the UI is served at `/`, this API under `/api`, so a
     // relative server URL is correct for every deployment without templating.
