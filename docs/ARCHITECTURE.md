@@ -573,7 +573,36 @@ apps/api/src/storage/
 │ created_at         │
 │ updated_at         │
 └────────────────────┘
+
+┌────────────────────────┐
+│    ai_invocations      │
+├────────────────────────┤
+│ id (PK, UUID)          │
+│ operation              │
+│ key_scope              │
+│ user_id (FK, SET NULL) │
+│ persona                │
+│ provider / model       │
+│ prompt_version         │
+│ status                 │
+│ error_code / message   │
+│ *_tokens               │
+│ latency_ms             │
+│ output_valid           │
+│ safety_decision        │
+│ attachment_count       │
+│ input / output (JSONB) │
+│ created_at             │
+└────────────────────────┘
 ```
+
+`ai_invocations` is telemetry, not product data: one row per AI operation on
+every exit path (success, provider failure, invalid output, refusal) and per
+test-connection attempt. Its `user_id` foreign key is `ON DELETE SET NULL`
+rather than `CASCADE` — deleting an account must not erase the record that
+those calls happened or what they cost. There is deliberately no column for the
+model's internal chain of thought (PRD §16, §88); `input` and `output` hold the
+*structured* request and response after redaction, capped by the writer.
 
 ### 6.2 JSONB Schema Definitions
 

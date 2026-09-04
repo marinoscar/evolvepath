@@ -40,6 +40,7 @@ model User {
   credentialUpdates         Credential[]     @relation("CredentialUpdatedBy")
   notificationDeliveries    NotificationDelivery[] @relation("UserNotificationDeliveries")
   notifications             Notification[]   @relation("UserNotifications")
+  aiInvocations             AiInvocation[]   @relation("UserAiInvocations")
 
   @@map("users")
 }
@@ -605,4 +606,131 @@ model Notification {
   //    backwards for the newest page, which is the only page anyone loads.
   @@index([userId, createdAt(sort: Desc)])
   @@map("notifications")
+}
+
+// =============================================================================
+// AI Observability (issue #21, epic #20)
+// =============================================================================
+//
+// One row per AI operation, written on EVERY exit path — success, provider
+// failure, invalid output, refusal — and on every test-connection attempt.
+// This is the durable half of PRD §88 ("every AI operation is observable
+// internally: model, prompt version, structured input and output, validation
+// result, latency, token use, safety decision") and of PRD §117 (the prompt
+// version is captured in logs).
+//
+// WHAT IS DELIBERATELY ABSENT: a column for the model's internal chain of
+// thought. PRD §16 and §88 forbid storing or exposing it, and the cheapest way
+// to keep that promise is to give the reasoning text nowhere to go. Reasoning
+// TOKENS are counted (`reasoning_tokens`) because a bill is not a transcript.
+//
+// This is TELEMETRY, not product data, and that is why `userId` is
+// `onDelete: SetNull` while the product tables cascade: deleting an account
+// must not erase the record that those calls happened and what they cost.
+// =============================================================================
+
+enum AiInvocationOperation {
+  /// A real product call through AiGatewayService.invoke() (#26).
+  invoke
+  /// An admin or user "does this key work?" probe (#24, #25).
+  test_connection
+
+  @@map("ai_invocation_operation")
+}
+
+enum AiKeyScope {
+  /// The caller's own BYOK key — every `invoke` is this.
+  user
+  /// The platform key, which serves only the admin catalog and admin test.
+  platform
+
+  @@map("ai_key_scope")
+}
+
+enum AiInvocationStatus {
+  succeeded
+  /// The provider could not be reached, refused the key, or errored.
+  failed
+  /// The provider answered, but the answer did not satisfy the contract.
+  invalid_output
+  /// The model declined to answer (an OpenAI `refusal` content part).
+  refused
+
+  @@map("ai_invocation_status")
+}
+
+model AiInvocation {
+  id        String                @id @default(uuid()) @db.Uuid
+  operation AiInvocationOperation
+  keyScope  AiKeyScope            @map("key_scope")
+
+  /// Nullable because the account may since have been deleted (SetNull below),
+  /// not because a call can be anonymous.
+  userId String? @map("user_id") @db.Uuid
+
+  /// One of PERSONA_KEYS (#22). A plain string, not an FK or an enum, for the
+  /// same reason `NotificationDelivery.eventKey` is: personas are declared in
+  /// code and persisted rows outlive their definitions.
+  persona String?
+
+  provider String
+
+  /// NULLABLE: a user-key test that skips the generate probe (no platform
+  /// default model is configured) never names a model.
+  model String?
+
+  /// e.g. 'planner.v1' — PRD §117.
+  promptVersion String? @map("prompt_version")
+
+  /// The API's own request id (RequestIdMiddleware), for joining to app logs.
+  requestId String? @map("request_id")
+
+  /// The provider's `x-request-id`, for a support ticket with OpenAI.
+  providerRequestId String? @map("provider_request_id")
+
+  status    AiInvocationStatus
+  errorCode String?            @map("error_code")
+
+  /// REDACTED AND CAPPED AT 2000 CHARS BY THE WRITER (AiKeyRedactor, #26),
+  /// never by the database. A column limit would truncate mid-key and leave a
+  /// key fragment behind; the writer scrubs first, then caps.
+  errorMessage String? @map("error_message") @db.Text
+
+  inputTokens       Int? @map("input_tokens")
+  outputTokens      Int? @map("output_tokens")
+  cachedInputTokens Int? @map("cached_input_tokens")
+  /// A COUNT, never the reasoning text. See the header.
+  reasoningTokens Int? @map("reasoning_tokens")
+
+  latencyMs Int @map("latency_ms")
+
+  /// Did the structured output satisfy its Zod contract? Null for operations
+  /// that have no contract to satisfy (a listModels-only test).
+  outputValid Boolean? @map("output_valid")
+
+  /// Free text reserved for E06-06 (#82): 'allow' / 'conservative' / 'redirect'.
+  /// Present from day one so the safety classifier needs no migration.
+  safetyDecision String? @map("safety_decision")
+
+  attachmentCount Int @default(0) @map("attachment_count")
+
+  /// The structured request/response AFTER redaction, capped at 32 KiB with a
+  /// `{ "_truncated": true }` marker. NEVER raw provider bodies, never
+  /// reasoning or chain of thought.
+  input  Json?
+  output Json?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  /// SetNull, not Cascade. See the header: a deleted account must not erase
+  /// the cost record.
+  user User? @relation("UserAiInvocations", fields: [userId], references: [id], onDelete: SetNull)
+
+  /// "What did this user spend / how did their calls go?" — the support query.
+  @@index([userId, createdAt])
+  /// "How is the coach persona behaving?" — the tuning query.
+  @@index([persona, createdAt])
+  /// "What is failing right now?" — the operational query.
+  @@index([status, createdAt])
+  @@map("ai_invocations")
 }
