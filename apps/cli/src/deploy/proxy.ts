@@ -89,7 +89,7 @@ export function renderVhost(target: ProxyTarget, options?: { maxBodyBytes?: numb
   const maxBody = options?.maxBodyBytes;
   const clientMaxBody = maxBody === undefined ? '100m' : `${Math.ceil(maxBody / (1024 * 1024))}m`;
 
-  return `# Managed by appctl deploy. Edits will be overwritten.
+  return `# Managed by evopath deploy. Edits will be overwritten.
 # Application: ${target.domain}
 
 server {
@@ -348,9 +348,9 @@ export async function removeVhost(
   // Only ever a file this tool wrote: the header is the marker, and a vhost
   // without it belongs to somebody else.
   const contents = readFileSync(path, 'utf8');
-  if (!contents.startsWith('# Managed by appctl deploy')) {
+  if (!contents.startsWith('# Managed by evopath deploy')) {
     throw new UsageError(
-      `${path} was not written by appctl, so it will not be removed. Remove it by hand if that is really what you want.`,
+      `${path} was not written by evopath, so it will not be removed. Remove it by hand if that is really what you want.`,
     );
   }
 
