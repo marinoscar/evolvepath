@@ -15,7 +15,7 @@ import type { CommandResult } from './executor.js';
 // Two files per run, because they have two different readers:
 //
 //   <command>-<timestamp>.log    a human reading it over SSH
-//   <command>-<timestamp>.jsonl  a program, and `appctl deploy status --json`
+//   <command>-<timestamp>.jsonl  a program, and `evopath deploy status --json`
 //
 // REDACTION IS THE SECURITY-CRITICAL PART AND IT IS STRUCTURAL. These logs are
 // written to be pasted into bug reports; that is their purpose. So every
@@ -120,7 +120,7 @@ export function openJournal(options: OpenJournalOptions): Journal {
 
   const logsDir = join(options.deployRoot, 'logs');
   const slug = timestampSlug(now());
-  const base = `appctl-${options.command}-${slug}`;
+  const base = `evopath-${options.command}-${slug}`;
   const logPath = join(logsDir, `${base}.log`);
   const jsonlPath = join(logsDir, `${base}.jsonl`);
 
@@ -173,7 +173,7 @@ export function openJournal(options: OpenJournalOptions): Journal {
     write(logPath, redact(text) + '\n');
   }
 
-  human(`=== appctl deploy ${options.command} - ${now().toISOString()} ===`);
+  human(`=== evopath deploy ${options.command} - ${now().toISOString()} ===`);
   event('run.start', { command: options.command, deployRoot: options.deployRoot });
 
   return {
@@ -240,7 +240,7 @@ export function pruneOldRuns(logsDir: string, retain: number): void {
 
   const bases = new Set<string>();
   for (const name of readdirSync(logsDir)) {
-    const match = /^(appctl-.+?)\.(log|jsonl)$/.exec(name);
+    const match = /^(evopath-.+?)\.(log|jsonl)$/.exec(name);
     if (match?.[1] !== undefined) bases.add(match[1]);
   }
 
