@@ -1,6 +1,9 @@
 # E08 — Family Domain: Commitments & Rituals
 
 <!-- epic-meta: slug=family-commitments-rituals phase=3 -->
+<!-- epic-issue: #35 -->
+
+> GitHub epic: [#35](https://github.com/marinoscar/evolvepath/issues/35)
 
 ## Epic
 
@@ -10,46 +13,46 @@ Turn family intentions into recurring, protected behaviour: the user defines rit
 
 ### Background
 
-- E02-01 ships the domain model this epic extends: `Outcome` (domain enum `WORK|FAMILY|HEALTH`), `Plan`/`PlanVersion`, `Routine` (trigger, frequency, estimated/minimum minutes, `fallbackBehavior`), `Commitment` (status enum `PLANNED, READY, STARTED, COMPLETED, PARTIALLY_COMPLETED, RESCHEDULED, SKIPPED, MISSED, CANCELLED`; `fullVersion`/`shortVersion`/`minimumVersion`; `rescheduleCount`; `skipReason`), `Evidence`, `DomainMode`. E02-04 owns `POST /commitments/:id/transition` and the transition matrix; E02-03 owns `/routines` CRUD.
-- E05-02 adds the intent-named actions this epic reuses verbatim: `POST /commitments/:id/actions/{start,pause,continue,complete,partial,fallback,reschedule,skip}` (`apps/api/src/commitments/actions/commitment-actions.controller.ts`). E05-04's Today screen renders a `DomainCard` per domain with `CommitmentRow` + `CommitmentActionsMenu` driven by `availableActions`; E05-04's `RescheduleDialog`/`SkipDialog` and E05-06's `QuickAddSheet` ("Family intention" kind) already exist. E08 adds family-specific labels and one Family-only affordance on top, not a second card.
-- E04-01 adds `user_profiles.timezone`; every recurrence computation in this epic is in that timezone. E05-01's `apps/api/src/today/local-date.ts` (`localDate`, `localDayBounds`) is the date helper to reuse.
-- E01 fixes the AI contract: `AiGatewayService.invoke({persona, userId, promptVersion, instructions, input, schema, schemaName})` → `{ok:true, output}` | `{ok:false, error:{code,message}}`, never throws for provider problems. E08 uses the `coach` persona twice, both optional: a rewrite suggestion for a rejected commitment title (E08-02) and the review sentence (E08-03). Both have deterministic fallbacks. E01-10's fake OpenAI server (`tools/fake-openai/server.mjs`, `infra/compose/fake-openai.compose.yml`) is what the e2e runs against.
+- E02-01 (#36) ships the domain model this epic extends: `Outcome` (domain enum `WORK|FAMILY|HEALTH`), `Plan`/`PlanVersion`, `Routine` (trigger, frequency, estimated/minimum minutes, `fallbackBehavior`), `Commitment` (status enum `PLANNED, READY, STARTED, COMPLETED, PARTIALLY_COMPLETED, RESCHEDULED, SKIPPED, MISSED, CANCELLED`; `fullVersion`/`shortVersion`/`minimumVersion`; `rescheduleCount`; `skipReason`), `Evidence`, `DomainMode`. E02-04 (#47) owns `POST /commitments/:id/transition` and the transition matrix; E02-03 (#42) owns `/routines` CRUD.
+- E05-02 (#40) adds the intent-named actions this epic reuses verbatim: `POST /commitments/:id/actions/{start,pause,continue,complete,partial,fallback,reschedule,skip}` (`apps/api/src/commitments/actions/commitment-actions.controller.ts`). E05-04 (#46)'s Today screen renders a `DomainCard` per domain with `CommitmentRow` + `CommitmentActionsMenu` driven by `availableActions`; E05-04 (#46)'s `RescheduleDialog`/`SkipDialog` and E05-06 (#52)'s `QuickAddSheet` ("Family intention" kind) already exist. E08 adds family-specific labels and one Family-only affordance on top, not a second card.
+- E04-01 (#100) adds `user_profiles.timezone`; every recurrence computation in this epic is in that timezone. E05-01 (#38)'s `apps/api/src/today/local-date.ts` (`localDate`, `localDayBounds`) is the date helper to reuse.
+- E01 fixes the AI contract: `AiGatewayService.invoke({persona, userId, promptVersion, instructions, input, schema, schemaName})` → `{ok:true, output}` | `{ok:false, error:{code,message}}`, never throws for provider problems. E08 uses the `coach` persona twice, both optional: a rewrite suggestion for a rejected commitment title (E08-02 (#41)) and the review sentence (E08-03 (#45)). Both have deterministic fallbacks. E01-10 (#30)'s fake OpenAI server (`tools/fake-openai/server.mjs`, `infra/compose/fake-openai.compose.yml`) is what the e2e runs against.
 - Scheduling: `ScheduleModule.forRoot()` is already registered in `apps/api/src/app.module.ts`; `apps/api/src/auth/tasks/token-cleanup.task.ts` is the `@Cron(CronExpression.EVERY_DAY_AT_3AM)` pattern to copy (an `@Injectable()` task class registered as a provider of its feature module).
-- Existing patterns to copy: `apps/api/src/pat/pat.controller.ts` (`@Auth()` + ownership-scoped service, `ParseUUIDPipe`, `nestjs-zod` DTOs); `apps/api/src/email/email-settings.service.ts` (direct `prisma.auditEvent.create` with `action '<domain>:<verb>'`); `apps/api/src/openapi/tags.ts` (every `@ApiTags` name declared in a group — `test/openapi/openapi-document.spec.ts` fails otherwise); `apps/api/test/helpers/test-app.helper.ts` (`createTestApp` + `overrideProviders`); `apps/web/src/__tests__/mocks/handlers.ts` (MSW); `tests/e2e/helpers/auth.helper.ts` (`loginAsTestUser` via `/testing/login`) extended by E01-10 (`withAiKey`) and E04-06 (onboarding flag).
-- Navigation decision: the Family surface is a **route under Path**, `/path/family`, owned by E02-05's `path` destination through prefix ownership (`owns('/path', '/path/family')` in `apps/web/src/config/destinations.ts`) — no registry change, no new destination, no settings card (it is a product surface, not a settings page). Editors open as a bottom sheet below 600px and a dialog at ≥ 600px, the same local presentation choice E05-06 documents.
+- Existing patterns to copy: `apps/api/src/pat/pat.controller.ts` (`@Auth()` + ownership-scoped service, `ParseUUIDPipe`, `nestjs-zod` DTOs); `apps/api/src/email/email-settings.service.ts` (direct `prisma.auditEvent.create` with `action '<domain>:<verb>'`); `apps/api/src/openapi/tags.ts` (every `@ApiTags` name declared in a group — `test/openapi/openapi-document.spec.ts` fails otherwise); `apps/api/test/helpers/test-app.helper.ts` (`createTestApp` + `overrideProviders`); `apps/web/src/__tests__/mocks/handlers.ts` (MSW); `tests/e2e/helpers/auth.helper.ts` (`loginAsTestUser` via `/testing/login`) extended by E01-10 (#30) (`withAiKey`) and E04-06 (#107) (onboarding flag).
+- Navigation decision: the Family surface is a **route under Path**, `/path/family`, owned by E02-05 (#51)'s `path` destination through prefix ownership (`owns('/path', '/path/family')` in `apps/web/src/config/destinations.ts`) — no registry change, no new destination, no settings card (it is a product surface, not a settings page). Editors open as a bottom sheet below 600px and a dialog at ≥ 600px, the same local presentation choice E05-06 (#52) documents.
 - No new permissions. Every endpoint here is a per-user resource: plain `@Auth()` with ownership resolved by `userId`; a foreign or missing id is a **404** (never 403).
-- Specs this epic produces: `docs/specs/family-domain.md` (E08-05). Specs it reads: `docs/specs/domain-model.md` (E02-08), `docs/specs/today-and-nba.md` (E05-07), `docs/specs/ai-gateway.md` (E01-12).
+- Specs this epic produces: `docs/specs/family-domain.md` (E08-05 (#53)). Specs it reads: `docs/specs/domain-model.md` (E02-08 (#62)), `docs/specs/today-and-nba.md` (E05-07 (#55)), `docs/specs/ai-gateway.md` (E01-12 (#32)).
 
 ### Scope
 
-- [ ] E08-01 `feat(db): add family members, rituals and ritual links on commitments`
-- [ ] E08-02 `feat(api): add family member and ritual endpoints with recurrence materialization and behaviour lint`
-- [ ] E08-03 `feat(api): add family review summary with planned-versus-kept and no aggregate score`
-- [ ] E08-04 `feat(web): add Family views under Path and family actions on Today`
-- [ ] E08-05 `test(tests): E08 end-to-end verification`
+- [ ] #37 `feat(db): add family members, rituals and ritual links on commitments` (E08-01)
+- [ ] #41 `feat(api): add family member and ritual endpoints with recurrence materialization and behaviour lint` (E08-02)
+- [ ] #45 `feat(api): add family review summary with planned-versus-kept and no aggregate score` (E08-03)
+- [ ] #50 `feat(web): add Family views under Path and family actions on Today` (E08-04)
+- [ ] #53 `test(tests): E08 end-to-end verification` (E08-05)
 
 ### Out of scope
 
-- Family presence notifications (PRD §60 N5 "Dinner starts soon…") and reminder deep links — E12 emits them; E08 only guarantees every materialized commitment is a normal `Commitment` row E12 can link to (`/today?commitment=<id>&action=start`, E05-04).
+- Family presence notifications (PRD §60 N5 "Dinner starts soon…") and reminder deep links — E12 emits them; E08 only guarantees every materialized commitment is a normal `Commitment` row E12 can link to (`/today?commitment=<id>&action=start`, E05-04 (#46)).
 - Shared or multi-user family accounts, inviting family members, any data entered by anyone other than the user (VISION §50: family members did not consent to be modeled).
 - Calendar integration (PRD §69), "important events" beyond the optional birthday (PRD §33 lists them; a free-text events table is deferred to E10 planning).
 - Weekly review generation and plan-version proposals from family data (E10 reads `GET /family/summary`; E08 only provides the data and the template sentence).
 - Momentum for the Family domain (E11 computes it from the same commitments).
 - Coach chat about family (E06 already handles it; E08 adds no conversation surface).
-- Any per-member analytics, sentiment, mood, "quality", "score" or "rating" field — explicitly forbidden and tested (E08-03).
+- Any per-member analytics, sentiment, mood, "quality", "score" or "rating" field — explicitly forbidden and tested (E08-03 (#45)).
 
 ### Sequencing
 
-- E08-01 first (schema). E08-02 depends on E08-01, E02-03 (routines), E02-04 (transition matrix + `POST /commitments`), E05-02 (actions), E04-01 (timezone), E01-06 (gateway, optional path only).
-- E08-03 depends on E08-01 and E05-02 (it reads statuses the actions write); it can run in parallel with E08-02 once the schema exists.
-- E08-04 depends on E08-02 and E08-03 (data) and on E05-04/E05-06 (Today components, sheet pattern); it can start against MSW as soon as E08-02's DTOs are fixed.
-- Critical path: E08-01 → E08-02 → E08-04 → E08-05. E08-05 is last and needs E01-10's fake OpenAI server.
+- E08-01 (#37) first (schema). E08-02 (#41) depends on E08-01 (#37), E02-03 (#42) (routines), E02-04 (#47) (transition matrix + `POST /commitments`), E05-02 (#40) (actions), E04-01 (#100) (timezone), E01-06 (#26) (gateway, optional path only).
+- E08-03 (#45) depends on E08-01 (#37) and E05-02 (#40) (it reads statuses the actions write); it can run in parallel with E08-02 (#41) once the schema exists.
+- E08-04 (#50) depends on E08-02 (#41) and E08-03 (#45) (data) and on E05-04 (#46)/E05-06 (#52) (Today components, sheet pattern); it can start against MSW as soon as E08-02 (#41)'s DTOs are fixed.
+- Critical path: E08-01 (#37) → E08-02 (#41) → E08-04 (#50) → E08-05 (#53). E08-05 (#53) is last and needs E01-10 (#30)'s fake OpenAI server.
 
 ### Manual end-to-end verification
 
 1. Clean clone. `cp infra/compose/.env.example infra/compose/.env`; set `SECRETS_ENCRYPTION_KEY=$(openssl rand -base64 32)`, `INITIAL_ADMIN_EMAIL=<you>`, `OPENAI_BASE_URL=http://fake-openai:8089/v1`.
 2. `cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up`. In another shell: `cd apps/api && npm run prisma:migrate && npm run prisma:seed` (confirm `add_family` in the migrate output).
-3. Open http://localhost:3535/testing/login, sign in as `family@test.local` role `viewer` with "Seed OpenAI key" (E01-10) and "Mark onboarding complete" (E04-06) ticked. Set the timezone: `evopath login`, then `evopath api PATCH /api/me/profile --data '{"timezone":"America/Costa_Rica"}'` (E04-01).
+3. Open http://localhost:3535/testing/login, sign in as `family@test.local` role `viewer` with "Seed OpenAI key" (E01-10 (#30)) and "Mark onboarding complete" (E04-06 (#107)) ticked. Set the timezone: `evopath login`, then `evopath api PATCH /api/me/profile --data '{"timezone":"America/Costa_Rica"}'` (E04-01 (#100)).
 4. http://localhost:3535/path/family — observe an empty state with two primary buttons: `Add a family member` and `Create a ritual`.
 5. `Add a family member` → sheet (phone width) / dialog (≥ 600px): nickname `Mia`, relationship `Child`, birthday = a date 5 days from today (any year) → Save. A card `Mia · Child` appears with a cake icon and "Birthday in 5 days". `evopath api GET /api/family/members | jq '.data[0] | keys'` → exactly `["birthday","createdAt","id","nickname","relationship"]`.
 6. `Create a ritual`: title `Phone-free dinner`, purpose `Be present at the table`, with `Mia`, weekdays Tue/Thu/Sun, time 18:30, every 1 week, ideal 45, minimum 10, fallback `Sit down phone-free for the first 10 minutes` → Save. The ritual card shows "Tue, Thu, Sun · 18:30 · 45 min (min 10)". Try title `Make Mia happier` → inline error "Describe what *you* will do, not how someone else should feel" with a `Suggest a rewrite` button that fills in the fake AI's suggestion; without the fake server the button is absent and only the error shows.
@@ -64,13 +67,13 @@ Turn family intentions into recurring, protected behaviour: the user defines rit
 
 ## Child issues
 
-### E08-01 `feat(db): add family members, rituals and ritual links on commitments`
+### E08-01 `feat(db): add family members, rituals and ritual links on commitments` — #37
 
-**Part of epic:** E08 · **Blocked by:** E02-01 · **Component:** database, api · **Priority:** P0 · **Agents:** database-dev → backend-dev → testing-dev → docs-dev
+**Part of epic:** E08 · **Blocked by:** E02-01 (#36) · **Component:** database, api · **Priority:** P0 · **Agents:** database-dev → backend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-PRD §33 (Family Privacy) fixes what a family member record may hold — nickname, relationship, optional birthday, optional recurring routines — and forbids anything that could become a hidden assessment; VISION §50 adds that family members did not consent to be modeled. PRD §34 defines a ritual (recurrence, ideal and minimum duration, purpose) and PRD §105 requires the user to create a family commitment with a recurrence and complete/move/skip it. E02-01's schema has `Commitment` and `Routine` but no ritual, no recurrence and no family member; every later child in this epic needs these three things as typed columns, with the privacy boundary enforced by the schema itself rather than by convention.
+PRD §33 (Family Privacy) fixes what a family member record may hold — nickname, relationship, optional birthday, optional recurring routines — and forbids anything that could become a hidden assessment; VISION §50 adds that family members did not consent to be modeled. PRD §34 defines a ritual (recurrence, ideal and minimum duration, purpose) and PRD §105 requires the user to create a family commitment with a recurrence and complete/move/skip it. E02-01 (#36)'s schema has `Commitment` and `Routine` but no ritual, no recurrence and no family member; every later child in this epic needs these three things as typed columns, with the privacy boundary enforced by the schema itself rather than by convention.
 
 #### Proposed solution
 
@@ -116,7 +119,7 @@ model Ritual {
   fallbackBehavior        String?       @map("fallback_behavior") @db.VarChar(200)
   active                  Boolean       @default(true)
   lastMaterializedThrough DateTime?     @map("last_materialized_through") @db.Date
-  routineId               String?       @map("routine_id") @db.Uuid   // E02-01 Routine; shows the ritual on the Path
+  routineId               String?       @map("routine_id") @db.Uuid   // E02-01 (#36) Routine; shows the ritual on the Path
   createdAt               DateTime      @default(now()) @map("created_at") @db.Timestamptz
   updatedAt               DateTime      @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -130,7 +133,7 @@ model Ritual {
 }
 ```
 
-`Commitment` (E02-01) gains:
+`Commitment` (E02-01 (#36)) gains:
 
 ```prisma
   ritualId       String?       @map("ritual_id") @db.Uuid
@@ -175,13 +178,13 @@ export const ritualResponseSchema = z.object({
 
 `userId` is deliberately absent from both response schemas (own resource; the caller is the owner).
 
-**API (backend-dev)** — `apps/api/src/family/family.module.ts` (new; imports `PrismaModule`; exports nothing yet; registered in `apps/api/src/app.module.ts`), `apps/api/src/family/family.schema.ts` (above), `apps/api/src/family/dto/family-member.dto.ts` and `dto/ritual.dto.ts` (new, `createZodDto` over the response schemas plus `createFamilyMemberSchema = familyMemberResponseSchema.pick({nickname, relationship, birthday}).partial({birthday})` and the ritual create/update bodies E08-02 consumes), and a mapper `apps/api/src/family/family.mapper.ts` (new): `toFamilyMemberDto(row)` (birthday `Date` → `YYYY-MM-DD` string via `toISOString().slice(0,10)`; it is `@db.Date`, so no timezone shift), `toRitualDto(row)`. No endpoints in this issue; no OpenAPI tag yet (E08-02 registers `Family`).
+**API (backend-dev)** — `apps/api/src/family/family.module.ts` (new; imports `PrismaModule`; exports nothing yet; registered in `apps/api/src/app.module.ts`), `apps/api/src/family/family.schema.ts` (above), `apps/api/src/family/dto/family-member.dto.ts` and `dto/ritual.dto.ts` (new, `createZodDto` over the response schemas plus `createFamilyMemberSchema = familyMemberResponseSchema.pick({nickname, relationship, birthday}).partial({birthday})` and the ritual create/update bodies E08-02 (#41) consumes), and a mapper `apps/api/src/family/family.mapper.ts` (new): `toFamilyMemberDto(row)` (birthday `Date` → `YYYY-MM-DD` string via `toISOString().slice(0,10)`; it is `@db.Date`, so no timezone shift), `toRitualDto(row)`. No endpoints in this issue; no OpenAPI tag yet (E08-02 (#41) registers `Family`).
 
 | Method | Path | Permission / guard | Request | Response |
 |---|---|---|---|---|
 | — | none in this issue | — | — | — |
 
-**UI (frontend-dev)** — n/a. Types land in E08-04.
+**UI (frontend-dev)** — n/a. Types land in E08-04 (#50).
 
 **Tests (testing-dev)**
 
@@ -189,7 +192,7 @@ export const ritualResponseSchema = z.object({
 - `apps/api/src/family/family.mapper.spec.ts` — `toFamilyMemberDto` output has exactly `FAMILY_MEMBER_RESPONSE_KEYS` (sorted key equality, not subset); a Prisma row carrying `userId` never leaks it; `birthday` `Date` at `2018-05-09T00:00:00Z` → `'2018-05-09'`; null stays null. `toRitualDto` round-trips `recurrence` through `ritualRecurrenceSchema`.
 - `apps/api/test/family/family-schema.integration.spec.ts` — boots `createTestApp` and asserts `FamilyModule` resolves (a broken relation graph fails at boot). With `useMockDatabase: false` behind the existing DB-available guard: inserting two commitments with the same `(ritualId, scheduledStart)` throws `P2002`; two rows with `ritualId: null` and equal `scheduledStart` both insert.
 
-**Docs (docs-dev)** — `CLAUDE.md` "Database Tables": add `family_members`, `rituals`, and "(+ `ritual_id`, `family_member_id`, E08-01)" on `commitments`; `docs/specs/family-domain.md` is created by E08-05 (this issue leaves the model section in the PR description).
+**Docs (docs-dev)** — `CLAUDE.md` "Database Tables": add `family_members`, `rituals`, and "(+ `ritual_id`, `family_member_id`, E08-01 (#37))" on `commitments`; `docs/specs/family-domain.md` is created by E08-05 (#53) (this issue leaves the model section in the PR description).
 
 #### Acceptance criteria
 
@@ -219,39 +222,39 @@ export const ritualResponseSchema = z.object({
 
 #### Out of scope
 
-- Endpoints, materialization, lint (E08-02); summary (E08-03).
+- Endpoints, materialization, lint (E08-02 (#41)); summary (E08-03 (#45)).
 - Any "important events" table (PRD §33) beyond the birthday column.
 - Backfilling `ritualId` on commitments created by E04 onboarding templates ("Phone-free dinner Tue/Thu/Sun") — those remain plain commitments; the user creates the ritual explicitly.
 
 #### Notes for the implementing agent
 
-- `birthday` is `@db.Date` on purpose: it is a calendar date, not an instant. Map it with `toISOString().slice(0, 10)`, never through the user's timezone. The year may be unknown; the UI (E08-04) sends `1900` as the placeholder year and the cue logic ignores the year — document this in the column comment.
-- The `@@unique([ritualId, scheduledStart])` composite relies on Postgres treating NULLs as distinct; do not add a partial index by hand — Prisma's generated migration is sufficient, and E02-01's `scheduledStart` must be `@db.Timestamptz` for the equality to be exact.
+- `birthday` is `@db.Date` on purpose: it is a calendar date, not an instant. Map it with `toISOString().slice(0, 10)`, never through the user's timezone. The year may be unknown; the UI (E08-04 (#50)) sends `1900` as the placeholder year and the cue logic ignores the year — document this in the column comment.
+- The `@@unique([ritualId, scheduledStart])` composite relies on Postgres treating NULLs as distinct; do not add a partial index by hand — Prisma's generated migration is sufficient, and E02-01 (#36)'s `scheduledStart` must be `@db.Timestamptz` for the equality to be exact.
 - Put the enum values in the order listed; `FamilyRelationship` order is what the UI select renders.
 - Run `npm run prisma:migrate:dev -- --name add_family` then `npm run prisma:generate`; never bare `npx prisma`.
-- Field names on `Commitment`/`Routine` are E02-01's; read `schema.prisma` before adding relations rather than trusting this text for the existing side.
+- Field names on `Commitment`/`Routine` are E02-01 (#36)'s; read `schema.prisma` before adding relations rather than trusting this text for the existing side.
 
 ---
 
-### E08-02 `feat(api): add family member and ritual endpoints with recurrence materialization and behaviour lint`
+### E08-02 `feat(api): add family member and ritual endpoints with recurrence materialization and behaviour lint` — #41
 
-**Part of epic:** E08 · **Blocked by:** E08-01, E02-03, E02-04, E05-02, E04-01 · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
+**Part of epic:** E08 · **Blocked by:** E08-01 (#37), E02-03 (#42), E02-04 (#47), E05-02 (#40), E04-01 (#100) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-PRD §34 lets users create recurring rituals; PRD §105 requires creating a family commitment with a recurrence and completing, moving or skipping it; VISION §11 frames the domain as translating family values into repeatable behaviours before the calendar takes the time. A ritual that lives only as a rule is invisible to Today (E05-01 ranks `Commitment` rows) and to the Path, so rituals must be materialized into real commitments ahead of time, idempotently, in the user's timezone, and cleaned up when the ritual changes. PRD §32 and §83 add the guardrail: a commitment must describe the user's own behaviour ("Put phone away during dinner"), never another person's state ("Make spouse happier"); the system cannot control another person's behaviour, so it must refuse to record a commitment that pretends to.
+PRD §34 lets users create recurring rituals; PRD §105 requires creating a family commitment with a recurrence and completing, moving or skipping it; VISION §11 frames the domain as translating family values into repeatable behaviours before the calendar takes the time. A ritual that lives only as a rule is invisible to Today (E05-01 (#38) ranks `Commitment` rows) and to the Path, so rituals must be materialized into real commitments ahead of time, idempotently, in the user's timezone, and cleaned up when the ritual changes. PRD §32 and §83 add the guardrail: a commitment must describe the user's own behaviour ("Put phone away during dinner"), never another person's state ("Make spouse happier"); the system cannot control another person's behaviour, so it must refuse to record a commitment that pretends to.
 
 #### Proposed solution
 
-A `family` module with CRUD for members and rituals, a pure recurrence engine with a DST-correct zoned-time resolver, a daily cron plus an on-demand materializer that create `PLANNED` FAMILY commitments for the next 7 days, a deterministic behaviour lint with an optional `coach` rewrite, and audit on every write. Completing, moving and skipping an occurrence are E05-02's actions — nothing is re-implemented here.
+A `family` module with CRUD for members and rituals, a pure recurrence engine with a DST-correct zoned-time resolver, a daily cron plus an on-demand materializer that create `PLANNED` FAMILY commitments for the next 7 days, a deterministic behaviour lint with an optional `coach` rewrite, and audit on every write. Completing, moving and skipping an occurrence are E05-02 (#40)'s actions — nothing is re-implemented here.
 
-**Data (database-dev)** — n/a (E08-01). No migration.
+**Data (database-dev)** — n/a (E08-01 (#37)). No migration.
 
 **API (backend-dev)**
 
 Files (all new unless noted):
 
-- `apps/api/src/family/family.module.ts` (E08-01; now imports `PrismaModule`, `AiModule`, `RoutinesModule` (E02-03), `CommitmentsModule` (E02-04); providers `FamilyMembersService`, `RitualsService`, `RitualMaterializerService`, `BehaviourLintService`, `RitualMaterializeTask`; exports `BehaviourLintService`, `RitualMaterializerService`).
+- `apps/api/src/family/family.module.ts` (E08-01 (#37); now imports `PrismaModule`, `AiModule`, `RoutinesModule` (E02-03 (#42)), `CommitmentsModule` (E02-04 (#47)); providers `FamilyMembersService`, `RitualsService`, `RitualMaterializerService`, `BehaviourLintService`, `RitualMaterializeTask`; exports `BehaviourLintService`, `RitualMaterializerService`).
 - `apps/api/src/family/family-members.controller.ts` — `@ApiTags('Family')`, `@Controller('family/members')`.
 - `apps/api/src/family/family-members.service.ts` — `list(userId)`, `create(userId, dto)`, `update(userId, id, dto)`, `remove(userId, id)`.
 - `apps/api/src/family/rituals.controller.ts` — `@ApiTags('Family')`, `@Controller('family/rituals')`.
@@ -269,7 +272,7 @@ export function weekStartLocal(instant: Date, timezone: string): string   // Mon
 export function weeksBetween(weekStartA: string, weekStartB: string): number
 ```
 
-  `zonedTimeToUtc` resolves the offset with `Intl.DateTimeFormat(..., {timeZone, hourCycle:'h23', ...}).formatToParts` iteratively (guess UTC, read the local wall time, correct, repeat once) — no date library (E05-01's `local-date.ts` sets the precedent). Rules: a wall time that does not exist (spring-forward gap) is shifted forward to the first valid instant; an ambiguous wall time (fall-back overlap) takes the **first** (DST) instant. A date is an occurrence when `weekdays` contains its local weekday and `weeksBetween(weekStartLocal(anchor), weekStartLocal(date)) % everyNWeeks === 0`.
+  `zonedTimeToUtc` resolves the offset with `Intl.DateTimeFormat(..., {timeZone, hourCycle:'h23', ...}).formatToParts` iteratively (guess UTC, read the local wall time, correct, repeat once) — no date library (E05-01 (#38)'s `local-date.ts` sets the precedent). Rules: a wall time that does not exist (spring-forward gap) is shifted forward to the first valid instant; an ambiguous wall time (fall-back overlap) takes the **first** (DST) instant. A date is an occurrence when `weekdays` contains its local weekday and `weeksBetween(weekStartLocal(anchor), weekStartLocal(date)) % everyNWeeks === 0`.
 
 - `apps/api/src/family/ritual-materializer.service.ts` — `materialize(userId, ritualId, now = new Date()): Promise<{created: number, skipped: number, through: string}>` and `materializeAllDue(now): Promise<{rituals: number, created: number}>`.
 - `apps/api/src/family/tasks/ritual-materialize.task.ts` — `@Cron(CronExpression.EVERY_DAY_AT_1AM) handleCron()` → `materializeAllDue()`; logs `ritual.materialize rituals=<n> created=<n>`; copies `apps/api/src/auth/tasks/token-cleanup.task.ts`.
@@ -295,9 +298,9 @@ Endpoints:
 Semantics:
 
 - **Ownership** — every service method loads with `where: {id, userId}` and throws `NotFoundException` (404) when absent; `familyMemberId` and `outcomeId` in bodies are validated to belong to the caller (404 `FAMILY_MEMBER_NOT_FOUND` / `OUTCOME_NOT_FOUND`, never 403).
-- **Ritual create** — `BehaviourLintService.check(title)` first (400 `BEHAVIOUR_TARGETS_OTHER_PERSON` with `{match}` in the error body); when `outcomeId` is given, create a `Routine` through E02-03's `RoutinesService.create` under that outcome's active `PlanVersion` `{domain: 'FAMILY', title, frequency: <summary string, e.g. 'Tue, Thu, Sun'>, preferredTime: recurrence.time, estimatedMinutes: idealMinutes, minimumMinutes, fallbackBehavior}` and store its id in `routineId` (adapt field names to E02-01's); then insert the ritual; then `materialize` (outside the transaction). Audit `ritual:create` `meta {recurrence, idealMinutes, minimumMinutes, hasMember: boolean, routineId}`.
-- **Materialize** — `horizonEnd = localDate(now, tz) + 7 days` (end of that local day); `from = max(now, lastMaterializedThrough ?? now)`; `occurrences = nextOccurrences(recurrence, from, horizonEnd, tz, createdAt)`; for each, `prisma.commitment.create` with `{userId, domain: 'FAMILY', title, status: 'PLANNED', scheduledStart, scheduledEnd: +idealMinutes, importance: 4, ritualId, familyMemberId, routineId, outcomeId, planId (from the routine's plan when linked), fullVersion: {title, minutes: idealMinutes}, shortVersion: idealMinutes − minimumMinutes ≥ 10 ? {title, minutes: round((idealMinutes + minimumMinutes)/2)} : null, minimumVersion: {title: fallbackBehavior ?? title, minutes: minimumMinutes}}` — catching `P2002` from the `(ritualId, scheduledStart)` index as `skipped` (idempotency, E08-01); rows already in any status are never touched. Then `lastMaterializedThrough = horizonEnd`. Inactive rituals return `{created: 0, skipped: 0}`. Audit `ritual:materialize` `meta {created, skipped, through}` only when `created > 0` (the cron must not write 365 empty audit rows per ritual a year). `materializeAllDue` iterates `rituals` where `active = true AND (lastMaterializedThrough IS NULL OR lastMaterializedThrough < today + 7d in the user's tz)` in pages of 200, each ritual in its own try/catch so one failure never stops the run; timezone from `user_profiles.timezone ?? 'UTC'`.
-- **Ritual update** — lint on `title` when present; when `recurrence`, `time`, `idealMinutes`, `minimumMinutes` or `fallbackBehavior` change: transition every future (`scheduledStart > now`) `PLANNED`/`READY` commitment of the ritual to `CANCELLED` through E02-04's matrix (never delete; `RESCHEDULED`, `STARTED` and terminal rows are left alone — the user touched them), reset `lastMaterializedThrough = null`, re-materialize. `active: false` cancels future `PLANNED`/`READY` rows and stops the cron for that ritual; `active: true` re-materializes. Keeps `routineId`'s `Routine` in sync (`active`, minutes, title) through `RoutinesService.update`. Audit `ritual:update` `meta {changed: string[], cancelled: number, created: number}`.
+- **Ritual create** — `BehaviourLintService.check(title)` first (400 `BEHAVIOUR_TARGETS_OTHER_PERSON` with `{match}` in the error body); when `outcomeId` is given, create a `Routine` through E02-03 (#42)'s `RoutinesService.create` under that outcome's active `PlanVersion` `{domain: 'FAMILY', title, frequency: <summary string, e.g. 'Tue, Thu, Sun'>, preferredTime: recurrence.time, estimatedMinutes: idealMinutes, minimumMinutes, fallbackBehavior}` and store its id in `routineId` (adapt field names to E02-01 (#36)'s); then insert the ritual; then `materialize` (outside the transaction). Audit `ritual:create` `meta {recurrence, idealMinutes, minimumMinutes, hasMember: boolean, routineId}`.
+- **Materialize** — `horizonEnd = localDate(now, tz) + 7 days` (end of that local day); `from = max(now, lastMaterializedThrough ?? now)`; `occurrences = nextOccurrences(recurrence, from, horizonEnd, tz, createdAt)`; for each, `prisma.commitment.create` with `{userId, domain: 'FAMILY', title, status: 'PLANNED', scheduledStart, scheduledEnd: +idealMinutes, importance: 4, ritualId, familyMemberId, routineId, outcomeId, planId (from the routine's plan when linked), fullVersion: {title, minutes: idealMinutes}, shortVersion: idealMinutes − minimumMinutes ≥ 10 ? {title, minutes: round((idealMinutes + minimumMinutes)/2)} : null, minimumVersion: {title: fallbackBehavior ?? title, minutes: minimumMinutes}}` — catching `P2002` from the `(ritualId, scheduledStart)` index as `skipped` (idempotency, E08-01 (#37)); rows already in any status are never touched. Then `lastMaterializedThrough = horizonEnd`. Inactive rituals return `{created: 0, skipped: 0}`. Audit `ritual:materialize` `meta {created, skipped, through}` only when `created > 0` (the cron must not write 365 empty audit rows per ritual a year). `materializeAllDue` iterates `rituals` where `active = true AND (lastMaterializedThrough IS NULL OR lastMaterializedThrough < today + 7d in the user's tz)` in pages of 200, each ritual in its own try/catch so one failure never stops the run; timezone from `user_profiles.timezone ?? 'UTC'`.
+- **Ritual update** — lint on `title` when present; when `recurrence`, `time`, `idealMinutes`, `minimumMinutes` or `fallbackBehavior` change: transition every future (`scheduledStart > now`) `PLANNED`/`READY` commitment of the ritual to `CANCELLED` through E02-04 (#47)'s matrix (never delete; `RESCHEDULED`, `STARTED` and terminal rows are left alone — the user touched them), reset `lastMaterializedThrough = null`, re-materialize. `active: false` cancels future `PLANNED`/`READY` rows and stops the cron for that ritual; `active: true` re-materializes. Keeps `routineId`'s `Routine` in sync (`active`, minutes, title) through `RoutinesService.update`. Audit `ritual:update` `meta {changed: string[], cancelled: number, created: number}`.
 - **Ritual delete** — cancel future `PLANNED`/`READY` rows; delete the ritual (FK `SetNull` keeps history); the linked `Routine` is left in place (the Path still shows what was planned). Audit `ritual:delete` `meta {cancelled}`.
 - **Member create/update/delete** — validate; delete sets `familyMemberId` to `NULL` on rituals and commitments (schema). Audit `family_member:create|update|delete` with `meta {relationship}` only — **never** the nickname or birthday (PRD §33; audit rows outlive the record).
 - **Behaviour lint** (`behaviour-lint.ts`) — deterministic, case-insensitive, runs on `title` after trimming. Rejects when any rule matches:
@@ -312,14 +315,14 @@ export const OTHER_STATE_WORDS = ['happier','happy','calmer','calm','nicer','beh
 export function lintBehaviourTitle(title: string): { ok: true } | { ok: false; code: 'TARGETS_OTHER_PERSON'; match: string; rule: 'A'|'B'|'C' }
 ```
 
-  A capitalised token that is not the first word counts as a name for rules A–C (so `Make Mia happier` is caught while `Read with Mia` passes). Titles that pass: "Put phone away during dinner", "Read with Mia for 15 minutes", "Call Dad Sunday", "Plan Saturday outing by Thursday", "Help Leo with his project for 20 minutes". The lint is applied in `RitualsService.create/update` and — one-line change in E02-04's `CommitmentsService.create/update`, guarded by `domain === 'FAMILY'`, injected from the exported `BehaviourLintService` — to `POST /commitments` and `PATCH /commitments/:id` so quick-add (E05-06) gets the same rule. Error body: `{ code: 'BEHAVIOUR_TARGETS_OTHER_PERSON', message: 'Describe what you will do, not how someone else should feel or behave.', match }`.
-- **Rewrite suggestion** (`POST /family/lint`) — runs the lint; when `ok: false`, calls `AiGatewayService.invoke({persona:'coach', userId, promptVersion:'family-behaviour-rewrite.v1', instructions: 'Rewrite the title as one concrete action the user will personally do, ≤ 12 words, no judgement of the other person.', input: {title, match}, schema: z.object({suggestion: z.string().min(3).max(120)}), schemaName:'FamilyBehaviourRewrite'})`; the suggestion is itself re-linted and dropped (`suggestion: null, source: 'none'`) if it fails. On `{ok:false}` from the gateway (any code) → `suggestion: null, source: 'none'`, HTTP 200. Log `family.lint ok=<bool> source=<ai|none>` — never the title. Throttle: reuse E01-06's `test-throttle.ts` per-user window (10/min) — the endpoint is user-triggered only.
+  A capitalised token that is not the first word counts as a name for rules A–C (so `Make Mia happier` is caught while `Read with Mia` passes). Titles that pass: "Put phone away during dinner", "Read with Mia for 15 minutes", "Call Dad Sunday", "Plan Saturday outing by Thursday", "Help Leo with his project for 20 minutes". The lint is applied in `RitualsService.create/update` and — one-line change in E02-04 (#47)'s `CommitmentsService.create/update`, guarded by `domain === 'FAMILY'`, injected from the exported `BehaviourLintService` — to `POST /commitments` and `PATCH /commitments/:id` so quick-add (E05-06 (#52)) gets the same rule. Error body: `{ code: 'BEHAVIOUR_TARGETS_OTHER_PERSON', message: 'Describe what you will do, not how someone else should feel or behave.', match }`.
+- **Rewrite suggestion** (`POST /family/lint`) — runs the lint; when `ok: false`, calls `AiGatewayService.invoke({persona:'coach', userId, promptVersion:'family-behaviour-rewrite.v1', instructions: 'Rewrite the title as one concrete action the user will personally do, ≤ 12 words, no judgement of the other person.', input: {title, match}, schema: z.object({suggestion: z.string().min(3).max(120)}), schemaName:'FamilyBehaviourRewrite'})`; the suggestion is itself re-linted and dropped (`suggestion: null, source: 'none'`) if it fails. On `{ok:false}` from the gateway (any code) → `suggestion: null, source: 'none'`, HTTP 200. Log `family.lint ok=<bool> source=<ai|none>` — never the title. Throttle: reuse E01-06 (#26)'s `test-throttle.ts` per-user window (10/min) — the endpoint is user-triggered only.
 
 Error codes: 400 Zod; 400 `BEHAVIOUR_TARGETS_OTHER_PERSON`; 400 `MINIMUM_EXCEEDS_IDEAL`; 404 (own-resource misses, incl. `FAMILY_MEMBER_NOT_FOUND`, `OUTCOME_NOT_FOUND`); 409 `INVALID_TRANSITION` bubbled from the matrix only if a cancel is attempted on a non-cancellable row (should not happen — the service filters statuses first; a 409 here is a programming error and is logged at `warn`).
 
-OpenAPI: add tag `Family` ("Family members (minimal records), rituals, recurrence materialization, the behaviour lint and the planned-versus-kept summary. Own data only.") to the `Product` group in `apps/api/src/openapi/tags.ts` (group created by E05-01; create it here if E05-01 has not merged).
+OpenAPI: add tag `Family` ("Family members (minimal records), rituals, recurrence materialization, the behaviour lint and the planned-versus-kept summary. Own data only.") to the `Product` group in `apps/api/src/openapi/tags.ts` (group created by E05-01 (#38); create it here if E05-01 (#38) has not merged).
 
-**UI (frontend-dev)** — n/a (E08-04 consumes).
+**UI (frontend-dev)** — n/a (E08-04 (#50) consumes).
 
 **Tests (testing-dev)**
 
@@ -330,10 +333,10 @@ OpenAPI: add tag `Family` ("Family members (minimal records), rituals, recurrenc
 - `apps/api/src/family/family-members.service.spec.ts` — audit `meta` never contains `nickname` or `birthday` (assert on the mock call); update partial; delete → 204.
 - `apps/api/src/family/behaviour-lint.service.spec.ts` — gateway stub `{ok:false}` → `suggestion null, source 'none'`, HTTP-200 shape; stub returning a suggestion that itself fails lint → dropped; gateway never called when the lint passes.
 - `apps/api/src/family/tasks/ritual-materialize.task.spec.ts` — `handleCron` calls `materializeAllDue` once and logs the counts.
-- `apps/api/test/family/family.integration.spec.ts` (`createTestApp` + `overrideProviders: [{provide: AiGatewayService, useValue: stub}]`) — 401 without token; member create → response keys exactly `FAMILY_MEMBER_RESPONSE_KEYS`; ritual create with Tue/Thu/Sun → `GET /commitments?from&to&domain=FAMILY` (E02-04) returns the expected count with `ritualId`; `POST …/materialize` twice → `created 0` on the second; `POST /family/rituals` with `title 'Make Mia happier'` → 400 `BEHAVIOUR_TARGETS_OTHER_PERSON`; `POST /commitments {domain:'FAMILY', title:'Fix Dad\'s attitude'}` → 400 (the E02-04 hook); `POST /commitments {domain:'WORK', title:'Fix Dad\'s attitude'}` → 201 (lint is FAMILY-only); user B gets 404 on every user-A id; audit rows `ritual:create`, `ritual:materialize`, `ritual:update`, `ritual:delete`, `family_member:create` exist with `targetType 'ritual' | 'family_member'`; `POST /family/lint` returns 200 with `source:'none'` when the stub rejects.
+- `apps/api/test/family/family.integration.spec.ts` (`createTestApp` + `overrideProviders: [{provide: AiGatewayService, useValue: stub}]`) — 401 without token; member create → response keys exactly `FAMILY_MEMBER_RESPONSE_KEYS`; ritual create with Tue/Thu/Sun → `GET /commitments?from&to&domain=FAMILY` (E02-04 (#47)) returns the expected count with `ritualId`; `POST …/materialize` twice → `created 0` on the second; `POST /family/rituals` with `title 'Make Mia happier'` → 400 `BEHAVIOUR_TARGETS_OTHER_PERSON`; `POST /commitments {domain:'FAMILY', title:'Fix Dad\'s attitude'}` → 400 (the E02-04 (#47) hook); `POST /commitments {domain:'WORK', title:'Fix Dad\'s attitude'}` → 201 (lint is FAMILY-only); user B gets 404 on every user-A id; audit rows `ritual:create`, `ritual:materialize`, `ritual:update`, `ritual:delete`, `family_member:create` exist with `targetType 'ritual' | 'family_member'`; `POST /family/lint` returns 200 with `source:'none'` when the stub rejects.
 - `apps/api/test/openapi/openapi-document.spec.ts` — passes with the new `Family` tag (existing assertion).
 
-**Docs (docs-dev)** — `docs/API.md` new section "Family" (11 routes, request/response examples, the lint error body, the materialization contract); `CLAUDE.md` "API Endpoints" adds the routes; `docs/specs/family-domain.md` is E08-05's (this issue documents the recurrence rules in the PR description).
+**Docs (docs-dev)** — `docs/API.md` new section "Family" (11 routes, request/response examples, the lint error body, the materialization contract); `CLAUDE.md` "API Endpoints" adds the routes; `docs/specs/family-domain.md` is E08-05 (#53)'s (this issue documents the recurrence rules in the PR description).
 
 #### Acceptance criteria
 
@@ -371,7 +374,7 @@ OpenAPI: add tag `Family` ("Family members (minimal records), rituals, recurrenc
 
 #### Out of scope
 
-- The summary/review data (E08-03); UI (E08-04).
+- The summary/review data (E08-03 (#45)); UI (E08-04 (#50)).
 - Reminders and deep links (E12); Routine/Plan versioning when a ritual changes (E10 — the linked `Routine` is updated in place, no `PlanVersion` is created).
 - Rituals in WORK or HEALTH domains — the model is FAMILY-only in this epic.
 - Materializing beyond 7 days or backfilling the past.
@@ -380,19 +383,19 @@ OpenAPI: add tag `Family` ("Family members (minimal records), rituals, recurrenc
 
 - Copy `apps/api/src/auth/tasks/token-cleanup.task.ts` for the cron class; `ScheduleModule.forRoot()` already lives in `app.module.ts` — do not register it again.
 - Keep `recurrence.ts` and `behaviour-lint.ts` free of Prisma, DI and `Date.now()`; the services pass `now`.
-- Reuse `localDate`/`localDayBounds` from `apps/api/src/today/local-date.ts` (E05-01); if that file is missing when you start, create it with the E05-01 signatures rather than a second helper.
-- Cancel through E02-04's transition service (matrix), never with a raw `updateMany` to `CANCELLED`; filter statuses first so the matrix never throws.
+- Reuse `localDate`/`localDayBounds` from `apps/api/src/today/local-date.ts` (E05-01 (#38)); if that file is missing when you start, create it with the E05-01 (#38) signatures rather than a second helper.
+- Cancel through E02-04 (#47)'s transition service (matrix), never with a raw `updateMany` to `CANCELLED`; filter statuses first so the matrix never throws.
 - Call `AiGatewayService.invoke` outside any `$transaction`; it never throws for provider errors — check `ok` before reading `output`.
 - Materialize **after** the ritual insert commits and outside the transaction (the unique index, not a transaction, is the idempotency guarantee).
-- The `CommitmentsService` lint hook is a two-line change in E02-04's module (`imports: [FamilyModule]` and one call); guard against the circular import: `FamilyModule` imports `CommitmentsModule` for the transition service, so export `BehaviourLintService` from a small `apps/api/src/family/behaviour-lint.module.ts` that has no imports, and have both modules import that.
+- The `CommitmentsService` lint hook is a two-line change in E02-04 (#47)'s module (`imports: [FamilyModule]` and one call); guard against the circular import: `FamilyModule` imports `CommitmentsModule` for the transition service, so export `BehaviourLintService` from a small `apps/api/src/family/behaviour-lint.module.ts` that has no imports, and have both modules import that.
 - Zod v4 + `nestjs-zod` DTOs; Fastify (no Express `res`); `@HttpCode(HttpStatus.OK)` on `materialize` and `lint`, `NO_CONTENT` on deletes.
 - Register the `Family` tag in `apps/api/src/openapi/tags.ts` or `test/openapi/openapi-document.spec.ts` fails.
 
 ---
 
-### E08-03 `feat(api): add family review summary with planned-versus-kept and no aggregate score`
+### E08-03 `feat(api): add family review summary with planned-versus-kept and no aggregate score` — #45
 
-**Part of epic:** E08 · **Blocked by:** E08-01, E05-02 · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
+**Part of epic:** E08 · **Blocked by:** E08-01 (#37), E05-02 (#40) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
@@ -400,7 +403,7 @@ PRD §35 says the app may show "Planned family commitments: 4 / Kept: 3" but mus
 
 #### Proposed solution
 
-One read endpoint returning per-ritual, per-week counts of statuses the E05-02 actions wrote, a deterministic "displacement" sentence built from PRD §35's coach copy with data placeholders (AI may rephrase, never compute), and a test that fails the build if the family DTOs or the `/family/*` part of the OpenAPI document ever contain `score`, `quality` or `rating`.
+One read endpoint returning per-ritual, per-week counts of statuses the E05-02 (#40) actions wrote, a deterministic "displacement" sentence built from PRD §35's coach copy with data placeholders (AI may rephrase, never compute), and a test that fails the build if the family DTOs or the `/family/*` part of the OpenAPI document ever contain `score`, `quality` or `rating`.
 
 **Data (database-dev)** — n/a (reads `commitments`, `rituals`, `reflections`). No migration.
 
@@ -434,8 +437,8 @@ export const familySummarySchema = z.object({
 }).strict();
 ```
 
-- `FamilySummaryService.getSummary(userId, {weekStart, weeks}, now = new Date())`: `tz = user_profiles.timezone ?? 'UTC'`; validate `weekStart` is a Monday in `tz` (400 `WEEK_START_NOT_MONDAY`); for each week compute `localDayBounds` (E05-01) of Monday 00:00 → next Monday 00:00; one query per window: `commitments` where `userId`, `domain = 'FAMILY'`, `scheduledStart` in window, `status != 'CANCELLED'`; group in memory by `ritualId` (title from the ritual, or "Other family commitments" for `null`); rituals with zero rows in a week are still listed with zeros when they were `active` and created before the window end (the user planned nothing because nothing was due — still visible, no judgement). `moved` counts rows with status `RESCHEDULED`; because E02-04's transition closes the **original** row as `RESCHEDULED` and creates a **new** `PLANNED` row at the new time (`rescheduledFromId`, `rescheduleCount + 1`), the original week counts the move under `moved` and the new week sees the live row as `open`/`kept`/… — document this in the spec; a commitment moved twice therefore leaves two `RESCHEDULED` rows behind, each counted once in the week it was originally due. There is no derived ratio, percentage, streak or grade anywhere in the payload: consumers compute `kept/planned` for display if they want, and E08-04 displays the two integers side by side.
-- `coachNote` — deterministic first: `displaced = count of FAMILY commitments in the requested window with status SKIPPED or RESCHEDULED whose skipReason ∈ {UNEXPECTED_CONFLICT, BAD_TIMING, TOO_MUCH}` (E05-02 writes the enum; `RESCHEDULED` rows have no reason and are counted only when a `Reflection` with `relatedType 'commitment'` and a matching tag exists) plus `evening = those with local hour ≥ 17`. When `displaced >= 2`, template (`summary-copy.ts`):
+- `FamilySummaryService.getSummary(userId, {weekStart, weeks}, now = new Date())`: `tz = user_profiles.timezone ?? 'UTC'`; validate `weekStart` is a Monday in `tz` (400 `WEEK_START_NOT_MONDAY`); for each week compute `localDayBounds` (E05-01 (#38)) of Monday 00:00 → next Monday 00:00; one query per window: `commitments` where `userId`, `domain = 'FAMILY'`, `scheduledStart` in window, `status != 'CANCELLED'`; group in memory by `ritualId` (title from the ritual, or "Other family commitments" for `null`); rituals with zero rows in a week are still listed with zeros when they were `active` and created before the window end (the user planned nothing because nothing was due — still visible, no judgement). `moved` counts rows with status `RESCHEDULED`; because E02-04 (#47)'s transition closes the **original** row as `RESCHEDULED` and creates a **new** `PLANNED` row at the new time (`rescheduledFromId`, `rescheduleCount + 1`), the original week counts the move under `moved` and the new week sees the live row as `open`/`kept`/… — document this in the spec; a commitment moved twice therefore leaves two `RESCHEDULED` rows behind, each counted once in the week it was originally due. There is no derived ratio, percentage, streak or grade anywhere in the payload: consumers compute `kept/planned` for display if they want, and E08-04 (#50) displays the two integers side by side.
+- `coachNote` — deterministic first: `displaced = count of FAMILY commitments in the requested window with status SKIPPED or RESCHEDULED whose skipReason ∈ {UNEXPECTED_CONFLICT, BAD_TIMING, TOO_MUCH}` (E05-02 (#40) writes the enum; `RESCHEDULED` rows have no reason and are counted only when a `Reflection` with `relatedType 'commitment'` and a matching tag exists) plus `evening = those with local hour ≥ 17`. When `displaced >= 2`, template (`summary-copy.ts`):
 
   ```ts
   export const DISPLACEMENT_TEMPLATE =
@@ -449,9 +452,9 @@ export const familySummarySchema = z.object({
 
 Error codes: 400 Zod / `WEEK_START_NOT_MONDAY`; 401.
 
-OpenAPI: reuse tag `Family` (E08-02).
+OpenAPI: reuse tag `Family` (E08-02 (#41)).
 
-**UI (frontend-dev)** — n/a (E08-04 renders the panel).
+**UI (frontend-dev)** — n/a (E08-04 (#50) renders the panel).
 
 **Tests (testing-dev)**
 
@@ -459,9 +462,9 @@ OpenAPI: reuse tag `Family` (E08-02).
 - `apps/api/src/family/summary-copy.spec.ts` — `renderDisplacementNote({count:2, eveningCount:2, weeks:1})` → "Work displaced 2 evening family commitments this week. …"; `({count:3, eveningCount:1, weeks:4})` → "…3 family commitments over the last 4 weeks…"; singular with `count: 1` is never called (service threshold 2) but renders grammatically.
 - `apps/api/src/family/family-summary.service.spec.ts` (AI part) — gateway `{ok:false}` → template; AI output missing the count digit → template; AI output containing "score" → template; `displaced < 2` → `coachNote null` and gateway not called; cache hit skips the gateway.
 - `apps/api/src/family/no-score.guard.spec.ts` — as specified; also asserts the regex would catch a planted fixture string (so the test cannot pass vacuously).
-- `apps/api/test/family/family-summary.integration.spec.ts` — full app with gateway stub: 401; default query returns 4 weeks with `weekStart` = this Monday in the profile timezone; after E05-02 `complete`/`skip` on materialized rows the counts change accordingly; user B's rows never appear; body validates against `familySummarySchema`; serialised body `!~ /score|quality|rating/i`.
+- `apps/api/test/family/family-summary.integration.spec.ts` — full app with gateway stub: 401; default query returns 4 weeks with `weekStart` = this Monday in the profile timezone; after E05-02 (#40) `complete`/`skip` on materialized rows the counts change accordingly; user B's rows never appear; body validates against `familySummarySchema`; serialised body `!~ /score|quality|rating/i`.
 
-**Docs (docs-dev)** — `docs/API.md` "Family" section gains the summary route and the payload; `CLAUDE.md` "API Endpoints" adds it; the no-score rule and the moved-row accounting decision go to `docs/specs/family-domain.md` (E08-05).
+**Docs (docs-dev)** — `docs/API.md` "Family" section gains the summary route and the payload; `CLAUDE.md` "API Endpoints" adds it; the no-score rule and the moved-row accounting decision go to `docs/specs/family-domain.md` (E08-05 (#53)).
 
 #### Acceptance criteria
 
@@ -485,7 +488,7 @@ OpenAPI: reuse tag `Family` (E08-02).
 
 #### Manual test script
 
-1. Epic script steps 1–3 and E08-02 script steps 2–3 (ritual with 2–3 occurrences this week).
+1. Epic script steps 1–3 and E08-02 (#41) script steps 2–3 (ritual with 2–3 occurrences this week).
 2. `evopath api POST /api/commitments/<occ1>/actions/complete --data '{}'`; `evopath api POST /api/commitments/<occ2>/actions/skip --data '{"reason":"UNEXPECTED_CONFLICT"}'`.
 3. `evopath api GET "/api/family/summary?weekStart=<this Monday>&weeks=1" | jq '.data.weeks[0]'` → the ritual line with `kept 1, skipped 1`, `open` = remaining; `coachNote: null` (only one displaced).
 4. Skip one more with `BAD_TIMING` → `coachNote.text` starts "Work displaced 2 evening family commitments this week." with `source: "ai"` (fake server) — stop `fake-openai` and re-request after 6 h or restart the API → `source: "template"`, identical numbers.
@@ -495,42 +498,42 @@ OpenAPI: reuse tag `Family` (E08-02).
 #### Out of scope
 
 - Weekly review generation, recommendations and plan-diff proposals (E10 consumes this endpoint).
-- Family momentum state (E11), charts (E08-04 shows two integers, E11 owns visualisation).
+- Family momentum state (E11), charts (E08-04 (#50) shows two integers, E11 owns visualisation).
 - Any per-member breakdown (a member is optional context on a ritual, never an axis of measurement).
 
 #### Notes for the implementing agent
 
 - Keep the aggregation in memory over one Prisma query per week; there are at most a handful of family rows per week and the code stays readable for the no-score reviewer.
 - The regex in `no-score.guard.spec.ts` must run over file **text**, not TypeScript types, so it also catches a stray `qualityScore` in a Zod description string.
-- Reuse `localDayBounds`/`localDate` from E05-01; do not introduce a date library.
+- Reuse `localDayBounds`/`localDate` from E05-01 (#38); do not introduce a date library.
 - The AI rephrase must keep the digits: assert `text.includes(String(count))` before accepting it.
-- `RESCHEDULED` rows carry no `skipReason`; look up E05-02's `Reflection` (`relatedType 'commitment'`, `relatedId`) for a tag before counting them as displaced.
+- `RESCHEDULED` rows carry no `skipReason`; look up E05-02 (#40)'s `Reflection` (`relatedType 'commitment'`, `relatedId`) for a tag before counting them as displaced.
 
 ---
 
-### E08-04 `feat(web): add Family views under Path and family actions on Today`
+### E08-04 `feat(web): add Family views under Path and family actions on Today` — #50
 
-**Part of epic:** E08 · **Blocked by:** E08-02, E08-03, E05-04, E05-06, E02-06 · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev → docs-dev
+**Part of epic:** E08 · **Blocked by:** E08-02 (#41), E08-03 (#45), E05-04 (#46), E05-06 (#52), E02-06 (#56) · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-VISION §11 asks Family to answer "What family rituals am I trying to protect?" and "What promises have I made?"; PRD §34 needs a way to create a ritual with recurrence and durations; PRD §33 limits the member record to nickname, relationship and birthday; PRD §35 wants planned-versus-kept shown without gamified judgement; PRD §105 requires complete/move/skip on family commitments. E05-04's Today card already renders FAMILY commitments with the generic action set, and E02-06's Path screen has no Family section. The user has nowhere to define a ritual, see who it is with, or answer "I'm in" to tonight's dinner in family language.
+VISION §11 asks Family to answer "What family rituals am I trying to protect?" and "What promises have I made?"; PRD §34 needs a way to create a ritual with recurrence and durations; PRD §33 limits the member record to nickname, relationship and birthday; PRD §35 wants planned-versus-kept shown without gamified judgement; PRD §105 requires complete/move/skip on family commitments. E05-04 (#46)'s Today card already renders FAMILY commitments with the generic action set, and E02-06 (#56)'s Path screen has no Family section. The user has nowhere to define a ritual, see who it is with, or answer "I'm in" to tonight's dinner in family language.
 
 #### Proposed solution
 
-A `/path/family` page (rituals, members, upcoming occurrences, this-week counts) with sheet/dialog editors and a recurrence picker; family-specific primary actions on Today's FAMILY card ("I'm in", "Move it", "Skip today") mapped onto E02-04/E05-02 endpoints; and a birthday cue on Today computed client-side from the member's date-only birthday.
+A `/path/family` page (rituals, members, upcoming occurrences, this-week counts) with sheet/dialog editors and a recurrence picker; family-specific primary actions on Today's FAMILY card ("I'm in", "Move it", "Skip today") mapped onto E02-04 (#47)/E05-02 (#40) endpoints; and a birthday cue on Today computed client-side from the member's date-only birthday.
 
 **Data (database-dev)** — n/a.
 
-**API (backend-dev)** — n/a (consumes E08-02, E08-03, E02-04 `POST /commitments/:id/transition`, E05-02 actions).
+**API (backend-dev)** — n/a (consumes E08-02 (#41), E08-03 (#45), E02-04 (#47) `POST /commitments/:id/transition`, E05-02 (#40) actions).
 
 **UI (frontend-dev)**
 
-Routes (`apps/web/src/App.tsx`): `<Route path="/path/family" element={<FamilyPage />} />` inside `NotificationProvider` + `Layout`, ungated beyond `ProtectedRoute` (own data). Ownership: `DESTINATION_ROUTES.path = ['/path']` (E02-05) already covers it via `owns()`; no change to `apps/web/src/config/destinations.ts` and no settings-registry card (this is a Path surface, not a settings page). E02-06's Path screen gets a **Family** section header with a `Manage rituals` link to `/path/family` and, when rituals exist, the next occurrence per ritual (`RitualUpcomingRow`) — a one-component addition to `apps/web/src/pages/PathPage.tsx` (E02-06's file name may differ; read it first).
+Routes (`apps/web/src/App.tsx`): `<Route path="/path/family" element={<FamilyPage />} />` inside `NotificationProvider` + `Layout`, ungated beyond `ProtectedRoute` (own data). Ownership: `DESTINATION_ROUTES.path = ['/path']` (E02-05 (#51)) already covers it via `owns()`; no change to `apps/web/src/config/destinations.ts` and no settings-registry card (this is a Path surface, not a settings page). E02-06 (#56)'s Path screen gets a **Family** section header with a `Manage rituals` link to `/path/family` and, when rituals exist, the next occurrence per ritual (`RitualUpcomingRow`) — a one-component addition to `apps/web/src/pages/PathPage.tsx` (E02-06 (#56)'s file name may differ; read it first).
 
-Types (`apps/web/src/types/index.ts`): `FamilyRelationship`, `FamilyMember` (exactly `id, nickname, relationship, birthday, createdAt`), `RitualRecurrence`, `Ritual`, `RitualWithUpcoming`, `LintResult`, `FamilySummary`, `FamilySummaryWeek`, `RitualWeekCounts`, `MaterializeResult` — mirroring E08-01/02/03 schemas field for field. `CommitmentCard` (E05-04) gains `ritualId: string | null` and `familyMemberId: string | null` (E08-01 columns; E05-04's mapper must expose them — one-line change under this issue if missing).
+Types (`apps/web/src/types/index.ts`): `FamilyRelationship`, `FamilyMember` (exactly `id, nickname, relationship, birthday, createdAt`), `RitualRecurrence`, `Ritual`, `RitualWithUpcoming`, `LintResult`, `FamilySummary`, `FamilySummaryWeek`, `RitualWeekCounts`, `MaterializeResult` — mirroring E08-01 (#37)/02/03 schemas field for field. `CommitmentCard` (E05-04 (#46)) gains `ritualId: string | null` and `familyMemberId: string | null` (E08-01 (#37) columns; E05-04 (#46)'s mapper must expose them — one-line change under this issue if missing).
 
-`apps/web/src/services/api.ts`: `getFamilyMembers()`, `createFamilyMember(body)`, `updateFamilyMember(id, body)`, `deleteFamilyMember(id)`, `getRituals(params?)`, `getRitual(id)`, `createRitual(body)`, `updateRitual(id, body)`, `deleteRitual(id)`, `materializeRitual(id)`, `lintFamilyTitle(title)`, `getFamilySummary({weekStart?, weeks?})`, `transitionCommitment(id, body)` (E02-04's body shape; add only if E05 did not) — all through the `api` `ApiService`.
+`apps/web/src/services/api.ts`: `getFamilyMembers()`, `createFamilyMember(body)`, `updateFamilyMember(id, body)`, `deleteFamilyMember(id)`, `getRituals(params?)`, `getRitual(id)`, `createRitual(body)`, `updateRitual(id, body)`, `deleteRitual(id)`, `materializeRitual(id)`, `lintFamilyTitle(title)`, `getFamilySummary({weekStart?, weeks?})`, `transitionCommitment(id, body)` (E02-04 (#47)'s body shape; add only if E05 did not) — all through the `api` `ApiService`.
 
 Hooks: `apps/web/src/hooks/useFamilyMembers.ts` (`{members, loading, error, create, update, remove, refresh}`), `useRituals.ts` (`{rituals, loading, error, create, update, remove, materialize, refresh}` — `create`/`update` surface a 400 `BEHAVIOUR_TARGETS_OTHER_PERSON` as a field error on `title` with `match`), `useFamilySummary.ts` (`{summary, loading, error, refresh}`; `weeks: 1` for the panel), `useBehaviourLint.ts` (debounced 500 ms `lintFamilyTitle` on the title field; exposes `{result, suggesting, suggest()}`).
 
@@ -538,16 +541,16 @@ Pure utils: `apps/web/src/utils/recurrence.ts` — `describeRecurrence(r: Ritual
 
 Components (`apps/web/src/components/family/`):
 
-- `FamilyPage` (`apps/web/src/pages/FamilyPage.tsx`) — `Container maxWidth="lg"`; `Grid` `size={{ xs: 12, md: 7 }}`: `RitualList` + `UpcomingFamilyCommitments`; `size={{ xs: 12, md: 5 }}`: `FamilyMemberCards` + `FamilyWeekPanel`. Empty state (no rituals, no members): illustration-free copy "Protect what matters before the calendar takes it" with `Add a family member` and `Create a ritual`. Page title via the AppBar title resolver the way E02-06's Path page does.
+- `FamilyPage` (`apps/web/src/pages/FamilyPage.tsx`) — `Container maxWidth="lg"`; `Grid` `size={{ xs: 12, md: 7 }}`: `RitualList` + `UpcomingFamilyCommitments`; `size={{ xs: 12, md: 5 }}`: `FamilyMemberCards` + `FamilyWeekPanel`. Empty state (no rituals, no members): illustration-free copy "Protect what matters before the calendar takes it" with `Add a family member` and `Create a ritual`. Page title via the AppBar title resolver the way E02-06 (#56)'s Path page does.
 - `RitualList.tsx` (`{rituals, onEdit, onToggleActive, onDelete}`) — `RitualCard` per ritual: title, `describeRecurrence`, "45 min (min 10)", member chip when `familyMemberId` (nickname looked up from `useFamilyMembers`), `Paused` tag when `!active`, ⋯ menu: Edit / Pause–Resume / Delete (confirm dialog: "Future occurrences will be cancelled. Past ones stay on your record.").
-- `RitualEditor.tsx` (`{open, initial?, members, onClose, onSaved}`) — `SwipeableDrawer anchor="bottom"` below 600px, `Dialog maxWidth="sm"` at ≥ 600px (`useMediaQuery(theme.breakpoints.down('sm'))`, a local presentation choice as in E05-06 — not one of the five coupled gates). Fields: title (with `useBehaviourLint`: on a failing lint show the error under the field, and `Suggest a rewrite` when `result.suggestion` exists — never auto-replace), purpose, member `Select` ("No one in particular"), `RecurrencePicker`, ideal/minimum minutes (chips 5/10/15/20/30/45/60 + custom), fallback text with helper "What is the smallest version that still counts?", optional `outcomeId` `Select` from `GET /outcomes?domain=FAMILY` (E02-02) labelled "Link to a Path outcome (shows on Path)". Save → create/update → `onSaved`; server 400 lint → field error.
+- `RitualEditor.tsx` (`{open, initial?, members, onClose, onSaved}`) — `SwipeableDrawer anchor="bottom"` below 600px, `Dialog maxWidth="sm"` at ≥ 600px (`useMediaQuery(theme.breakpoints.down('sm'))`, a local presentation choice as in E05-06 (#52) — not one of the five coupled gates). Fields: title (with `useBehaviourLint`: on a failing lint show the error under the field, and `Suggest a rewrite` when `result.suggestion` exists — never auto-replace), purpose, member `Select` ("No one in particular"), `RecurrencePicker`, ideal/minimum minutes (chips 5/10/15/20/30/45/60 + custom), fallback text with helper "What is the smallest version that still counts?", optional `outcomeId` `Select` from `GET /outcomes?domain=FAMILY` (E02-02 (#39)) labelled "Link to a Path outcome (shows on Path)". Save → create/update → `onSaved`; server 400 lint → field error.
 - `RecurrencePicker.tsx` (`{value, onChange}`) — seven `ToggleButton` weekday chips in Monday-first order (`aria-pressed`, labels `Mon … Sun`), MUI X `TimePicker` (24 h, minute step 5), `ToggleButtonGroup` "Every week / 2 weeks / 4 weeks"; live summary text below via `describeRecurrence`.
 - `FamilyMemberCards.tsx` (`{members, onAdd, onEdit, onDelete}`) — small cards: nickname, relationship label, `Birthday in N days` / `Birthday today` when `daysUntilBirthday ≤ 7`, else the date without year when set. Nothing else is rendered or requested — the card is intentionally sparse (PRD §33).
 - `FamilyMemberEditor.tsx` (`{open, initial?, onClose, onSaved}`) — sheet/dialog as above; nickname (40 max, counter), relationship `Select` in enum order, birthday `DatePicker` with a "Year unknown" checkbox that sends `1900-MM-DD`; delete requires confirm ("Rituals and past commitments keep their history; the name is removed.").
-- `UpcomingFamilyCommitments.tsx` (`{commitments, onAction}`) — next 7 days of FAMILY `CommitmentCard`s from `GET /commitments?from&to&domain=FAMILY` (E02-04), grouped by local day, each row reusing E05-04's `CommitmentRow` with the family action labels below.
+- `UpcomingFamilyCommitments.tsx` (`{commitments, onAction}`) — next 7 days of FAMILY `CommitmentCard`s from `GET /commitments?from&to&domain=FAMILY` (E02-04 (#47)), grouped by local day, each row reusing E05-04 (#46)'s `CommitmentRow` with the family action labels below.
 - `FamilyWeekPanel.tsx` (`{summary}`) — "This week": one line per ritual `title · Planned N · Kept N` with small `moved/skipped` text; `coachNote.text` in a quiet `Alert severity="info"` when present, with a "template" caption when `source === 'template'`. **No progress bar, no percentage, no colour scale** — two integers, deliberately (VISION §12).
-- `BirthdayCue.tsx` (`{members, todayLocal}`) — chip "🎂 Mia's birthday in 5 days" / "today"; rendered inside Today's FAMILY `DomainCard` header (E05-04 `DomainCard` gains an optional `headerExtra?: ReactNode` prop) and at the top of `FamilyPage`. Data: `useFamilyMembers` (one extra `GET /family/members` on Today, cached for the session in the hook).
-- Family action labels on Today (`apps/web/src/components/today/familyActions.ts`, consumed by `CommitmentRow`/`CommitmentActionsMenu` when `commitment.domain === 'FAMILY'`): `PLANNED | RESCHEDULED` → primary **I'm in** (`transitionCommitment(id, → READY)` via E02-04; optimistic; the row then shows E05's `Start`), secondary **Move it** (opens E05-04 `RescheduleDialog` → `rescheduleCommitment`), **Skip today** (opens E05-04 `SkipDialog` → `skipCommitment`; reason list unchanged); `READY | STARTED` → E05's generic labels; `COMPLETED` → "Kept" instead of "Done" in the status text. Labels only — every request is an existing E02-04/E05-02 endpoint.
+- `BirthdayCue.tsx` (`{members, todayLocal}`) — chip "🎂 Mia's birthday in 5 days" / "today"; rendered inside Today's FAMILY `DomainCard` header (E05-04 (#46) `DomainCard` gains an optional `headerExtra?: ReactNode` prop) and at the top of `FamilyPage`. Data: `useFamilyMembers` (one extra `GET /family/members` on Today, cached for the session in the hook).
+- Family action labels on Today (`apps/web/src/components/today/familyActions.ts`, consumed by `CommitmentRow`/`CommitmentActionsMenu` when `commitment.domain === 'FAMILY'`): `PLANNED | RESCHEDULED` → primary **I'm in** (`transitionCommitment(id, → READY)` via E02-04 (#47); optimistic; the row then shows E05's `Start`), secondary **Move it** (opens E05-04 (#46) `RescheduleDialog` → `rescheduleCommitment`), **Skip today** (opens E05-04 (#46) `SkipDialog` → `skipCommitment`; reason list unchanged); `READY | STARTED` → E05's generic labels; `COMPLETED` → "Kept" instead of "Done" in the status text. Labels only — every request is an existing E02-04 (#47)/E05-02 (#40) endpoint.
 
 Responsive: `FamilyPage` two columns at `md`, single column below; editors sheet/dialog at `sm` as a local choice; `BottomNav` and the rail untouched (five coupled gates). Visual harness: add `family` and `family-empty` scenes to `apps/web/visual/main.tsx` and regenerate baselines in the pinned Playwright container.
 
@@ -559,13 +562,13 @@ A11y: weekday chips are `ToggleButton`s with `aria-pressed` and full-name `aria-
 - `apps/web/src/__tests__/utils/recurrence.test.ts` — `describeRecurrence` for 1/2/4 weeks, all-seven → "Daily", Monday-first ordering of a `[0,2,4]` value → "Tue, Thu, Sun".
 - `apps/web/src/__tests__/utils/birthday.test.ts` — 5 days ahead, today, yesterday → 364/365, year ignored (`1900-…`), 29 Feb in a non-leap year, `null` for `null`.
 - `apps/web/src/__tests__/utils/ritualForm.schema.test.ts` — minimum > ideal rejected; empty weekdays rejected; `everyNWeeks: 3` rejected.
-- `apps/web/src/__tests__/pages/FamilyPage.test.tsx` — empty state CTAs; creating a member posts exactly `{nickname, relationship, birthday}` and the card appears; creating a ritual posts the exact E08-02 body (assert JSON) and the card shows "Tue, Thu, Sun · 18:30 · 45 min (min 10)"; lint 400 from MSW → field error with `match` text and `Suggest a rewrite` present only when the mock returns a suggestion; clicking it fills the field (does not submit); week panel shows `Planned 3 · Kept 1` and **no** `%` or progress bar (`queryByRole('progressbar')` is null); birthday cue at ≤ 7 days; below 600px the editor is a `SwipeableDrawer`, at ≥ 600px a `Dialog` (mock `matchMedia`); axe.
+- `apps/web/src/__tests__/pages/FamilyPage.test.tsx` — empty state CTAs; creating a member posts exactly `{nickname, relationship, birthday}` and the card appears; creating a ritual posts the exact E08-02 (#41) body (assert JSON) and the card shows "Tue, Thu, Sun · 18:30 · 45 min (min 10)"; lint 400 from MSW → field error with `match` text and `Suggest a rewrite` present only when the mock returns a suggestion; clicking it fills the field (does not submit); week panel shows `Planned 3 · Kept 1` and **no** `%` or progress bar (`queryByRole('progressbar')` is null); birthday cue at ≤ 7 days; below 600px the editor is a `SwipeableDrawer`, at ≥ 600px a `Dialog` (mock `matchMedia`); axe.
 - `apps/web/src/__tests__/components/family/RecurrencePicker.test.tsx` — chips toggle values (Sunday → 0), keyboard toggling, summary text updates.
 - `apps/web/src/__tests__/components/family/RitualEditor.test.tsx` — edit mode prefills; `Pause` sends `{active:false}`; delete confirm text; server 400 lint mapped to the title field.
 - `apps/web/src/__tests__/pages/TodayPage.test.tsx` (extend) — a FAMILY row shows `I'm in` / `Move it` / `Skip today`; `I'm in` posts the transition and the row re-renders as READY with `Start`; WORK rows are unchanged; cue chip renders when a member's birthday is within 7 days.
 - `apps/web/src/__tests__/config/destinations.test.ts` — `/path/family` is owned by `path` (prefix), and by nothing else.
 
-**Docs (docs-dev)** — `docs/specs/family-domain.md` UI section (E08-05 owns the file; this issue adds the component map to the PR); `CLAUDE.md` unchanged (no settings page, no registry).
+**Docs (docs-dev)** — `docs/specs/family-domain.md` UI section (E08-05 (#53) owns the file; this issue adds the component map to the PR); `CLAUDE.md` unchanged (no settings page, no registry).
 
 #### Acceptance criteria
 
@@ -602,27 +605,27 @@ A11y: weekday chips are `ToggleButton`s with `aria-pressed` and full-name `aria-
 
 - Notification settings for family cues (E12), calendar sync (PRD §69).
 - Charts or momentum visuals for family (E11 owns Progress).
-- Editing occurrences' text (E05-06's editor already does that for any commitment).
+- Editing occurrences' text (E05-06 (#52)'s editor already does that for any commitment).
 - A Family destination in the bottom bar or rail — Family lives under Path (PRD §11 fixes the five destinations).
 
 #### Notes for the implementing agent
 
-- Follow `apps/web/src/pages/Admin/EmailSettingsPage.tsx` + `hooks/useEmailSettings.ts` for the hook/page split and `ApiError` handling; E05-06's `QuickAddSheet` for the sheet/dialog switch.
+- Follow `apps/web/src/pages/Admin/EmailSettingsPage.tsx` + `hooks/useEmailSettings.ts` for the hook/page split and `ApiError` handling; E05-06 (#52)'s `QuickAddSheet` for the sheet/dialog switch.
 - Do not touch `Layout.tsx`, `BottomNav.tsx`, `AppBar.tsx`, `SettingsHub.tsx` breakpoints (five coupled gates); `md` on `FamilyPage` and `sm` in the editors are local layout choices — say so in a comment.
-- `DomainCard`'s `headerExtra` prop and `CommitmentRow`'s label map are small extensions of E05-04 components; keep them additive so E05 tests stay green.
-- Weekday values are 0 = Sunday (JS `getDay()`, E08-02 contract); only the **display** order is Monday-first.
+- `DomainCard`'s `headerExtra` prop and `CommitmentRow`'s label map are small extensions of E05-04 (#46) components; keep them additive so E05 tests stay green.
+- Weekday values are 0 = Sunday (JS `getDay()`, E08-02 (#41) contract); only the **display** order is Monday-first.
 - The birthday placeholder year `1900` must never be shown; `daysUntilBirthday` ignores the year and the card prints `dd MMM` only.
 - Do not add `/path/family` to `USER_SETTINGS_SECTIONS` or `ADMIN_SECTIONS`; it is not a settings page.
 
 ---
 
-### E08-05 `test(tests): E08 end-to-end verification`
+### E08-05 `test(tests): E08 end-to-end verification` — #53
 
-**Part of epic:** E08 · **Blocked by:** E08-01, E08-02, E08-03, E08-04, E01-10, E05-07 · **Component:** tests, docs · **Priority:** P0 · **Agents:** testing-dev → docs-dev
+**Part of epic:** E08 · **Blocked by:** E08-01 (#37), E08-02 (#41), E08-03 (#45), E08-04 (#50), E01-10 (#30), E05-07 (#55) · **Component:** tests, docs · **Priority:** P0 · **Agents:** testing-dev → docs-dev
 
 #### Problem statement
 
-PRD §105's five family acceptance criteria — create a family commitment, create a recurrence, complete/move/skip, and never create a family-quality score — are only proven when a browser drives the ritual from creation to a kept occurrence against the real API, database and cron path, with the fake OpenAI server (E01-10) answering the optional AI calls. The epic also has to leave the spec later epics (E10 planned-vs-actual, E11 momentum, E12 N5 cues) read for the contracts fixed here.
+PRD §105's five family acceptance criteria — create a family commitment, create a recurrence, complete/move/skip, and never create a family-quality score — are only proven when a browser drives the ritual from creation to a kept occurrence against the real API, database and cron path, with the fake OpenAI server (E01-10 (#30)) answering the optional AI calls. The epic also has to leave the spec later epics (E10 planned-vs-actual, E11 momentum, E12 N5 cues) read for the contracts fixed here.
 
 #### Proposed solution
 
@@ -630,17 +633,17 @@ A Playwright spec `tests/e2e/specs/family.spec.ts` with an API helper for family
 
 **Data (database-dev)** — n/a.
 
-**API (backend-dev)** — n/a (a seeding gap in E08-02's DTOs is filed against E08-02; do not patch here).
+**API (backend-dev)** — n/a (a seeding gap in E08-02 (#41)'s DTOs is filed against E08-02 (#41); do not patch here).
 
 **UI (frontend-dev)** — add stable `data-testid`s only where role/text selectors are ambiguous: `family-add-member`, `family-create-ritual`, `ritual-title`, `recurrence-weekday-<0..6>`, `recurrence-time`, `ritual-ideal`, `ritual-minimum`, `ritual-fallback`, `ritual-save`, `ritual-card-<id>`, `family-week-panel`, `today-family-imin`, `today-family-move`, `today-family-skip`, `today-birthday-cue`.
 
 **Tests (testing-dev)**
 
-- `tests/e2e/helpers/family.helper.ts` (new): `apiContext(page)` (reuse E05-07's `commitments.helper.ts` implementation — import, do not copy), `createMember(ctx, body)`, `createRitual(ctx, body)`, `listFamilyCommitments(ctx, from, to)`, `materialize(ctx, ritualId)`, `getSummary(ctx, weekStart, weeks)`, `mondayOf(dateLocal)`, `setTimezone(ctx, tz)` (E04-01 `PATCH /me/profile`).
-- `tests/e2e/specs/family.spec.ts` (run with `docker compose -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up`), fresh user per test via `loginAsTestUser` with a unique email, `withAiKey` (E01-10) and onboarding marked complete (E04-06); timezone set to `UTC` so "tonight" is computable:
+- `tests/e2e/helpers/family.helper.ts` (new): `apiContext(page)` (reuse E05-07 (#55)'s `commitments.helper.ts` implementation — import, do not copy), `createMember(ctx, body)`, `createRitual(ctx, body)`, `listFamilyCommitments(ctx, from, to)`, `materialize(ctx, ritualId)`, `getSummary(ctx, weekStart, weeks)`, `mondayOf(dateLocal)`, `setTimezone(ctx, tz)` (E04-01 (#100) `PATCH /me/profile`).
+- `tests/e2e/specs/family.spec.ts` (run with `docker compose -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up`), fresh user per test via `loginAsTestUser` with a unique email, `withAiKey` (E01-10 (#30)) and onboarding marked complete (E04-06 (#107)); timezone set to `UTC` so "tonight" is computable:
   1. **Member → ritual → materialize → Today → I'm in → complete → summary 1/1**: UI: `/path/family` → `Add a family member` (`Mia`, `Child`, birthday = today + 5 days with the year checkbox unticked) → card visible with "Birthday in 5 days"; `Create a ritual` → title `Phone-free dinner`, weekdays chosen so that **today** is included plus two others (compute from `new Date().getUTCDay()`), time = current UTC time + 2 h rounded to 5 min (so tonight's occurrence is in the future), ideal 45, minimum 10, fallback text → Save; expect the ritual card text to include "45 min (min 10)". API: `listFamilyCommitments(today, today+7d)` → ≥ 1 row with `ritualId`, exactly one with today's date; `materialize(ritualId)` → `created 0`. UI: `/` → Family card shows `Phone-free dinner` and `today-birthday-cue` reads "Mia's birthday in 5 days"; click `today-family-imin` → row shows `Start`; ⋯ → `Done` → `Complete`; row shows kept. API: `getSummary(mondayOf(today), 1)` → the ritual line has `planned ≥ 1`, `kept 1`; `JSON.stringify(summary)` does not match `/score|quality|rating/i`.
   2. **Move and skip via Today**: seed a ritual with two occurrences this week through the API; on `/`, `today-family-move` → tomorrow → save → `GET /commitments/:id` `rescheduleCount 1`, `status RESCHEDULED`; on the second occurrence (reschedule it to today first via API) `today-family-skip` → `Unexpected conflict` → `SKIPPED`; summary shows `skipped 1`.
-  3. **Behaviour lint in the editor with and without AI**: type `Make Mia happier` → error text visible, `Suggest a rewrite` visible (fake server) → click → field is non-empty and differs → Save disabled until the lint passes; then admin fixture points `baseUrl` at `http://fake-openai:1/v1` (E05-07 case 5 pattern) → reload → same title → error visible, no suggest button; `afterEach` restores `baseUrl`.
+  3. **Behaviour lint in the editor with and without AI**: type `Make Mia happier` → error text visible, `Suggest a rewrite` visible (fake server) → click → field is non-empty and differs → Save disabled until the lint passes; then admin fixture points `baseUrl` at `http://fake-openai:1/v1` (E05-07 (#55) case 5 pattern) → reload → same title → error visible, no suggest button; `afterEach` restores `baseUrl`.
   4. **Recurrence edit cancels only future PLANNED rows**: API-seeded ritual with three weekdays; complete one occurrence via API; UI: edit → untick one weekday → Save; API: rows for the removed weekday in the future are `CANCELLED`, the completed row is still `COMPLETED`, no row was deleted (count unchanged).
   5. **No score fields anywhere**: for each of `GET /family/members`, `GET /family/rituals`, `GET /family/rituals/:id`, `GET /family/summary`, `GET /api/docs/openapi.json` (filtered to `/api/family` paths and their schemas): `expect(JSON.stringify(body)).not.toMatch(/score|quality|rating/i)`; and `GET /family/members` items have exactly the five keys (sorted equality).
   6. **Responsive**: `page.setViewportSize({width: 390, height: 844})` → `/path/family` shows a single column, `Create a ritual` opens a drawer (`role="presentation"` MUI drawer paper visible) and BottomNav is visible; at `{1280, 800}` the editor is a `role="dialog"`.
@@ -648,7 +651,7 @@ A Playwright spec `tests/e2e/specs/family.spec.ts` with an API helper for family
 
 **Docs (docs-dev)**
 
-- `docs/specs/family-domain.md` (new): purpose and the privacy boundary (PRD §33, VISION §50 — what the member record may hold and why nothing else); data model (`family_members`, `rituals`, commitment links, the unique index); recurrence contract (`RitualRecurrence`, weekday numbering, Monday-start weeks, `everyNWeeks` anchoring to `createdAt`, DST rules for gaps and overlaps, the 7-day horizon, cron at 01:00 + on-demand, idempotency via the index, cancel-not-delete on edit, `SetNull` on delete); version mapping ideal/short/minimum; behaviour lint rules A–C with the PRD §32 examples and the FAMILY-only hook in `CommitmentsService`; the optional AI rewrite and its re-lint; the summary contract (count semantics, moved-row accounting under E02-04's new-row reschedule, the displacement template and threshold, AI rephrase acceptance rules); the **no-score rule** and the test that enforces it; UI map (`/path/family`, family action labels on Today, birthday cue); what E10/E11/E12 read from here; rejected alternatives (RRULE strings, a Family destination in the nav, per-member metrics, a "kept %" bar, notification-driven materialization).
+- `docs/specs/family-domain.md` (new): purpose and the privacy boundary (PRD §33, VISION §50 — what the member record may hold and why nothing else); data model (`family_members`, `rituals`, commitment links, the unique index); recurrence contract (`RitualRecurrence`, weekday numbering, Monday-start weeks, `everyNWeeks` anchoring to `createdAt`, DST rules for gaps and overlaps, the 7-day horizon, cron at 01:00 + on-demand, idempotency via the index, cancel-not-delete on edit, `SetNull` on delete); version mapping ideal/short/minimum; behaviour lint rules A–C with the PRD §32 examples and the FAMILY-only hook in `CommitmentsService`; the optional AI rewrite and its re-lint; the summary contract (count semantics, moved-row accounting under E02-04 (#47)'s new-row reschedule, the displacement template and threshold, AI rephrase acceptance rules); the **no-score rule** and the test that enforces it; UI map (`/path/family`, family action labels on Today, birthday cue); what E10/E11/E12 read from here; rejected alternatives (RRULE strings, a Family destination in the nav, per-member metrics, a "kept %" bar, notification-driven materialization).
 - `docs/API.md`: "Family" section — 12 routes with request/response examples and error codes.
 - `CLAUDE.md`: endpoints list, `family_members`/`rituals` in Database Tables, a "Family domain" pointer paragraph to the spec (do not restate rules).
 - `docs/TESTING.md`: E2E section mentions `family.spec.ts` and the fake-openai compose file.
@@ -683,14 +686,14 @@ A Playwright spec `tests/e2e/specs/family.spec.ts` with an API helper for family
 
 #### Out of scope
 
-- Visual-regression baselines for `/path/family` (E08-04 owns them).
+- Visual-regression baselines for `/path/family` (E08-04 (#50) owns them).
 - E10/E11/E12 flows that consume the family data.
 - CI workflow files (declined project-wide; local runs only).
 
 #### Notes for the implementing agent
 
-- Reuse `tests/e2e/helpers/auth.helper.ts` (with E01-10's `withAiKey` and E04-06's onboarding option) and E05-07's `commitments.helper.ts`; do not create a second login or API-context helper.
-- Seed through the API, never through `psql`, so the spec also exercises E08-02's create contracts.
+- Reuse `tests/e2e/helpers/auth.helper.ts` (with E01-10 (#30)'s `withAiKey` and E04-06 (#107)'s onboarding option) and E05-07 (#55)'s `commitments.helper.ts`; do not create a second login or API-context helper.
+- Seed through the API, never through `psql`, so the spec also exercises E08-02 (#41)'s create contracts.
 - Case 1's "tonight" arithmetic must run in UTC with the profile timezone set to `UTC`; if the run starts after 21:55 UTC, roll the ritual time to tomorrow and assert on tomorrow's row instead of failing.
 - The spec file is the last child: if a case fails because an earlier child deviated, fix the child under its own issue and reference it in the commit.
 

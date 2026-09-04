@@ -1,6 +1,9 @@
 # E02 — Product Shell, Domain Model & Path Screen
 
 <!-- epic-meta: slug=product-shell-domain-model phase=1 -->
+<!-- epic-issue: #33 -->
+
+> GitHub epic: [#33](https://github.com/marinoscar/evolvepath/issues/33)
 
 ## Epic
 
@@ -11,7 +14,7 @@ Give EvolvePath its deterministic backbone before any AI touches it: the PRD §9
 ### Background
 
 - The repo is a generic foundation (OAuth, RBAC, settings hub, encrypted credentials, storage, notifications) with **no product tables**. `apps/api/prisma/schema.prisma` ends at `notifications`; the last migration is `20260831030721_add_notifications`.
-- E01 ships the `RequireAiKey` gate (`apps/web/src/components/common/RequireAiKey.tsx`, route tree `ProtectedRoute` → `RequireAiKey` → `NotificationProvider`+`Layout`), the `AiGatewayService` contract, and the fake OpenAI server (`tools/fake-openai/server.mjs`, `infra/compose/fake-openai.compose.yml`, E01-10) plus the `withAiKey` option on `POST /auth/test/login` and `tests/e2e/helpers/auth.helper.ts`. E02 makes **no AI calls**; it only has to coexist with that gate (every shell route is behind it) and reuse `withAiKey` in e2e so a test user is not bounced to `/setup/ai-key`.
+- E01 ships the `RequireAiKey` gate (`apps/web/src/components/common/RequireAiKey.tsx`, route tree `ProtectedRoute` → `RequireAiKey` → `NotificationProvider`+`Layout`), the `AiGatewayService` contract, and the fake OpenAI server (`tools/fake-openai/server.mjs`, `infra/compose/fake-openai.compose.yml`, E01-10 (#30)) plus the `withAiKey` option on `POST /auth/test/login` and `tests/e2e/helpers/auth.helper.ts`. E02 makes **no AI calls**; it only has to coexist with that gate (every shell route is behind it) and reuse `withAiKey` in e2e so a test user is not bounced to `/setup/ai-key`.
 - Per-user resources follow the PAT pattern: plain `@Auth()` (`apps/api/src/auth/decorators/auth.decorator.ts`, `Auth(options: { roles?, permissions? })`), `@CurrentUser('id')`, `prisma.<model>.findFirst({ where: { id, userId } })` and `NotFoundException` when absent (`apps/api/src/pat/pat.service.ts`). No new permission strings are introduced by this epic.
 - DTOs are `nestjs-zod` `createZodDto` classes (`apps/api/src/pat/dto/create-pat.dto.ts`); `ZodValidationPipe` is global (`APP_PIPE` in `app.module.ts`). class-validator is not used anywhere.
 - Audit is a direct `prisma.auditEvent.create({ actorUserId, action: '<domain>:<verb>', targetType, targetId, meta })` (`apps/api/src/email/email-settings.service.ts` ~line 434).
@@ -22,37 +25,37 @@ Give EvolvePath its deterministic backbone before any AI touches it: the PRD §9
 - Pixel baselines live in `tests/visual/specs/*-snapshots/` and are regenerated only inside `mcr.microsoft.com/playwright:v1.62.1-noble` (`docs/TESTING.md` → "Visual Regression Testing"). The harness `apps/web/visual/main.tsx` mounts the real `Layout`/rail/bottom bar over a fake `AuthContext`.
 - Web tests: Vitest + RTL + MSW (`apps/web/src/__tests__/mocks/handlers.ts`, `utils/test-utils.tsx` `renderWithProviders`); `vitest-axe` is already a devDependency (used by `components/datatable/__tests__/conformance/runDataTableConformanceSuite.tsx`).
 - There is no PWA manifest, no service worker, no `apps/web/public/icons/`; `apps/web/index.html` carries only the `%APP_NAME%` title/description and the Inter stylesheet link; `apps/web/nginx.conf` caches `\.(js|css|png|…)$` for one year with `immutable` — a service worker file served under that rule would never update.
-- Related specs: `docs/specs/settings-ui.md` (E01-11), `docs/specs/ai-gateway.md` (E01-12). This epic adds `docs/specs/domain-model.md` (E02-08).
+- Related specs: `docs/specs/settings-ui.md` (E01-11 (#31)), `docs/specs/ai-gateway.md` (E01-12 (#32)). This epic adds `docs/specs/domain-model.md` (E02-08 (#62)).
 
 ### Scope
 
-- [ ] E02-01 feat(db): add EvolvePath core domain schema
-- [ ] E02-02 feat(api): add Best Self, Outcomes and Domain Mode endpoints
-- [ ] E02-03 feat(api): add Plans with versioning and Routines endpoints
-- [ ] E02-04 feat(api): add Commitments, Evidence and Reflections endpoints
-- [ ] E02-05 feat(web): add app shell with Today/Path/Coach/Progress/Profile navigation
-- [ ] E02-06 feat(web): add Path screen with outcome, plan version and routine management
-- [ ] E02-07 feat(web): add PWA baseline with manifest, icons and app-shell service worker
-- [ ] E02-08 test(tests): E02 end-to-end verification
+- [ ] #36 feat(db): add EvolvePath core domain schema (E02-01)
+- [ ] #39 feat(api): add Best Self, Outcomes and Domain Mode endpoints (E02-02)
+- [ ] #42 feat(api): add Plans with versioning and Routines endpoints (E02-03)
+- [ ] #47 feat(api): add Commitments, Evidence and Reflections endpoints (E02-04)
+- [ ] #51 feat(web): add app shell with Today/Path/Coach/Progress/Profile navigation (E02-05)
+- [ ] #56 feat(web): add Path screen with outcome, plan version and routine management (E02-06)
+- [ ] #58 feat(web): add PWA baseline with manifest, icons and app-shell service worker (E02-07)
+- [ ] #62 test(tests): E02 end-to-end verification (E02-08)
 
 ### Out of scope
 
 - Any AI call, proposal, or plan mutation by AI (E04 onboarding, E06 mutation protocol). Every write in this epic is user-authored (`createdBy: USER`).
-- The real Today screen, next-best-action engine, Start flow, quick add, daily check-in (E05). E02-05 ships a placeholder Today page only.
+- The real Today screen, next-best-action engine, Start flow, quick add, daily check-in (E05). E02-05 (#51) ships a placeholder Today page only.
 - Coach and Progress screens (E06, E11) — placeholders only.
-- `UserProfile` (timezone, locale, onboarding state, coaching style) — E04-01. Commitments in this epic store UTC `Timestamptz` and the browser renders local time.
+- `UserProfile` (timezone, locale, onboarding state, coaching style) — E04-01 (#100). Commitments in this epic store UTC `Timestamptz` and the browser renders local time.
 - Focus sessions, rituals/recurrence generation, workouts (E07–E09). `Routine` describes a repeatable behaviour; nothing in E02 materialises commitments from routines automatically.
-- Momentum, consistency runs, comeback loop (E11); notifications of any kind (E12); web push (E12-04).
-- Offline data caching or background sync in the service worker (PRD §121 applies to workout logging, E09-08). E02-07 precaches the app shell only.
+- Momentum, consistency runs, comeback loop (E11); notifications of any kind (E12); web push (E12-04 (#64)).
+- Offline data caching or background sync in the service worker (PRD §121 applies to workout logging, E09-08 (#109)). E02-07 (#58) precaches the app shell only.
 - Wearables, calendar, voice, social (PRD §100, §112, §113).
 
 ### Sequencing
 
-- **Critical path:** E02-01 → E02-02 → E02-03 → E02-04 → E02-06 → E02-08.
-- E02-05 (shell/navigation) depends on nothing in this epic besides E01's route tree; it can start in parallel with E02-01 and must land before E02-06 (which needs the `/path` destination).
-- E02-07 (PWA) depends only on E02-05 (the shell it caches) and can run in parallel with E02-03/E02-04.
-- E02-02, E02-03, E02-04 are sequential because each extends `PathModule`/`CommitmentsModule` and the OpenAPI tag group the previous one created; running them in parallel produces merge conflicts in `tags.ts`, `app.module.ts` and `docs/API.md`.
-- E02-08 is last and depends on every other child plus E01-10 (fake OpenAI server, `withAiKey`).
+- **Critical path:** E02-01 (#36) → E02-02 (#39) → E02-03 (#42) → E02-04 (#47) → E02-06 (#56) → E02-08 (#62).
+- E02-05 (#51) (shell/navigation) depends on nothing in this epic besides E01's route tree; it can start in parallel with E02-01 (#36) and must land before E02-06 (#56) (which needs the `/path` destination).
+- E02-07 (#58) (PWA) depends only on E02-05 (#51) (the shell it caches) and can run in parallel with E02-03 (#42)/E02-04 (#47).
+- E02-02 (#39), E02-03 (#42), E02-04 (#47) are sequential because each extends `PathModule`/`CommitmentsModule` and the OpenAPI tag group the previous one created; running them in parallel produces merge conflicts in `tags.ts`, `app.module.ts` and `docs/API.md`.
+- E02-08 (#62) is last and depends on every other child plus E01-10 (#30) (fake OpenAI server, `withAiKey`).
 
 ### Manual end-to-end verification
 
@@ -77,7 +80,7 @@ Give EvolvePath its deterministic backbone before any AI touches it: the PRD §9
 
 ## Child issues
 
-### E02-01 `feat(db): add EvolvePath core domain schema`
+### E02-01 `feat(db): add EvolvePath core domain schema` — #36
 
 **Part of epic:** E02 · **Blocked by:** none · **Component:** database · **Priority:** P0 · **Agents:** database-dev → testing-dev → docs-dev
 
@@ -140,12 +143,12 @@ then `npm run prisma:migrate:dev` (applies) and `npm run prisma:generate`. Seed 
 **Tests (testing-dev)**
 
 - `apps/api/test/db/core-domain-schema.integration.spec.ts` (new, `useMockDatabase: false`, runs against `infra/compose/test.compose.yml`'s Postgres; skip with a clear message when `POSTGRES_HOST` is unset, matching how `apps/api/test/setup.ts` guards DB specs): (a) migration applies on an empty DB (`npm run prisma:migrate` exit 0); (b) inserting two `ACTIVE` versions for one plan raises a unique-violation (`P2002`) while `DRAFT`+`ACTIVE` succeeds; (c) `@@unique([planId, version])` rejects a duplicate version number; (d) deleting a `User` cascades to all nine tables (`count == 0` afterwards); (e) deleting a `Commitment` leaves its `evidence_items` row with `commitment_id NULL`.
-- `apps/api/test/mocks/prisma.mock.ts`: extend `createMockPrismaService` with the nine new delegates (`bestSelfProfile`, `outcome`, `plan`, `planVersion`, `routine`, `commitment`, `evidence`, `reflection`, `domainMode`) so E02-02..04 unit tests can stub them.
+- `apps/api/test/mocks/prisma.mock.ts`: extend `createMockPrismaService` with the nine new delegates (`bestSelfProfile`, `outcome`, `plan`, `planVersion`, `routine`, `commitment`, `evidence`, `reflection`, `domainMode`) so E02-02 (#39)..04 unit tests can stub them.
 
 **Docs (docs-dev)**
 
 - `CLAUDE.md` → "Database Tables": add the nine tables in one bullet each.
-- `docs/ARCHITECTURE.md`: add a "Product domain" subsection listing the hierarchy and pointing at `docs/specs/domain-model.md` (written in E02-08; link it as forthcoming).
+- `docs/ARCHITECTURE.md`: add a "Product domain" subsection listing the hierarchy and pointing at `docs/specs/domain-model.md` (written in E02-08 (#62); link it as forthcoming).
 
 #### Acceptance criteria
 
@@ -176,8 +179,8 @@ then `npm run prisma:migrate:dev` (applies) and `npm run prisma:generate`. Seed 
 
 #### Out of scope
 
-- Endpoints, DTOs, services (E02-02..04).
-- `UserProfile`/timezone (E04-01); `Obstacle`, `MemoryInsight` (E06-01); `FocusSession` (E07-02); `FamilyMember`/`Ritual` (E08-01); workout tables (E09-01).
+- Endpoints, DTOs, services (E02-02 (#39)..04).
+- `UserProfile`/timezone (E04-01 (#100)); `Obstacle`, `MemoryInsight` (E06-01 (#61)); `FocusSession` (E07-02 (#110)); `FamilyMember`/`Ritual` (E08-01 (#37)); workout tables (E09-01 (#72)).
 - Backfilling or migrating any existing data (there is none).
 
 #### Notes for the implementing agent
@@ -191,9 +194,9 @@ then `npm run prisma:migrate:dev` (applies) and `npm run prisma:generate`. Seed 
 
 ---
 
-### E02-02 `feat(api): add Best Self, Outcomes and Domain Mode endpoints`
+### E02-02 `feat(api): add Best Self, Outcomes and Domain Mode endpoints` — #39
 
-**Part of epic:** E02 · **Blocked by:** E02-01 · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
+**Part of epic:** E02 · **Blocked by:** E02-01 (#36) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
@@ -203,13 +206,13 @@ PRD §10.2 (BestSelfProfile), §10.4 (Outcome) and §49 (Domain Modes) are the t
 
 Create `apps/api/src/path/` (new) — `PathModule` registered in `app.module.ts` after `NotificationsModule` — containing three feature folders with a controller, a service and Zod DTOs each, plus one shared ownership helper and one shared enum schema file.
 
-**Data (database-dev)** — n/a (E02-01).
+**Data (database-dev)** — n/a (E02-01 (#36)).
 
 **API (backend-dev)**
 
 Files (all new):
 
-- `apps/api/src/path/path.module.ts` — imports `PrismaModule`; controllers/providers below; exports `OutcomesService` (E02-03 needs it).
+- `apps/api/src/path/path.module.ts` — imports `PrismaModule`; controllers/providers below; exports `OutcomesService` (E02-03 (#42) needs it).
 - `apps/api/src/path/domain.schema.ts` — Zod mirrors of the Prisma enums: `domainSchema = z.enum(['WORK','FAMILY','HEALTH'])`, `outcomeStateSchema`, `domainModeKindSchema`, plus `DOMAINS = domainSchema.options`. A unit test asserts each equals `Object.values(Prisma.$Enums.X)` so the two can never drift.
 - `apps/api/src/path/owned-resource.ts` — `export async function findOwnedOrThrow<T>(lookup: () => Promise<T | null>, what: string): Promise<T>` → throws `NotFoundException(`${what} not found`)` when `null`. Every service method that takes an id goes through it. **Never** throw 403 for another user's row: a 403 confirms the id exists.
 - `apps/api/src/path/best-self/{best-self.controller.ts, best-self.service.ts, dto/upsert-best-self.dto.ts, dto/best-self-response.dto.ts}`
@@ -284,7 +287,7 @@ OpenAPI: add a new group to `TAG_GROUPS` in `apps/api/src/openapi/tags.ts`, plac
 },
 ```
 
-**UI (frontend-dev)** — n/a (E02-06).
+**UI (frontend-dev)** — n/a (E02-06 (#56)).
 
 **Tests (testing-dev)**
 
@@ -331,7 +334,7 @@ OpenAPI: add a new group to `TAG_GROUPS` in `apps/api/src/openapi/tags.ts`, plac
 
 #### Out of scope
 
-- Plans, versions, routines (E02-03); commitments, evidence, reflections (E02-04).
+- Plans, versions, routines (E02-03 (#42)); commitments, evidence, reflections (E02-04 (#47)).
 - Restoring an archived outcome (not in the PRD; add when a screen needs it).
 - AI-generated Best Self or outcomes (E04).
 
@@ -346,9 +349,9 @@ OpenAPI: add a new group to `TAG_GROUPS` in `apps/api/src/openapi/tags.ts`, plac
 
 ---
 
-### E02-03 `feat(api): add Plans with versioning and Routines endpoints`
+### E02-03 `feat(api): add Plans with versioning and Routines endpoints` — #42
 
-**Part of epic:** E02 · **Blocked by:** E02-02 · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
+**Part of epic:** E02 · **Blocked by:** E02-02 (#39) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
@@ -358,7 +361,7 @@ PRD §10.5 defines a Plan as a persistent, versioned strategy ("every major AI-r
 
 Extend `PathModule` with `plans/` and `routines/` feature folders. A `Plan` is the stable container (one per outcome); `PlanVersion` rows are immutable once they leave `DRAFT`; routines belong to a version, and creating a new version clones the source version's routines so history is self-contained.
 
-**Data (database-dev)** — n/a (E02-01). Invariant enforced by DB: one ACTIVE version per plan (partial unique index).
+**Data (database-dev)** — n/a (E02-01 (#36)). Invariant enforced by DB: one ACTIVE version per plan (partial unique index).
 
 **API (backend-dev)**
 
@@ -392,7 +395,7 @@ Services:
 
 OpenAPI: add to the `EvolvePath` group in `tags.ts`: `{ name: 'Plans', description: 'Versioned strategies for an outcome. Versions are append-only: activating a draft supersedes the current version and both stay readable, with the rationale that explains the change (PRD §80).' }` and `{ name: 'Routines', description: 'Repeatable behaviours belonging to one plan version — trigger, frequency, ideal and minimum duration, and a fallback.' }`.
 
-**UI (frontend-dev)** — n/a (E02-06).
+**UI (frontend-dev)** — n/a (E02-06 (#56)).
 
 **Tests (testing-dev)**
 
@@ -427,7 +430,7 @@ OpenAPI: add to the `EvolvePath` group in `tags.ts`: `{ name: 'Plans', descripti
 
 #### Manual test script
 
-1. E02-02 manual script steps 1–4 (have `TOKEN` and an outcome `OID`).
+1. E02-02 (#39) manual script steps 1–4 (have `TOKEN` and an outcome `OID`).
 2. `curl -s -X POST … -d '{"rationale":"Start with mornings","expectedWeeklyLoad":120,"routines":[{"title":"Morning workout","triggerType":"EVENT","triggerValue":"after morning coffee","frequency":"WEEKDAYS","preferredTime":"06:30","estimatedDurationMin":45,"minimumDurationMin":10,"fallbackBehavior":"10-minute circuit"}]}' localhost:3535/api/outcomes/$OID/plans` → 201; note `PID`.
 3. `curl -s -X POST … -d '{"rationale":"Evenings slipped; move to mornings + Saturday"}' localhost:3535/api/plans/$PID/versions` → 201 `version: 2, status: DRAFT`, one cloned routine.
 4. `curl -s -X POST … localhost:3535/api/plans/$PID/versions/2/activate` → 200 ACTIVE. `curl -s … localhost:3535/api/plans/$PID/versions` → v2 ACTIVE, v1 SUPERSEDED.
@@ -436,9 +439,9 @@ OpenAPI: add to the `EvolvePath` group in `tags.ts`: `{ name: 'Plans', descripti
 
 #### Out of scope
 
-- AI-authored drafts and the accept/edit/reject proposal protocol (E06-04) — only the `author` parameter hook is provided.
-- Generating commitments from routines (E05/E08); weekly load validation across domains (E10-03).
-- Plan diff computation for the UI (E06's plan-diff component); E02-06 shows rationale and routine lists per version only.
+- AI-authored drafts and the accept/edit/reject proposal protocol (E06-04 (#76)) — only the `author` parameter hook is provided.
+- Generating commitments from routines (E05/E08); weekly load validation across domains (E10-03 (#80)).
+- Plan diff computation for the UI (E06's plan-diff component); E02-06 (#56) shows rationale and routine lists per version only.
 
 #### Notes for the implementing agent
 
@@ -450,9 +453,9 @@ OpenAPI: add to the `EvolvePath` group in `tags.ts`: `{ name: 'Plans', descripti
 
 ---
 
-### E02-04 `feat(api): add Commitments, Evidence and Reflections endpoints`
+### E02-04 `feat(api): add Commitments, Evidence and Reflections endpoints` — #47
 
-**Part of epic:** E02 · **Blocked by:** E02-03 · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
+**Part of epic:** E02 · **Blocked by:** E02-03 (#42) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
@@ -462,7 +465,7 @@ PRD §10.7 defines the Commitment with nine statuses and full/short/minimum vers
 
 Create `apps/api/src/commitments/` (new) — `CommitmentsModule`, registered in `app.module.ts` after `PathModule` — with the commitment state machine as a pure, unit-tested function, a transition endpoint that applies it, and evidence/reflection endpoints that only ever write what the user (or a later server flow) explicitly logs.
 
-**Data (database-dev)** — n/a (E02-01).
+**Data (database-dev)** — n/a (E02-01 (#36)).
 
 **API (backend-dev)**
 
@@ -504,7 +507,7 @@ Transition semantics (`CommitmentsService.transition`, one `$transaction`):
 - Load with `{ id, userId }` (404). Check `canTransition` (409).
 - `STARTED`: set `startedAt = now` (first time only). `COMPLETED` / `PARTIALLY_COMPLETED`: set `completedAt = now`; if `dto.evidence` present, create one `Evidence` row `{ source: 'USER_LOG', evidenceType: dto.evidence.evidenceType ?? (to === 'COMPLETED' ? 'completion' : 'partial'), occurredAt: now, commitmentId }`. **No evidence row is created without `dto.evidence`** — completion is a status; evidence is what the user logged (PRD §10.9).
 - `SKIPPED`: `skipReason = dto.reason ?? null`. `CANCELLED` / `MISSED`: no extra fields.
-- `RESCHEDULED`: `rescheduleTo` required (400 if absent or ≤ now − 1 min). The original row becomes `RESCHEDULED` (terminal, keeps its evidence); a **new** commitment is created copying `domain, title, importance, commitmentType, outcomeId, planVersionId, routineId, full/short/minimumVersion`, with `scheduledStart = rescheduleTo`, `scheduledEnd = rescheduleTo + (original duration)` when the original had an end, `status: PLANNED`, `rescheduledFromId = original.id`, and **`rescheduleCount = original.rescheduleCount + 1`** — the count travels with the intention, so "moved twice" is readable on the live row (E07-03 avoidance detection reads it).
+- `RESCHEDULED`: `rescheduleTo` required (400 if absent or ≤ now − 1 min). The original row becomes `RESCHEDULED` (terminal, keeps its evidence); a **new** commitment is created copying `domain, title, importance, commitmentType, outcomeId, planVersionId, routineId, full/short/minimumVersion`, with `scheduledStart = rescheduleTo`, `scheduledEnd = rescheduleTo + (original duration)` when the original had an end, `status: PLANNED`, `rescheduledFromId = original.id`, and **`rescheduleCount = original.rescheduleCount + 1`** — the count travels with the intention, so "moved twice" is readable on the live row (E07-03 (#116) avoidance detection reads it).
 - `dto.evidence` on any `to` other than COMPLETED/PARTIALLY_COMPLETED → 400. `rescheduleTo` on any `to` other than RESCHEDULED → 400.
 - Audit `commitment:transition` (targetType `commitment`, meta `{ from, to, rescheduleCount, rescheduledToId, evidenceId }`) after commit. Also `commitment:create` (meta `{ domain, planVersionId, routineId, rescheduledFromId }`), `commitment:update`, `evidence:create` (meta `{ source, evidenceType, commitmentId }`), `evidence:delete`, `reflection:create` (meta `{ relatedType, relatedId }`).
 
@@ -512,7 +515,7 @@ Errors: 400 `VALIDATION_ERROR`; 404 `NOT_FOUND`; 409 `CONFLICT` for terminal-row
 
 OpenAPI: add to `EvolvePath` group: `{ name: 'Commitments', description: 'Specific future intentions with full, short and minimum versions and a nine-state lifecycle. Transitions are validated by a fixed matrix; a reschedule closes the original and opens a new commitment that carries the reschedule count.' }`, `{ name: 'Evidence', description: 'What actually happened. Written only by explicit user logs or server-side flows — never derived from a planned item (PRD §10.9).' }`, `{ name: 'Reflections', description: 'Optional, lightweight notes and scores attached to a commitment, outcome, plan version or day.' }`.
 
-**UI (frontend-dev)** — n/a (E02-06).
+**UI (frontend-dev)** — n/a (E02-06 (#56)).
 
 **Tests (testing-dev)**
 
@@ -551,7 +554,7 @@ OpenAPI: add to `EvolvePath` group: `{ name: 'Commitments', description: 'Specif
 
 #### Manual test script
 
-1. E02-03 manual script (have `TOKEN`, `PID`, active version id `VID`).
+1. E02-03 (#42) manual script (have `TOKEN`, `PID`, active version id `VID`).
 2. `curl -s -X POST … -d '{"domain":"HEALTH","title":"Upper A","scheduledStart":"<tomorrow 06:30Z>","scheduledEnd":"<tomorrow 07:15Z>","importance":4,"planVersionId":"'$VID'","minimumVersion":"10-minute circuit"}' localhost:3535/api/commitments` → 201; note `CID`; `allowedTransitions` = `["READY","STARTED","RESCHEDULED","SKIPPED","MISSED","CANCELLED"]`.
 3. `curl -s -X POST … -d '{"to":"STARTED"}' localhost:3535/api/commitments/$CID/transition` → 200 `startedAt` set.
 4. `curl -s -X POST … -d '{"to":"COMPLETED","evidence":{"qualitativeValue":"Finished all sets"}}' …/transition` → 200 with `evidence.source: "USER_LOG"`.
@@ -561,28 +564,28 @@ OpenAPI: add to `EvolvePath` group: `{ name: 'Commitments', description: 'Specif
 
 #### Out of scope
 
-- Server-side flows that write `TIMER` / `APP_FLOW` / `WORKOUT_LOG` evidence (E05-02 Start flow, E07-02 focus sessions, E09-03 runner) — they call `EvidenceService.createFromFlow(userId, {...source})`, an internal method this child adds but exposes on no route.
-- Automatic `MISSED` marking (E11-02 comeback loop). Nothing in E02 changes a status without a user request.
-- "Make it smaller"/decomposition, pause/continue (E05-02): `STARTED → READY` is deliberately not in the matrix; E05 may extend the matrix with a test.
+- Server-side flows that write `TIMER` / `APP_FLOW` / `WORKOUT_LOG` evidence (E05-02 (#40) Start flow, E07-02 (#110) focus sessions, E09-03 (#81) runner) — they call `EvidenceService.createFromFlow(userId, {...source})`, an internal method this child adds but exposes on no route.
+- Automatic `MISSED` marking (E11-02 (#112) comeback loop). Nothing in E02 changes a status without a user request.
+- "Make it smaller"/decomposition, pause/continue (E05-02 (#40)): `STARTED → READY` is deliberately not in the matrix; E05 may extend the matrix with a test.
 
 #### Notes for the implementing agent
 
-- Keep the matrix in its own file with no Nest imports so it can be unit-tested and, later, copied verbatim to the web (`apps/web/src/utils/commitmentTransitions.ts` in E02-06 must agree; add a comment in both pointing at the other).
+- Keep the matrix in its own file with no Nest imports so it can be unit-tested and, later, copied verbatim to the web (`apps/web/src/utils/commitmentTransitions.ts` in E02-06 (#56) must agree; add a comment in both pointing at the other).
 - `CommitmentStatus` type comes from `@prisma/client`; the DTO enum uses `z.enum(Object.values(CommitmentStatus))` to stay in sync.
 - Range queries: parse `from`/`to` with `z.string().datetime({ offset: true })` and compare as `Date`; reject `to < from` and spans over the cap with a 400.
 - Evidence `source` DTO is `z.literal('USER_LOG')` on purpose — the enum exists in Prisma for server flows, not for clients.
-- Audit after commit, outside `$transaction` (see E02-03 note). Add the tags to `tags.ts` in the same commit as the controllers.
+- Audit after commit, outside `$transaction` (see E02-03 (#42) note). Add the tags to `tags.ts` in the same commit as the controllers.
 - Fastify parses query arrays from repeated keys and csv differently; accept `status` as a csv string and split in the DTO (`z.string().transform(s => s.split(','))` piped into the enum array).
 
 ---
 
-### E02-05 `feat(web): add app shell with Today/Path/Coach/Progress/Profile navigation`
+### E02-05 `feat(web): add app shell with Today/Path/Coach/Progress/Profile navigation` — #51
 
 **Part of epic:** E02 · **Blocked by:** none · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev → ops-dev → docs-dev
 
 #### Problem statement
 
-PRD §11 fixes the primary navigation as Today, Path, Coach, Progress, Profile; VISION Part VII §27 makes Today "the most important screen"; PRD §123 makes mobile the primary platform. The shell today has three destinations (Home, User Settings, Console) built for a generic admin app, and `BottomNav.tsx`'s header comment declares "four actions is the ceiling". Every later web child (E02-06, E05, E06, E11) needs its destination to exist before it can be routed.
+PRD §11 fixes the primary navigation as Today, Path, Coach, Progress, Profile; VISION Part VII §27 makes Today "the most important screen"; PRD §123 makes mobile the primary platform. The shell today has three destinations (Home, User Settings, Console) built for a generic admin app, and `BottomNav.tsx`'s header comment declares "four actions is the ceiling". Every later web child (E02-06 (#56), E05, E06, E11) needs its destination to exist before it can be routed.
 
 #### Proposed solution
 
@@ -598,7 +601,7 @@ Replace the destination model's contents — not its mechanics — with the five
 
 - `export type DestinationKey = 'today' | 'path' | 'coach' | 'progress' | 'profile' | 'console';`
 - `DESTINATION_ROUTES = { today: ['/'], path: ['/path'], coach: ['/coach'], progress: ['/progress'], profile: ['/settings'], console: ['/admin'] }`.
-- `UNOWNED_ROUTES` unchanged (`/login`, `/auth/callback`, `/activate`, `/testing/login`) plus `/setup/ai-key` (added by E01-09; keep it if present).
+- `UNOWNED_ROUTES` unchanged (`/login`, `/auth/callback`, `/activate`, `/testing/login`) plus `/setup/ai-key` (added by E01-09 (#29); keep it if present).
 - `DESTINATIONS` in this order with icons from `@mui/icons-material`: `today` (label "Today", `TodayIcon` = `Today`), `path` ("Path", `RouteIcon` = `Route`), `coach` ("Coach", `ForumIcon` = `Forum`), `progress` ("Progress", `InsightsIcon` = `Insights`), `profile` (label "Profile", `compactLabel` "Profile", `PersonIcon` = `Person`, `path: '/settings'`), then `console` exactly as today (`pinned: true`, `anyPermission: ['system_settings:read', 'users:read']`). `compactLabel` equals `label` for all five (all ≤ 8 characters).
 - Update the file header and the `pinned` doc comment: the bottom bar now **excludes** pinned destinations (below); the user menu still lists them.
 
@@ -616,7 +619,7 @@ Replace the destination model's contents — not its mechanics — with the five
 Pages (new, each a `Container maxWidth="lg"` + `Typography h4` title + one MUI `Card` empty state; no data fetching):
 
 - `apps/web/src/pages/TodayPage.tsx` — greeting `Good {morning|afternoon|evening}, {user.displayName ?? 'there'}` computed from the local hour (pure helper `apps/web/src/utils/greeting.ts` `greetingFor(hour: number)`), an empty-state card "Your Path is empty" with body "Add your first outcome and the Today screen fills itself." and a `Button component={Link} to="/path"` labelled **Go to Path**; `data-testid="today-empty-state"`.
-- `apps/web/src/pages/PathPage.tsx` — placeholder "Path" with text "Best Self, outcomes and plans live here." (replaced wholesale by E02-06).
+- `apps/web/src/pages/PathPage.tsx` — placeholder "Path" with text "Best Self, outcomes and plans live here." (replaced wholesale by E02-06 (#56)).
 - `apps/web/src/pages/CoachPage.tsx` — "Coach" + "Your coach arrives with a later release." `data-testid="coach-placeholder"`.
 - `apps/web/src/pages/ProgressPage.tsx` — "Progress" + "Momentum and evidence will appear here." `data-testid="progress-placeholder"`.
 
@@ -624,7 +627,7 @@ Deletions: `apps/web/src/pages/HomePage.tsx`, `apps/web/src/components/home/Quic
 
 `apps/web/src/components/navigation/UserMenu.tsx`: no logic change; verify the destination list renders the five + Console for admins (its existing test updates labels).
 
-`apps/web/src/components/navigation/AppBar.tsx`: no change to `isCompactWindow` (gate 5). `resolveDrillDown` is untouched here (E02-06 extends it for `/path/outcomes/:id`).
+`apps/web/src/components/navigation/AppBar.tsx`: no change to `isCompactWindow` (gate 5). `resolveDrillDown` is untouched here (E02-06 (#56) extends it for `/path/outcomes/:id`).
 
 `apps/web/visual/main.tsx`: replace the `HomePage` lazy import with `TodayPage`, add `/path`, `/coach`, `/progress` routes so specs can screenshot active states; the fake user keeps `aiKey` from E01.
 
@@ -646,7 +649,7 @@ a11y: each `BottomNavigationAction` keeps `aria-label={destination.label}`; acti
 **Docs (docs-dev)**
 
 - `CLAUDE.md`: in "MANDATORY: Settings UI Pattern" add one sentence to rule 5's list noting the bottom bar excludes `pinned` destinations; update the "Access Control" paragraph's mention of `/admin/users` if it references Home.
-- `docs/specs/settings-ui.md` (E01-11): add a "Product destinations" subsection listing the five keys, their routes and the pinned-exclusion rule.
+- `docs/specs/settings-ui.md` (E01-11 (#31)): add a "Product destinations" subsection listing the five keys, their routes and the pinned-exclusion rule.
 - `docs/ARCHITECTURE.md`: replace any "Home" mention in the frontend section with the five destinations.
 
 #### Acceptance criteria
@@ -682,7 +685,7 @@ a11y: each `BottomNavigationAction` keeps `aria-label={destination.label}`; acti
 
 - Any content on Today/Coach/Progress (E05, E06, E11).
 - Renaming `/settings` to `/profile` — the destination is labelled Profile but keeps the hub route so `USER_SETTINGS_SECTIONS`, the AppBar drill-down titles and bookmarks stay valid.
-- Hiding the bottom bar during a workout (PRD §11; E09-08).
+- Hiding the bottom bar during a workout (PRD §11; E09-08 (#109)).
 - Changing any of the five coupled breakpoint gates.
 
 #### Notes for the implementing agent
@@ -696,31 +699,31 @@ a11y: each `BottomNavigationAction` keeps `aria-label={destination.label}`; acti
 
 ---
 
-### E02-06 `feat(web): add Path screen with outcome, plan version and routine management`
+### E02-06 `feat(web): add Path screen with outcome, plan version and routine management` — #56
 
-**Part of epic:** E02 · **Blocked by:** E02-04, E02-05 · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev → docs-dev
+**Part of epic:** E02 · **Blocked by:** E02-04 (#47), E02-05 (#51) · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-PRD §9 says the hierarchy "must be represented explicitly in the product" and VISION Part VI §24 that it "should be visible throughout the experience"; PRD §80/§103 require the user to inspect plan history and why it changed; PRD §127 gives the user control over their objects. With E02-02..04 in place the API can hold a full Path, but the only way to build one is `curl`. The Path screen is the deterministic surface (PRD §123: "web is useful for deeper review, planning") that E04's onboarding will later fill automatically and E06's proposals will later modify.
+PRD §9 says the hierarchy "must be represented explicitly in the product" and VISION Part VI §24 that it "should be visible throughout the experience"; PRD §80/§103 require the user to inspect plan history and why it changed; PRD §127 gives the user control over their objects. With E02-02 (#39)..04 in place the API can hold a full Path, but the only way to build one is `curl`. The Path screen is the deterministic surface (PRD §123: "web is useful for deeper review, planning") that E04's onboarding will later fill automatically and E06's proposals will later modify.
 
 #### Proposed solution
 
-Replace the E02-05 `PathPage` placeholder with the real hierarchy view, plus an outcome detail page at `/path/outcomes/:id` holding the plan, its versions, routines and upcoming commitments. Phones get stacked cards and a drill-down; ≥600px gets a three-column domain grid and an inline detail layout.
+Replace the E02-05 (#51) `PathPage` placeholder with the real hierarchy view, plus an outcome detail page at `/path/outcomes/:id` holding the plan, its versions, routines and upcoming commitments. Phones get stacked cards and a drill-down; ≥600px gets a three-column domain grid and an inline detail layout.
 
 **Data (database-dev)** — n/a.
 
-**API (backend-dev)** — n/a (consumes E02-02..04 as specified).
+**API (backend-dev)** — n/a (consumes E02-02 (#39)..04 as specified).
 
 **UI (frontend-dev)**
 
-Types (`apps/web/src/types/index.ts`, new exports): `Domain`, `OutcomeState`, `PlanVersionStatus`, `PlanAuthor`, `CommitmentStatus`, `EvidenceSource`, `DomainModeKind`, `RoutineTriggerType`, `RoutineFrequency` (string unions mirroring E02-01), `BestSelfProfile`, `Outcome`, `OutcomeInput`, `Plan`, `PlanVersionSummary`, `PlanVersion`, `Routine`, `RoutineInput`, `Commitment`, `CommitmentInput`, `TransitionInput`, `TransitionResult`, `Evidence`, `DomainMode`.
+Types (`apps/web/src/types/index.ts`, new exports): `Domain`, `OutcomeState`, `PlanVersionStatus`, `PlanAuthor`, `CommitmentStatus`, `EvidenceSource`, `DomainModeKind`, `RoutineTriggerType`, `RoutineFrequency` (string unions mirroring E02-01 (#36)), `BestSelfProfile`, `Outcome`, `OutcomeInput`, `Plan`, `PlanVersionSummary`, `PlanVersion`, `Routine`, `RoutineInput`, `Commitment`, `CommitmentInput`, `TransitionInput`, `TransitionResult`, `Evidence`, `DomainMode`.
 
 API functions (`apps/web/src/services/api.ts`, using the existing `api` instance): `getBestSelf`, `putBestSelf`, `getOutcomes(params?: { domain?, includeArchived? })`, `createOutcome`, `getOutcome(id)`, `updateOutcome(id, patch)`, `archiveOutcome(id)`, `getDomainModes`, `setDomainMode(domain, body)`, `getPlansForOutcome(outcomeId)`, `createPlan(outcomeId, body)`, `getPlanVersions(planId)`, `getPlanVersion(planId, version)`, `createPlanVersion(planId, body)`, `activatePlanVersion(planId, version)`, `rejectPlanVersion(planId, version)`, `getRoutines(planVersionId)`, `createRoutine`, `updateRoutine`, `deleteRoutine`, `getCommitments({ from, to, outcomeId? })`, `createCommitment`, `transitionCommitment(id, body)`.
 
 Hooks (`apps/web/src/hooks/`, new, same shape as `usePersonalAccessTokens.ts`: `{ data, isLoading, error, refresh, <mutations> }`): `useBestSelf.ts`, `useOutcomes.ts` (`{ includeArchived }` option), `useOutcome.ts` (`id` → outcome + plan + versions + active version routines, one `refresh`), `useDomainModes.ts`, `useOutcomeCommitments.ts` (`outcomeId`, range = today → +14 days).
 
-Pure helper `apps/web/src/utils/commitmentTransitions.ts` — a verbatim copy of the E02-04 matrix (`allowedTransitions`) with a comment pointing at `apps/api/src/commitments/commitment-transitions.ts`; the UI still uses `commitment.allowedTransitions` from the API when present and the local copy only for optimistic rendering.
+Pure helper `apps/web/src/utils/commitmentTransitions.ts` — a verbatim copy of the E02-04 (#47) matrix (`allowedTransitions`) with a comment pointing at `apps/api/src/commitments/commitment-transitions.ts`; the UI still uses `commitment.allowedTransitions` from the API when present and the local copy only for optimistic rendering.
 
 Routes (`apps/web/src/App.tsx`): `/path` → `PathPage`, `/path/outcomes/:id` → `OutcomeDetailPage` (both inside the `Layout` element; owned by `path` via `DESTINATION_ROUTES`).
 
@@ -798,7 +801,7 @@ a11y: every dialog has `aria-labelledby` on its title; status chip menu is a `Me
 #### Out of scope
 
 - Today's next-best-action, Start flow, quick add (E05); Coach proposals and plan diffs (E06); momentum/evidence timeline (E11).
-- Reflections UI (the API exists; E05-03 adds the end-of-day reflection surface).
+- Reflections UI (the API exists; E05-03 (#43) adds the end-of-day reflection surface).
 - Drag-and-drop ordering of routines (`sortOrder` is set by creation order only).
 
 #### Notes for the implementing agent
@@ -812,19 +815,19 @@ a11y: every dialog has `aria-labelledby` on its title; status chip menu is a `Me
 
 ---
 
-### E02-07 `feat(web): add PWA baseline with manifest, icons and app-shell service worker`
+### E02-07 `feat(web): add PWA baseline with manifest, icons and app-shell service worker` — #58
 
-**Part of epic:** E02 · **Blocked by:** E02-05 · **Component:** web, infra · **Priority:** P0 · **Agents:** frontend-dev → ops-dev → testing-dev → docs-dev
+**Part of epic:** E02 · **Blocked by:** E02-05 (#51) · **Component:** web, infra · **Priority:** P0 · **Agents:** frontend-dev → ops-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-PRD §123: "the primary platform should be mobile because behaviour intervention often occurs near the moment of action"; PRD §121 anticipates intermittent connectivity for workout logging; E12-04 needs a service worker to receive web push. The web app has no manifest, no icons, no `theme-color` and no service worker, so it cannot be installed to a home screen and every launch is a full network round trip for the shell.
+PRD §123: "the primary platform should be mobile because behaviour intervention often occurs near the moment of action"; PRD §121 anticipates intermittent connectivity for workout logging; E12-04 (#64) needs a service worker to receive web push. The web app has no manifest, no icons, no `theme-color` and no service worker, so it cannot be installed to a home screen and every launch is a full network round trip for the shell.
 
 #### Proposed solution
 
 Add a static web manifest and icon set, wire them into `index.html`, and generate an app-shell-only service worker with `vite-plugin-pwa` that is registered in production builds only. No runtime data caching.
 
-Why `vite-plugin-pwa` (and not a hand-written `sw.js`): it generates a Workbox precache manifest from the actual Vite build output (hashed asset names change every build; a hand-written list goes stale on the first deploy), injects the registration helper, handles the `autoUpdate` reload semantics, and E12-04 can extend the same worker with a push handler via `injectManifest` later. A hand-written worker would re-implement precache versioning by hand — the exact class of bug the plugin exists to remove.
+Why `vite-plugin-pwa` (and not a hand-written `sw.js`): it generates a Workbox precache manifest from the actual Vite build output (hashed asset names change every build; a hand-written list goes stale on the first deploy), injects the registration helper, handles the `autoUpdate` reload semantics, and E12-04 (#64) can extend the same worker with a push handler via `injectManifest` later. A hand-written worker would re-implement precache versioning by hand — the exact class of bug the plugin exists to remove.
 
 **Data (database-dev)** — n/a.
 
@@ -879,7 +882,7 @@ Why Vitest and the visual harness are unaffected: `vitest.config.ts` is its own 
 
 **Docs (docs-dev)**
 
-- `docs/ARCHITECTURE.md`: "PWA" subsection — what is precached (shell only), update strategy (`autoUpdate`, reload on next navigation), what is deliberately not cached (`/api/*`), and where E12-04 will extend the worker.
+- `docs/ARCHITECTURE.md`: "PWA" subsection — what is precached (shell only), update strategy (`autoUpdate`, reload on next navigation), what is deliberately not cached (`/api/*`), and where E12-04 (#64) will extend the worker.
 - `docs/deployment/vps.md`: note that `sw.js`/manifest must be served with `no-cache` (the app's nginx does this; a host proxy must not override `Cache-Control` for those paths).
 - `CLAUDE.md` "Repository Structure": `public/manifest.webmanifest`, `public/icons/`, `scripts/generate-icons.mjs`, `src/pwa/`.
 
@@ -914,8 +917,8 @@ Why Vitest and the visual harness are unaffected: `vitest.config.ts` is its own 
 
 #### Out of scope
 
-- Offline data, background sync, queued writes (E09-08 for workout set logs).
-- Web push subscription and the push event handler (E12-04, which switches the plugin to `injectManifest` if it needs custom worker code).
+- Offline data, background sync, queued writes (E09-08 (#109) for workout set logs).
+- Web push subscription and the push event handler (E12-04 (#64), which switches the plugin to `injectManifest` if it needs custom worker code).
 - Install prompts/banners in the UI ("Add EvolvePath to your home screen") — later, once Today exists.
 - Splash-screen images for iOS.
 
@@ -929,9 +932,9 @@ Why Vitest and the visual harness are unaffected: `vitest.config.ts` is its own 
 
 ---
 
-### E02-08 `test(tests): E02 end-to-end verification`
+### E02-08 `test(tests): E02 end-to-end verification` — #62
 
-**Part of epic:** E02 · **Blocked by:** E02-01, E02-02, E02-03, E02-04, E02-05, E02-06, E02-07 · **Component:** tests, docs · **Priority:** P0 · **Agents:** testing-dev → ops-dev → docs-dev
+**Part of epic:** E02 · **Blocked by:** E02-01 (#36), E02-02 (#39), E02-03 (#42), E02-04 (#47), E02-05 (#51), E02-06 (#56), E02-07 (#58) · **Component:** tests, docs · **Priority:** P0 · **Agents:** testing-dev → ops-dev → docs-dev
 
 #### Problem statement
 
@@ -943,7 +946,7 @@ Add Playwright e2e specs under `tests/e2e/specs/` covering navigation and the fu
 
 **Data (database-dev)** — n/a.
 
-**API (backend-dev)** — n/a. (If E01-10's `withAiKey` option on `TestLoginDto` is missing, this child is blocked, not worked around.)
+**API (backend-dev)** — n/a. (If E01-10 (#30)'s `withAiKey` option on `TestLoginDto` is missing, this child is blocked, not worked around.)
 
 **UI (frontend-dev)** — n/a beyond adding stable `data-testid`s where the specs below need them (listed under Tests); no behaviour change.
 
@@ -951,7 +954,7 @@ Add Playwright e2e specs under `tests/e2e/specs/` covering navigation and the fu
 
 `tests/e2e/package.json`: add devDependency `@axe-core/playwright`. `tests/e2e/playwright.config.ts`: add a second project `{ name: 'mobile-chromium', use: { ...devices['Pixel 7'] } }` and change `webServer.command` to `docker compose -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up` (the gate needs the fake provider for the key test).
 
-`tests/e2e/helpers/auth.helper.ts`: `loginAsTestUser` gains `withAiKey?: boolean` (E01-10 adds the DTO field and a hidden checkbox `[data-testid="test-with-ai-key"]` on `/testing/login`; if E01-10 implemented it as a query param, follow that — do not fork the helper). Add `helpers/path.helper.ts` with `uniqueEmail(prefix)` (`${prefix}-${Date.now()}@test.local`, so parallel runs never share rows) and `tomorrowAt(hour, minute)` returning a `datetime-local` string.
+`tests/e2e/helpers/auth.helper.ts`: `loginAsTestUser` gains `withAiKey?: boolean` (E01-10 (#30) adds the DTO field and a hidden checkbox `[data-testid="test-with-ai-key"]` on `/testing/login`; if E01-10 (#30) implemented it as a query param, follow that — do not fork the helper). Add `helpers/path.helper.ts` with `uniqueEmail(prefix)` (`${prefix}-${Date.now()}@test.local`, so parallel runs never share rows) and `tomorrowAt(hour, minute)` returning a `datetime-local` string.
 
 `tests/e2e/specs/navigation.spec.ts` (new):
 
@@ -976,14 +979,14 @@ Add Playwright e2e specs under `tests/e2e/specs/` covering navigation and the fu
 12. **DB assertions** through the API rather than psql (the e2e host has no DB client): `GET /api/plans/<planId>/versions` → `[{version:2,status:'ACTIVE'},{version:1,status:'SUPERSEDED', activeUntil: not null}]`; `GET /api/evidence?from&to` → exactly one row, `source: 'USER_LOG'`; `GET /api/commitments?from&to&status=RESCHEDULED` → two rows. Tokens for these calls come from the page's `localStorage` access token or by minting a PAT via `POST /api/pat` from the page context.
 13. `AxeBuilder` on `/path` (populated) and `/path/outcomes/<id>` → no serious/critical violations, on both projects.
 
-`data-testid`s to add in E02-06 components if missing: `best-self-edit`, `add-outcome-<DOMAIN>`, `outcome-card-<id>`, `create-plan`, `new-plan-version`, `activate-version-<n>`, `add-routine`, `add-commitment`, `commitment-status-<id>`, `show-archived`, `outcome-archive`.
+`data-testid`s to add in E02-06 (#56) components if missing: `best-self-edit`, `add-outcome-<DOMAIN>`, `outcome-card-<id>`, `create-plan`, `new-plan-version`, `activate-version-<n>`, `add-routine`, `add-commitment`, `commitment-status-<id>`, `show-archived`, `outcome-archive`.
 
 ops-dev: run `cd tests/e2e && npm ci && npx playwright install chromium && npx playwright test navigation.spec.ts path.spec.ts` against the compose stack with the fake provider; attach the HTML report path to the PR.
 
 **Docs (docs-dev)**
 
 - `docs/specs/domain-model.md` (new): the hierarchy diagram (mermaid), every enum with members and meaning, each table with its purpose and key invariants (one plan per outcome, one ACTIVE version per plan via partial index, versions immutable after DRAFT, routines belong to a version and are cloned on new versions, RESCHEDULED closes the row and carries `rescheduleCount` to the successor, evidence outlives commitments and is never derived from planned items, `createdBy` is server-set), the transition matrix table, ownership rule (404 never 403), audit action list, the URL conventions (`:version` is the integer), and "Extending the model" guidance for E04–E11 (which tables they add, which they must not modify). Link PRD §9, §10, §80, §103.
-- `docs/API.md`: verify the EvolvePath section from E02-02..04 is complete and consistent (paths, codes, `INVALID_TRANSITION`), add a "Product resources" paragraph under "Authentication" explaining the ownership/404 rule.
+- `docs/API.md`: verify the EvolvePath section from E02-02 (#39)..04 is complete and consistent (paths, codes, `INVALID_TRANSITION`), add a "Product resources" paragraph under "Authentication" explaining the ownership/404 rule.
 - `docs/TESTING.md`: E2E section — the `mobile-chromium` project, `@axe-core/playwright` usage, the fake-provider compose file in `webServer`, the `withAiKey` login option, and "how to run only E02's specs".
 - `docs/epics/README.md`: in the E02 row add "Verified by `tests/e2e/specs/path.spec.ts`, `navigation.spec.ts`; spec `docs/specs/domain-model.md`". `docs/epics/E02-product-shell-domain-model.md`: add a "Verification" line under the epic body's manual script pointing at the two specs.
 - `CLAUDE.md`: "Testing Requirements" — add "E2E: every epic ships Playwright specs under `tests/e2e/specs/` proving its flow against the fake OpenAI server" and the `docs/specs/domain-model.md` link under "Architecture Principles" or "Common Patterns".
@@ -1019,8 +1022,8 @@ ops-dev: run `cd tests/e2e && npm ci && npx playwright install chromium && npx p
 #### Out of scope
 
 - CI workflow files (declined for now — see PLAN "Cross-cutting items"); the specs are run locally and in the PR description.
-- Visual pixel baselines (E02-05 covers the navigation baselines; e2e asserts behaviour, not pixels).
-- E2E coverage for reflections and domain modes (API-level integration tests in E02-02/E02-04 cover them; a screen for reflections arrives in E05).
+- Visual pixel baselines (E02-05 (#51) covers the navigation baselines; e2e asserts behaviour, not pixels).
+- E2E coverage for reflections and domain modes (API-level integration tests in E02-02 (#39)/E02-04 (#47) cover them; a screen for reflections arrives in E05).
 
 #### Notes for the implementing agent
 

@@ -1,6 +1,9 @@
 # E06 — AI Coach: Context Assembler, Coaching Reasoner, Mutation Protocol & Memory
 
 <!-- epic-meta: slug=ai-coach-memory phase=2 -->
+<!-- epic-issue: #57 -->
+
+> GitHub epic: [#57](https://github.com/marinoscar/evolvepath/issues/57)
 
 ## Epic
 
@@ -10,52 +13,52 @@ Give EvolvePath its coach: a Coach screen where the user talks to a context-awar
 
 ### Background
 
-- **Gateway.** Every model call goes through `AiGatewayService.invoke({persona, userId, promptVersion, instructions, input, attachments?, schema, schemaName})` from E01-06 (`apps/api/src/ai/gateway/ai-gateway.service.ts`). It returns `{ok:true, invocationId, output}` or `{ok:false, invocationId, error:{code,message}}` and never throws for provider problems. Personas `coach`, `safety`, `pattern_analyst`, `media_analyst` are already registered in `apps/api/src/ai/ai-personas.ts` (E01-02). Every call writes one `ai_invocations` row; that table already carries a nullable `safetyDecision` column (E01-01) that nothing writes yet — E06-06 is what fills it.
-- **Domain state** comes from E02: `Outcome`, `Plan` + `PlanVersion` (`DRAFT|ACTIVE|SUPERSEDED|REJECTED`, `createdBy USER|AI`, `previousVersionId`, `rationale`), `Routine`, `Commitment` (status lifecycle, `rescheduleCount`, `skipReason`), `Evidence`, `Reflection`, `DomainMode`, and the `PlansService` version helpers from E02-03 (`createVersion`, `activateVersion`). The Path screen (E02-06) already renders version history with "why it changed"; E06 only has to produce versions with a rationale.
-- **Media**: `MediaAttachment` rows (E03-02), `MediaAttachmentPicker` (E03-06) and the `media_analyst` summary flow (E03-07) exist. The `coach` persona is not a `vision` persona, so the coach receives attachments as text summaries (`MediaAttachment.aiSummary`), not pixels.
-- **Coaching style** lives on `user_profiles.coachingStyle` (`GENTLE|BALANCED|DIRECT`, E04-01). Today's commitments and the Start flow route come from E05.
-- **Patterns to copy.** Ownership-checked per-user resources: `apps/api/src/pat/` (plain `@Auth()`, own rows only). Audit: direct `prisma.auditEvent.create` as in `apps/api/src/email/email-settings.service.ts`. Zod DTOs via `createZodDto` (`apps/api/src/email/dto/update-email-settings.dto.ts`). Registry-driven lists: `apps/api/src/notifications/notification-events.ts`. Settings pages: `apps/web/src/config/userSettingsSections.tsx` + `SettingsHub`. Integration harness: `apps/api/test/helpers/test-app.helper.ts` (`createTestApp({ overrideProviders })`). Fake OpenAI server: `tools/fake-openai/server.mjs` + `infra/compose/fake-openai.compose.yml` (E01-10).
+- **Gateway.** Every model call goes through `AiGatewayService.invoke({persona, userId, promptVersion, instructions, input, attachments?, schema, schemaName})` from E01-06 (#26) (`apps/api/src/ai/gateway/ai-gateway.service.ts`). It returns `{ok:true, invocationId, output}` or `{ok:false, invocationId, error:{code,message}}` and never throws for provider problems. Personas `coach`, `safety`, `pattern_analyst`, `media_analyst` are already registered in `apps/api/src/ai/ai-personas.ts` (E01-02 (#22)). Every call writes one `ai_invocations` row; that table already carries a nullable `safetyDecision` column (E01-01 (#21)) that nothing writes yet — E06-06 (#82) is what fills it.
+- **Domain state** comes from E02: `Outcome`, `Plan` + `PlanVersion` (`DRAFT|ACTIVE|SUPERSEDED|REJECTED`, `createdBy USER|AI`, `previousVersionId`, `rationale`), `Routine`, `Commitment` (status lifecycle, `rescheduleCount`, `skipReason`), `Evidence`, `Reflection`, `DomainMode`, and the `PlansService` version helpers from E02-03 (#42) (`createVersion`, `activateVersion`). The Path screen (E02-06 (#56)) already renders version history with "why it changed"; E06 only has to produce versions with a rationale.
+- **Media**: `MediaAttachment` rows (E03-02 (#74)), `MediaAttachmentPicker` (E03-06 (#91)) and the `media_analyst` summary flow (E03-07 (#96)) exist. The `coach` persona is not a `vision` persona, so the coach receives attachments as text summaries (`MediaAttachment.aiSummary`), not pixels.
+- **Coaching style** lives on `user_profiles.coachingStyle` (`GENTLE|BALANCED|DIRECT`, E04-01 (#100)). Today's commitments and the Start flow route come from E05.
+- **Patterns to copy.** Ownership-checked per-user resources: `apps/api/src/pat/` (plain `@Auth()`, own rows only). Audit: direct `prisma.auditEvent.create` as in `apps/api/src/email/email-settings.service.ts`. Zod DTOs via `createZodDto` (`apps/api/src/email/dto/update-email-settings.dto.ts`). Registry-driven lists: `apps/api/src/notifications/notification-events.ts`. Settings pages: `apps/web/src/config/userSettingsSections.tsx` + `SettingsHub`. Integration harness: `apps/api/test/helpers/test-app.helper.ts` (`createTestApp({ overrideProviders })`). Fake OpenAI server: `tools/fake-openai/server.mjs` + `infra/compose/fake-openai.compose.yml` (E01-10 (#30)).
 - **Non-negotiables** carried from CLAUDE.md and the PRD: deterministic product logic must work with AI unavailable (PRD §120); the model is never the source of truth (VISION §20); chain of thought is never stored or shown (PRD §16, §88); prompts are versioned (PRD §117).
-- Design rationale and rejected alternatives are written up by E06-09 in `docs/specs/coach-and-memory.md` (new).
+- Design rationale and rejected alternatives are written up by E06-09 (#93) in `docs/specs/coach-and-memory.md` (new).
 
 ### Scope
 
-- [ ] E06-01 Add coach conversations, plan-change proposals, memory insights and obstacles
-- [ ] E06-02 Add persona-scoped context assembler with a deterministic character budget
-- [ ] E06-03 Add coach chat endpoints with the structured coaching contract
-- [ ] E06-04 Add plan-change proposal accept, edit and reject mutation protocol
-- [ ] E06-05 Add memory insight endpoints and the pattern-analysis proposer
-- [ ] E06-06 Add deterministic safety pre-check and safety-persona policy
-- [ ] E06-07 Add Coach screen with proposal cards, diff view and attachments
-- [ ] E06-08 Add AI memory settings page with confirm, forget and do-not-use
-- [ ] E06-09 E06 end-to-end verification
+- [ ] #61 Add coach conversations, plan-change proposals, memory insights and obstacles (E06-01)
+- [ ] #63 Add persona-scoped context assembler with a deterministic character budget (E06-02)
+- [ ] #70 Add coach chat endpoints with the structured coaching contract (E06-03)
+- [ ] #76 Add plan-change proposal accept, edit and reject mutation protocol (E06-04)
+- [ ] #78 Add memory insight endpoints and the pattern-analysis proposer (E06-05)
+- [ ] #82 Add deterministic safety pre-check and safety-persona policy (E06-06)
+- [ ] #86 Add Coach screen with proposal cards, diff view and attachments (E06-07)
+- [ ] #90 Add AI memory settings page with confirm, forget and do-not-use (E06-08)
+- [ ] #93 E06 end-to-end verification (E06-09)
 
 ### Out of scope
 
 - Streaming responses (the contract is a single validated JSON object; streaming can be layered later without changing it).
-- The full Pattern Analysis Service (time-of-day reliability, recovery latency, notification responsiveness — PRD §14.4) and momentum states: E11. E06-05 ships a proposer stub over 28-day aggregates only.
-- Weekly Review and Weekly Planning proposals (E10) — they reuse `PlanChangeProposal` with `sourceKind: WEEKLY_REVIEW` and the E06-04 protocol unchanged.
-- Workout-specific proposals (`sourceKind: WORKOUT`, E09-05) and the anti-procrastination ladder triggers that create `Obstacle` rows (E07-03). E06 creates the tables and the coach may *read* obstacles; it does not detect them.
-- Coaching notifications (N1–N9, E12). E06-05 registers exactly one notification event (`memory.insight_proposed`).
+- The full Pattern Analysis Service (time-of-day reliability, recovery latency, notification responsiveness — PRD §14.4) and momentum states: E11. E06-05 (#78) ships a proposer stub over 28-day aggregates only.
+- Weekly Review and Weekly Planning proposals (E10) — they reuse `PlanChangeProposal` with `sourceKind: WEEKLY_REVIEW` and the E06-04 (#76) protocol unchanged.
+- Workout-specific proposals (`sourceKind: WORKOUT`, E09-05 (#88)) and the anti-procrastination ladder triggers that create `Obstacle` rows (E07-03 (#116)). E06 creates the tables and the coach may *read* obstacles; it does not detect them.
+- Coaching notifications (N1–N9, E12). E06-05 (#78) registers exactly one notification event (`memory.insight_proposed`).
 - Conversation search (PRD §79), voice (PRD §125), locale-specific crisis hotlines, multi-language copy.
 - Pre-authorised automatic adaptations (PRD §15 "small ephemeral adaptations") — every change in E06 requires an explicit accept.
 
 ### Sequencing
 
-- **E06-01** first (every other child needs the tables).
-- **E06-02** (context assembler) and **E06-06** (safety) are independent of each other and can run in parallel after E06-01.
-- **E06-04** (mutation protocol) needs only E06-01 + E02-03; it can run in parallel with E06-02/E06-06.
-- **E06-03** (chat) is the integration point: blocked by E06-02, E06-04 (it creates proposals) and E06-06 (pre-check).
-- **E06-05** (memory) is blocked by E06-01 and E06-02 (it modifies the assembler's insight query); it can run in parallel with E06-03.
-- **E06-07** is blocked by E06-03 and E06-04; **E06-08** by E06-05. The two web children can run in parallel.
-- **E06-09** last. Critical path: E06-01 → E06-02 → E06-03 → E06-07 → E06-09.
+- **E06-01 (#61)** first (every other child needs the tables).
+- **E06-02 (#63)** (context assembler) and **E06-06 (#82)** (safety) are independent of each other and can run in parallel after E06-01 (#61).
+- **E06-04 (#76)** (mutation protocol) needs only E06-01 (#61) + E02-03 (#42); it can run in parallel with E06-02 (#63)/E06-06 (#82).
+- **E06-03 (#70)** (chat) is the integration point: blocked by E06-02 (#63), E06-04 (#76) (it creates proposals) and E06-06 (#82) (pre-check).
+- **E06-05 (#78)** (memory) is blocked by E06-01 (#61) and E06-02 (#63) (it modifies the assembler's insight query); it can run in parallel with E06-03 (#70).
+- **E06-07 (#86)** is blocked by E06-03 (#70) and E06-04 (#76); **E06-08 (#90)** by E06-05 (#78). The two web children can run in parallel.
+- **E06-09 (#93)** last. Critical path: E06-01 (#61) → E06-02 (#63) → E06-03 (#70) → E06-07 (#86) → E06-09 (#93).
 
 ### Manual end-to-end verification
 
 1. Clean clone. `cp infra/compose/.env.example infra/compose/.env`; set `SECRETS_ENCRYPTION_KEY=$(openssl rand -base64 32)`, `INITIAL_ADMIN_EMAIL=<you>`, `OPENAI_BASE_URL=http://fake-openai:8089/v1`.
 2. `cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up --build`.
 3. In another shell: `cd apps/api && npm run prisma:migrate && npm run prisma:seed`. Confirm the migration list ends with `add_coach_and_memory`.
-4. Open http://localhost:3535/testing/login, sign in as `coach-user@test.local` (role `contributor`, tick "Seed an OpenAI key" — the `withAiKey` option from E01-10). Complete onboarding (E04) choosing Health with a "Strength workout" routine on Wednesday 18:30, coaching style **Direct**. You land on `/today`.
+4. Open http://localhost:3535/testing/login, sign in as `coach-user@test.local` (role `contributor`, tick "Seed an OpenAI key" — the `withAiKey` option from E01-10 (#30)). Complete onboarding (E04) choosing Health with a "Strength workout" routine on Wednesday 18:30, coaching style **Direct**. You land on `/today`.
 5. Go to http://localhost:3535/coach. Observe the conversation list (empty state on a phone-width window, side panel + empty conversation at ≥600px) and the seven suggested-prompt chips from PRD §66.
 6. Type `My schedule changed. I can't work out Wednesday anymore.` and send. Observe: your message appears immediately (optimistic), a "Thinking…" placeholder, then the coach reply with a **proposal card**: "Wednesday 18:30 → Saturday 09:00", the reason line, and buttons **Accept / Edit / Keep current plan**. Expand **Why this?** — the `reasoning_summary` is shown; nothing resembling model scratch work.
 7. Click **Accept**. Snackbar "Plan updated (v2)". Open http://localhost:3535/path → the Health plan shows **v2 · Active** with the rationale, and v1 in history as **Superseded**.
@@ -72,13 +75,13 @@ Give EvolvePath its coach: a Coach screen where the user talks to a context-awar
 
 ## Child issues
 
-### E06-01 `feat(db): add coach conversations, plan-change proposals, memory insights and obstacles`
+### E06-01 `feat(db): add coach conversations, plan-change proposals, memory insights and obstacles` — #61
 
-**Part of epic:** E06 · **Blocked by:** none (needs E02-01 merged) · **Component:** database · **Priority:** P0 · **Agents:** database-dev → testing-dev → docs-dev
+**Part of epic:** E06 · **Blocked by:** none (needs E02-01 (#36) merged) · **Component:** database · **Priority:** P0 · **Agents:** database-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-The coach needs durable, product-owned state that is not a chat transcript: conversations and messages (PRD §17 Tier 4), plan-change proposals with a structured diff and a decision (PRD §15 steps 1–7), memory insights the user can inspect and remove (PRD §10.12, §17 Tier 3, §85), and recurring obstacles (PRD §10.11). None of these tables exist; `ai_invocations` (E01-01) is telemetry, not product state.
+The coach needs durable, product-owned state that is not a chat transcript: conversations and messages (PRD §17 Tier 4), plan-change proposals with a structured diff and a decision (PRD §15 steps 1–7), memory insights the user can inspect and remove (PRD §10.12, §17 Tier 3, §85), and recurring obstacles (PRD §10.11). None of these tables exist; `ai_invocations` (E01-01 (#21)) is telemetry, not product state.
 
 #### Proposed solution
 
@@ -97,10 +100,10 @@ Enums:
 Models (all ids `String @id @default(uuid())`, `createdAt DateTime @default(now())`, `updatedAt DateTime @updatedAt` where listed):
 
 - `CoachConversation` → `@@map("coach_conversations")`: `userId` (FK `User`, `onDelete: Cascade`), `title String?` (≤120), `createdAt`, `lastMessageAt DateTime @default(now())`, relation `messages CoachMessage[]`. Index `@@index([userId, lastMessageAt(sort: Desc)])`.
-- `CoachMessage` → `@@map("coach_messages")`: `conversationId` (FK `CoachConversation`, `onDelete: Cascade`), `role CoachMessageRole`, `content String @db.Text`, `structured Json?` (the validated `coach_reply` contract from E06-03, plus `proposal.proposalId` when one was created; `null` for USER/SYSTEM rows and for fallback replies), `attachmentIds String[] @default([])` (ids of `MediaAttachment` rows — no FK, a deleted attachment must not delete the message), `invocationId String?` (id of the `ai_invocations` row; no FK, telemetry rows may be pruned), `safetyDecision Json?` (E06-06 `SafetyDecision`), `createdAt`. Index `@@index([conversationId, createdAt])`.
-- `PlanChangeProposal` → `@@map("plan_change_proposals")`: `userId` (FK `User`, Cascade), `planId` (FK `Plan`, Cascade), `sourceKind ProposalSourceKind`, `sourceMessageId String?` (FK `CoachMessage`, `onDelete: SetNull`), `summary String` (≤300), `changes Json` (array of `PlanChange`, schema in E06-04), `originalChanges Json?` (set the first time `/edit` rewrites `changes`), `status ProposalStatus @default(PROPOSED)`, `appliedPlanVersionId String?` (FK `PlanVersion`, `onDelete: SetNull`), `invocationId String?`, `expiresAt DateTime` (creator sets `now + 7 days`), `editedAt DateTime?`, `decidedAt DateTime?`, `decisionReason String?` (≤300, from `/reject`), `createdAt`, `updatedAt`. Indexes `@@index([userId, status, createdAt(sort: Desc)])`, `@@index([planId])`.
+- `CoachMessage` → `@@map("coach_messages")`: `conversationId` (FK `CoachConversation`, `onDelete: Cascade`), `role CoachMessageRole`, `content String @db.Text`, `structured Json?` (the validated `coach_reply` contract from E06-03 (#70), plus `proposal.proposalId` when one was created; `null` for USER/SYSTEM rows and for fallback replies), `attachmentIds String[] @default([])` (ids of `MediaAttachment` rows — no FK, a deleted attachment must not delete the message), `invocationId String?` (id of the `ai_invocations` row; no FK, telemetry rows may be pruned), `safetyDecision Json?` (E06-06 (#82) `SafetyDecision`), `createdAt`. Index `@@index([conversationId, createdAt])`.
+- `PlanChangeProposal` → `@@map("plan_change_proposals")`: `userId` (FK `User`, Cascade), `planId` (FK `Plan`, Cascade), `sourceKind ProposalSourceKind`, `sourceMessageId String?` (FK `CoachMessage`, `onDelete: SetNull`), `summary String` (≤300), `changes Json` (array of `PlanChange`, schema in E06-04 (#76)), `originalChanges Json?` (set the first time `/edit` rewrites `changes`), `status ProposalStatus @default(PROPOSED)`, `appliedPlanVersionId String?` (FK `PlanVersion`, `onDelete: SetNull`), `invocationId String?`, `expiresAt DateTime` (creator sets `now + 7 days`), `editedAt DateTime?`, `decidedAt DateTime?`, `decisionReason String?` (≤300, from `/reject`), `createdAt`, `updatedAt`. Indexes `@@index([userId, status, createdAt(sort: Desc)])`, `@@index([planId])`.
 - `MemoryInsight` → `@@map("memory_insights")`: `userId` (FK `User`, Cascade), `category MemoryInsightCategory`, `statement String` (≤280), `evidenceCount Int @default(0)`, `confidence Float` (0–1, enforced by Zod at the boundary), `userConfirmed Boolean @default(false)`, `doNotUse Boolean @default(false)`, `expiresAt DateTime?`, `source MemoryInsightSource`, `invocationId String?`, `createdAt`, `updatedAt`. Indexes `@@index([userId, category])`, `@@index([userId, doNotUse, userConfirmed])`.
-- `Obstacle` → `@@map("obstacles")`: `userId` (FK `User`, Cascade), `type ObstacleType`, `description String` (≤280), `domain` (the `Domain` enum E02-01 introduced for `Outcome.domain`), `observedCount Int @default(1)`, `confidence Float`, `lastObservedAt DateTime @default(now())`, `interventionHistory Json @default("[]")` (PRD §10.11 `intervention_history`; E07-03 appends `{level, at}` entries), `createdAt`, `updatedAt`. Index `@@index([userId, domain, lastObservedAt(sort: Desc)])`.
+- `Obstacle` → `@@map("obstacles")`: `userId` (FK `User`, Cascade), `type ObstacleType`, `description String` (≤280), `domain` (the `Domain` enum E02-01 (#36) introduced for `Outcome.domain`), `observedCount Int @default(1)`, `confidence Float`, `lastObservedAt DateTime @default(now())`, `interventionHistory Json @default("[]")` (PRD §10.11 `intervention_history`; E07-03 (#116) appends `{level, at}` entries), `createdAt`, `updatedAt`. Index `@@index([userId, domain, lastObservedAt(sort: Desc)])`.
 
 Add the back-relations on `User`, `Plan`, `PlanVersion` (named relations, e.g. `"UserCoachConversations"`, `"ProposalAppliedVersion"`, following the `"UserPersonalAccessTokens"` naming already in the schema). Migration: `npm run prisma:migrate:dev -- --name add_coach_and_memory`. Seed: n/a.
 
@@ -142,8 +145,8 @@ Add the back-relations on `User`, `Plan`, `PlanVersion` (named relations, e.g. `
 
 #### Out of scope
 
-- Any controller/service; conversation title generation; proposal expiry sweeps (E06-04 expires lazily on read).
-- `CoachPreference` as its own table (PRD §10.13): `coachingStyle` already lives on `user_profiles` (E04-01); the remaining preference fields are P1.
+- Any controller/service; conversation title generation; proposal expiry sweeps (E06-04 (#76) expires lazily on read).
+- `CoachPreference` as its own table (PRD §10.13): `coachingStyle` already lives on `user_profiles` (E04-01 (#100)); the remaining preference fields are P1.
 
 #### Notes for the implementing agent
 
@@ -154,9 +157,9 @@ Add the back-relations on `User`, `Plan`, `PlanVersion` (named relations, e.g. `
 
 ---
 
-### E06-02 `feat(api): add persona-scoped context assembler with a deterministic character budget`
+### E06-02 `feat(api): add persona-scoped context assembler with a deterministic character budget` — #63
 
-**Part of epic:** E06 · **Blocked by:** E06-01 · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
+**Part of epic:** E06 · **Blocked by:** E06-01 (#61) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
@@ -170,7 +173,7 @@ A pure-ish service that reads product state through Prisma, returns a typed `Coa
 
 **API (backend-dev)**
 
-New module `apps/api/src/coach/coach.module.ts` (new) — `imports: [PrismaModule]` for now (E06-03 adds `AiModule`, `SafetyModule`, `NotificationsModule`); exports `ContextAssemblerService`. Register in `app.module.ts`.
+New module `apps/api/src/coach/coach.module.ts` (new) — `imports: [PrismaModule]` for now (E06-03 (#70) adds `AiModule`, `SafetyModule`, `NotificationsModule`); exports `ContextAssemblerService`. Register in `app.module.ts`.
 
 Files (all new):
 - `apps/api/src/coach/context/context.types.ts` —
@@ -209,7 +212,7 @@ Files (all new):
   - `renderForPrompt(context: CoachContext): string` — deterministic serializer: fixed section order, stable key order, ISO dates, no user email/name (the persona is told "the user" only), bullet lists; this string is what callers pass as `input.context`.
   - `applyBudget(context, limitChars)` — private, pure: measures `renderForPrompt`; while over budget, drops the **oldest** item from the episodic lists in the order `recentReflections` → `recentEvidence` → `recentMisses` → `obstacles` → `memoryInsights` (lowest confidence first), never touching Tier 1 sections (`activePlans`, `todayCommitments`); records `{section, dropped}` in `budget.truncated`. Same input ⇒ same output.
   - Decorate `assemble` with `@Trace('coach.context.assemble')` (`apps/api/src/common/decorators/trace.decorator.ts`) and set span attributes `context.scope`, `context.used_chars`, `context.truncated_sections` — never content.
-- Timezone/coaching style come from `user_profiles` (E04-01); when absent default `BALANCED` and `UTC`.
+- Timezone/coaching style come from `user_profiles` (E04-01 (#100)); when absent default `BALANCED` and `UTC`.
 
 No endpoints, no audit.
 
@@ -225,7 +228,7 @@ No endpoints, no audit.
 - "renderForPrompt never includes the user's email or display name".
 - "defaults to BALANCED/UTC when no profile row".
 
-**Docs (docs-dev)** — `docs/specs/coach-and-memory.md` §"Context scopes and budgets" (file created by E06-09; write the section now in the spec's skeleton if it does not yet exist), one paragraph in `CLAUDE.md` "Common Patterns" → "Calling an AI persona" stating that inputs come from `ContextAssemblerService.assemble` + `renderForPrompt`, never ad-hoc Prisma dumps.
+**Docs (docs-dev)** — `docs/specs/coach-and-memory.md` §"Context scopes and budgets" (file created by E06-09 (#93); write the section now in the spec's skeleton if it does not yet exist), one paragraph in `CLAUDE.md` "Common Patterns" → "Calling an AI persona" stating that inputs come from `ContextAssemblerService.assemble` + `renderForPrompt`, never ad-hoc Prisma dumps.
 
 #### Acceptance criteria
 
@@ -260,15 +263,15 @@ No endpoints, no audit.
 #### Notes for the implementing agent
 
 - Model the section-query fan-out on how `NotificationStoreService` (`apps/api/src/notifications/notification-store.service.ts`) shapes list queries; keep each section a private method so scopes can compose them.
-- Field names of E02 models: read `apps/api/prisma/schema.prisma` after E02-01 rather than trusting this spec's summaries; the `*Summary` types here list intent, not column names.
+- Field names of E02 models: read `apps/api/prisma/schema.prisma` after E02-01 (#36) rather than trusting this spec's summaries; the `*Summary` types here list intent, not column names.
 - Character budget, not tokens: no tokenizer dependency; 12 000 chars ≈ 3 000 tokens, comfortably inside the `coach` persona's fast-tier model.
 - Keep `renderForPrompt` free of `Date.now()` — take `now` from the context object so tests are deterministic.
 
 ---
 
-### E06-03 `feat(api): add coach chat endpoints with the structured coaching contract`
+### E06-03 `feat(api): add coach chat endpoints with the structured coaching contract` — #70
 
-**Part of epic:** E06 · **Blocked by:** E06-02, E06-04, E06-06 · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
+**Part of epic:** E06 · **Blocked by:** E06-02 (#63), E06-04 (#76), E06-06 (#82) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
@@ -276,11 +279,11 @@ The Coaching Reasoner (PRD §14.3) must "explain next action, diagnose friction,
 
 #### Proposed solution
 
-**Data (database-dev)** — n/a (E06-01).
+**Data (database-dev)** — n/a (E06-01 (#61)).
 
 **API (backend-dev)**
 
-Extend `apps/api/src/coach/coach.module.ts`: `imports: [PrismaModule, AiModule, SafetyModule (E06-06), MediaModule (E03-04), NotificationsModule]`; controllers `CoachController`; providers `CoachService`, `CoachConversationsService`, `CoachOutputGuard`, `ProposalsService` (E06-04).
+Extend `apps/api/src/coach/coach.module.ts`: `imports: [PrismaModule, AiModule, SafetyModule (E06-06 (#82)), MediaModule (E03-04 (#83)), NotificationsModule]`; controllers `CoachController`; providers `CoachService`, `CoachConversationsService`, `CoachOutputGuard`, `ProposalsService` (E06-04 (#76)).
 
 Files (new):
 - `apps/api/src/coach/contracts/coach-reply.contract.ts` — the Zod contract, **exactly**:
@@ -297,8 +300,8 @@ Files (new):
   });
   export type CoachReply = z.infer<typeof coachReplySchema>;
   ```
-  (`nullable()` rather than `optional()` because E01-06's `strict-json-schema.ts` emits `strict: true` schemas, where every property is required; the service maps `null` → omitted in responses.) `planChangeSchema` is imported from `apps/api/src/coach/proposals/plan-change.schema.ts` (E06-04).
-- `apps/api/src/coach/prompts/coach.prompt.ts` — `export const COACH_PROMPT_VERSION = 'coach.v1'`; `buildCoachInstructions({ style, safety }): string` composed of: role + objective; "authoritative data" block (the context is the only truth; ids in the output must come from it); prohibited assumptions (never claim completion, never invent plans/family members/workout history, never diagnose, never present yourself as a therapist — PRD §18); the PRD §67 shape (acknowledge → observation → action → CTA, no motivational speeches); the intervention ladder mapping (PRD §26 levels 0–6 ↔ `NORMAL_REMINDER…GOAL_CHALLENGE`, plus `REINFORCE/CLARIFY/REDUCE_SCOPE/RECONNECT_REASON/RECOVER` from VISION §21 modes); the "protect the goal from the mood / the user from the plan" rule (VISION §22); anti-manipulation list (PRD §129); tone block per style — `GENTLE`: offer choices, soften observations, no callouts; `BALANCED`: default; `DIRECT`: short sentences, name avoidance plainly, no cheerleading, still never guilt or disappointment; length limits (user_message ≤ 600 chars, ≤ 4 sentences); when `safety.decision === 'conservative'` append `SAFETY_CONSERVATIVE_INSTRUCTIONS` from E06-06.
+  (`nullable()` rather than `optional()` because E01-06 (#26)'s `strict-json-schema.ts` emits `strict: true` schemas, where every property is required; the service maps `null` → omitted in responses.) `planChangeSchema` is imported from `apps/api/src/coach/proposals/plan-change.schema.ts` (E06-04 (#76)).
+- `apps/api/src/coach/prompts/coach.prompt.ts` — `export const COACH_PROMPT_VERSION = 'coach.v1'`; `buildCoachInstructions({ style, safety }): string` composed of: role + objective; "authoritative data" block (the context is the only truth; ids in the output must come from it); prohibited assumptions (never claim completion, never invent plans/family members/workout history, never diagnose, never present yourself as a therapist — PRD §18); the PRD §67 shape (acknowledge → observation → action → CTA, no motivational speeches); the intervention ladder mapping (PRD §26 levels 0–6 ↔ `NORMAL_REMINDER…GOAL_CHALLENGE`, plus `REINFORCE/CLARIFY/REDUCE_SCOPE/RECONNECT_REASON/RECOVER` from VISION §21 modes); the "protect the goal from the mood / the user from the plan" rule (VISION §22); anti-manipulation list (PRD §129); tone block per style — `GENTLE`: offer choices, soften observations, no callouts; `BALANCED`: default; `DIRECT`: short sentences, name avoidance plainly, no cheerleading, still never guilt or disappointment; length limits (user_message ≤ 600 chars, ≤ 4 sentences); when `safety.decision === 'conservative'` append `SAFETY_CONSERVATIVE_INSTRUCTIONS` from E06-06 (#82).
 - `apps/api/src/coach/suggested-prompts.ts` — `SUGGESTED_PROMPTS` in PRD §66 order: `plan_week` "Help me plan my week", `procrastinating` "I'm procrastinating", `shorter_workout` "Make today's workout shorter", `fell_off` "I fell off", `review_progress` "Review my progress", `decide_what_matters` "Help me decide what matters", `change_plan` "Change my plan" — `{key, label, text}`.
 - `apps/api/src/coach/coach-output-guard.ts` — `guardCoachOutput(reply: CoachReply, ctx: CoachContext): { ok: true } | { ok: false; reason: string }`: `recommended_action.commitmentId` must be in `ctx.todayCommitments` or an active PLANNED commitment of the user (guard receives the id set); `proposal.planId` must be in `ctx.activePlans`; every `changes[].target.id` must belong to that plan's active version (routine ids) or the user's PLANNED commitments; `proposal` and `friction_question` never both non-null.
 - `apps/api/src/coach/coach-fallbacks.ts` — `fallbackReply(code: AiErrorCode | 'invalid_output' | 'safety_redirect'): { content: string }` — safe templates: e.g. `invalid_output` → "I couldn't produce a reliable answer just now. Your plan is unchanged. Try again, or pick a suggested prompt."; `no_user_key` → "Add your OpenAI key in Settings → AI to chat with the coach."; `ai_disabled` → "The coach is turned off by your administrator."; generic → "The coach is unavailable right now. Your plan and today's actions still work without it."
@@ -321,20 +324,20 @@ Endpoints (OpenAPI tag `Coach`, new group `Coaching` in `apps/api/src/openapi/ta
 1. Resolve conversation (create when `conversationId` absent; title = first 60 chars of `text`); 403 if another user's.
 2. Validate `attachmentIds` are the caller's `MediaAttachment` rows with `processingStatus === 'ready'` → else 400 `attachment_not_found`.
 3. Persist the USER `CoachMessage` and bump `lastMessageAt`.
-4. `SafetyPolicyService.evaluate({ userId, text, surface: 'coach' })` (E06-06). On `redirect`: persist a COACH message with `content = safety copy`, `structured: null`, `safetyDecision`, no gateway call; return `degraded: false`.
-5. `ContextAssemblerService.assemble(userId, 'coach')` (E06-02). Build `recentTurns`: the last 10 messages of this conversation as `{role, content}` (Tier 4 — never the full history, never `structured`).
-6. For each attachment lacking `aiSummary`, call `AiGatewayService.invoke({ persona: 'media_analyst', schema: mediaSummarySchema (E03-07), attachments: [{storageObjectId}] })` once and store the summary; then pass `attachments: [{id, kind, purpose, aiSummary}]` as **text** in the input.
+4. `SafetyPolicyService.evaluate({ userId, text, surface: 'coach' })` (E06-06 (#82)). On `redirect`: persist a COACH message with `content = safety copy`, `structured: null`, `safetyDecision`, no gateway call; return `degraded: false`.
+5. `ContextAssemblerService.assemble(userId, 'coach')` (E06-02 (#63)). Build `recentTurns`: the last 10 messages of this conversation as `{role, content}` (Tier 4 — never the full history, never `structured`).
+6. For each attachment lacking `aiSummary`, call `AiGatewayService.invoke({ persona: 'media_analyst', schema: mediaSummarySchema (E03-07 (#96)), attachments: [{storageObjectId}] })` once and store the summary; then pass `attachments: [{id, kind, purpose, aiSummary}]` as **text** in the input.
 7. `AiGatewayService.invoke<CoachReply>({ persona: 'coach', userId, promptVersion: COACH_PROMPT_VERSION, instructions: buildCoachInstructions({style, safety}), input: { context: renderForPrompt(ctx), recentTurns, attachments, userText: text }, schema: coachReplySchema, schemaName: 'coach_reply', safetyDecision })`.
 8. `{ok:false}` → persist COACH message with `content = fallbackReply(error.code)`, `structured: null`, `invocationId`; return `degraded: true`; HTTP 201, never 5xx.
 9. `guardCoachOutput` fails → `prisma.aiInvocation.update({ where: {id: invocationId}, data: { status: 'invalid_output', outputValid: false, errorCode: 'hallucination_guard', errorMessage: reason } })`, persist `fallbackReply('invalid_output')`, `degraded: true`.
-10. `reply.proposal` non-null → `ProposalsService.createFromCoach(userId, { planId, summary, changes, sourceMessageId, invocationId })` (E06-04) → `proposalId` stored inside `structured.proposal`.
+10. `reply.proposal` non-null → `ProposalsService.createFromCoach(userId, { planId, summary, changes, sourceMessageId, invocationId })` (E06-04 (#76)) → `proposalId` stored inside `structured.proposal`.
 11. Persist COACH message (`content = user_message`, `structured`, `invocationId`, `safetyDecision`), bump `lastMessageAt`, return.
 
 Log line (Pino, no content): `coach message conversation=<id> invocation=<id> intervention=<type> proposal=<bool> safety=<decision> degraded=<bool>`. Span `coach.send_message`. Audit only for `coach:conversation_deleted`.
 
 Error codes: 400 `attachment_not_found`, 400 validation (Zod), 403 `forbidden` (foreign conversation), 404 `conversation_not_found`.
 
-**UI (frontend-dev)** — n/a (E06-07).
+**UI (frontend-dev)** — n/a (E06-07 (#86)).
 
 **Tests (testing-dev)**
 - Unit `apps/api/src/coach/contracts/coach-reply.contract.spec.ts`: accepts the PRD §16 example; rejects unknown `intervention_type`, `user_message` > 600, `proposal.changes` empty, both `proposal` and `friction_question` set (guard test).
@@ -378,30 +381,30 @@ Error codes: 400 `attachment_not_found`, 400 validation (Zod), 403 `forbidden` (
 #### Out of scope
 
 - Streaming, message editing, regenerate, conversation search.
-- Persisting `Obstacle` rows from friction answers (E07-03).
+- Persisting `Obstacle` rows from friction answers (E07-03 (#116)).
 
 #### Notes for the implementing agent
 
 - Controller/DTO shape: copy `apps/api/src/pat/pat.controller.ts` (own-resource `@Auth()`, `@ApiDataResponse` from `common/decorators/api-data-response.decorator.ts`, `createZodDto`).
 - Use `@CurrentUser()` (`apps/api/src/auth/decorators/current-user.decorator.ts`) for `userId`; never trust ids in the body for ownership.
-- The gateway already writes the `ai_invocations` row; do **not** write a second one. The `safetyDecision` argument on `invoke` is added by E06-06 — if that child hasn't merged yet, land the coach without it and add the argument in a follow-up commit.
+- The gateway already writes the `ai_invocations` row; do **not** write a second one. The `safetyDecision` argument on `invoke` is added by E06-06 (#82) — if that child hasn't merged yet, land the coach without it and add the argument in a follow-up commit.
 - Register `Coach` under a new `Coaching` group in `apps/api/src/openapi/tags.ts`; the OpenAPI spec test fails on orphaned/undeclared tags.
 - Fastify: there is no `req.user` magic beyond the guards; JSON bodies only.
-- Do not add a `SYSTEM` message per turn; the enum value exists for future system notices (e.g. "Plan updated to v2"), which E06-04 writes when a proposal created from this conversation is accepted.
+- Do not add a `SYSTEM` message per turn; the enum value exists for future system notices (e.g. "Plan updated to v2"), which E06-04 (#76) writes when a proposal created from this conversation is accepted.
 
 ---
 
-### E06-04 `feat(api): add plan-change proposal accept, edit and reject mutation protocol`
+### E06-04 `feat(api): add plan-change proposal accept, edit and reject mutation protocol` — #76
 
-**Part of epic:** E06 · **Blocked by:** E06-01 · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
+**Part of epic:** E06 · **Blocked by:** E06-01 (#61) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-PRD §15 fixes the mutation protocol: AI produces a proposal → product displays a diff → user approves or edits → plan service validates → a new plan version becomes active → the previous version stays in history → a change event is recorded. VISION §19: "EvolvePath owns the plan. AI owns the coaching." PRD §80 requires version history with a reason; §89 "Mutation safety" and §107 require that the AI never changes plans without approval. The coach (E06-03), weekly review (E10) and workout adaptation (E09-05) all need one implementation of that protocol.
+PRD §15 fixes the mutation protocol: AI produces a proposal → product displays a diff → user approves or edits → plan service validates → a new plan version becomes active → the previous version stays in history → a change event is recorded. VISION §19: "EvolvePath owns the plan. AI owns the coaching." PRD §80 requires version history with a reason; §89 "Mutation safety" and §107 require that the AI never changes plans without approval. The coach (E06-03 (#70)), weekly review (E10) and workout adaptation (E09-05 (#88)) all need one implementation of that protocol.
 
 #### Proposed solution
 
-**Data (database-dev)** — n/a (E06-01).
+**Data (database-dev)** — n/a (E06-01 (#61)).
 
 **API (backend-dev)**
 
@@ -409,7 +412,7 @@ Files (new) under `apps/api/src/coach/proposals/`:
 - `plan-change.schema.ts` —
   ```ts
   export const PLAN_CHANGE_OPS = ['move','reduce','replace','add','remove','pause'] as const;
-  export const routineSnapshotSchema = z.object({ title, triggerType, triggerValue, frequency, preferredTime, estimatedDurationMinutes, minimumDurationMinutes, fallbackBehavior }).partial(); // field names = Routine (E02-01)
+  export const routineSnapshotSchema = z.object({ title, triggerType, triggerValue, frequency, preferredTime, estimatedDurationMinutes, minimumDurationMinutes, fallbackBehavior }).partial(); // field names = Routine (E02-01 (#36))
   export const planChangeSchema = z.object({
     op: z.enum(PLAN_CHANGE_OPS),
     target: z.object({ type: z.enum(['routine','commitment']), id: z.string().uuid().nullable() }),
@@ -445,7 +448,7 @@ Files (new) under `apps/api/src/coach/proposals/`:
 
 OpenAPI tag `Plan Proposals` in the `Coaching` group. Error codes: 403 `forbidden`, 404 `proposal_not_found`, 409 `proposal_not_actionable`, 409 `proposal_expired`, 422 `invalid_changes`.
 
-**UI (frontend-dev)** — n/a (E06-07).
+**UI (frontend-dev)** — n/a (E06-07 (#86)).
 
 **Tests (testing-dev)**
 - Unit `apply-changes.spec.ts` (table-driven): move Wednesday 18:30 → Saturday 09:00 yields one `DiffEntry` with `preferredTime`/`triggerValue` fields and a `reschedule` effect per future commitment; `reduce` 40 → 15 min; `remove` yields `cancel` effects; `add` yields `tmp:` id; `pause`; unknown target → `target_not_found` with index; `reduce` with larger `after` → `invalid_after`; two changes on the same target → `duplicate_target`; determinism (deep-equal across two calls); original snapshot not mutated.
@@ -486,29 +489,29 @@ OpenAPI tag `Plan Proposals` in the `Coaching` group. Error codes: 403 `forbidde
 #### Out of scope
 
 - Proposal expiry sweeps/cron; notifications on new proposals (E12 N9 "Plan issue").
-- Cross-domain load checks on accept (E10-03).
+- Cross-domain load checks on accept (E10-03 (#80)).
 
 #### Notes for the implementing agent
 
-- Use `PlansService.createVersion`/`activateVersion` from E02-03; if their signatures differ from the sketch here, adapt the call, not the protocol. Never bypass them with raw `planVersion.create`.
+- Use `PlansService.createVersion`/`activateVersion` from E02-03 (#42); if their signatures differ from the sketch here, adapt the call, not the protocol. Never bypass them with raw `planVersion.create`.
 - `applyChanges` must stay pure and side-effect free — it is reused by `GET /proposals/:id` for the preview and by the web diff (same `DiffEntry` shape, serialized).
-- Transactions: Prisma interactive `$transaction(async (tx) => …)`; pass `tx` into the E02 services (they must accept an optional client — add that overload in this child if E02-03 didn't).
+- Transactions: Prisma interactive `$transaction(async (tx) => …)`; pass `tx` into the E02 services (they must accept an optional client — add that overload in this child if E02-03 (#42) didn't).
 - Audit pattern: `apps/api/src/email/email-settings.service.ts` `auditEvent.create`; `targetType: 'plan'`, `targetId: planId`.
-- Timezone for "future" comes from `user_profiles.timezone` (E04-01), default UTC.
+- Timezone for "future" comes from `user_profiles.timezone` (E04-01 (#100)), default UTC.
 
 ---
 
-### E06-05 `feat(api): add memory insight endpoints and the pattern-analysis proposer`
+### E06-05 `feat(api): add memory insight endpoints and the pattern-analysis proposer` — #78
 
-**Part of epic:** E06 · **Blocked by:** E06-01, E06-02 · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
+**Part of epic:** E06 · **Blocked by:** E06-01 (#61), E06-02 (#63) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-PRD §17 Tier 3 requires durable preferences that are "inspectable and removable"; §10.12 says durable inferences "should usually require explicit user approval before becoming strong planning assumptions"; §85 gives the controls (Edit / Forget / Do not use for coaching); §127 lists "delete memory"; VISION §23 describes the loop ("I've noticed you complete morning workouts much more consistently… Save that as a planning preference? Yes / No"). PRD §14.4 defines the Pattern Analysis Service that produces candidate insights. The tables exist (E06-01); no endpoints, no proposer, and the context assembler (E06-02) must honour the flags end to end.
+PRD §17 Tier 3 requires durable preferences that are "inspectable and removable"; §10.12 says durable inferences "should usually require explicit user approval before becoming strong planning assumptions"; §85 gives the controls (Edit / Forget / Do not use for coaching); §127 lists "delete memory"; VISION §23 describes the loop ("I've noticed you complete morning workouts much more consistently… Save that as a planning preference? Yes / No"). PRD §14.4 defines the Pattern Analysis Service that produces candidate insights. The tables exist (E06-01 (#61)); no endpoints, no proposer, and the context assembler (E06-02 (#63)) must honour the flags end to end.
 
 #### Proposed solution
 
-**Data (database-dev)** — n/a (E06-01).
+**Data (database-dev)** — n/a (E06-01 (#61)).
 
 **API (backend-dev)**
 
@@ -548,9 +551,9 @@ OpenAPI tag `Memory Insights` (group `Coaching`). Cross-user → 403; unknown �
 
 Notification (CLAUDE.md recipe): register `memory.insight_proposed` in `apps/api/src/notifications/notification-events.ts` (`label: 'New coaching insight to review'`, `channels: ['browser']`, `defaultEnabled: true`, not mandatory) and a browser template in `EVENT_BROWSER_TEMPLATES` (`apps/api/src/notifications/channels/browser-notification.channel.ts`) returning `{ title: 'The coach noticed a pattern', body: '<count> new insight(s) to confirm or dismiss.', link: '/settings/ai-memory' }`. `CoachModule` imports `NotificationsModule`.
 
-E06-02 hook: no assembler change is needed for the coach scopes (the query already requires `userConfirmed && !doNotUse`); add `assembleForPatternAnalysis` **not** — the proposer uses `aggregateStats`, not the assembler, so per-user free text never reaches the `pattern_analyst` persona.
+E06-02 (#63) hook: no assembler change is needed for the coach scopes (the query already requires `userConfirmed && !doNotUse`); add `assembleForPatternAnalysis` **not** — the proposer uses `aggregateStats`, not the assembler, so per-user free text never reaches the `pattern_analyst` persona.
 
-**UI (frontend-dev)** — n/a (E06-08).
+**UI (frontend-dev)** — n/a (E06-08 (#90)).
 
 **Tests (testing-dev)**
 - Unit `pattern-stats.spec.ts`: fixture of 30 commitments → morning rate 0.8 / evening 0.3, weekday table, reschedule histogram; empty input → `sampleSize 0`; timezone bucketing (a 23:30 UTC completion in `America/Costa_Rica` is `afternoon`).
@@ -591,24 +594,24 @@ E06-02 hook: no assembler change is needed for the coach scopes (the query alrea
 #### Out of scope
 
 - Scheduled (cron) proposer runs — E10's weekly review calls `proposeInsights`; E11 replaces `aggregateStats` with the momentum engine's analytics.
-- Obstacle creation (E07-03).
+- Obstacle creation (E07-03 (#116)).
 
 #### Notes for the implementing agent
 
-- Throttle: reuse `apps/api/src/ai/gateway/test-throttle.ts` (E01-06 per-user sliding window) rather than adding `@nestjs/throttler`.
+- Throttle: reuse `apps/api/src/ai/gateway/test-throttle.ts` (E01-06 (#26) per-user sliding window) rather than adding `@nestjs/throttler`.
 - Notification recipe is in `CLAUDE.md` → "Adding a Notification"; `notify()` after the insight rows are committed and outside any transaction.
 - Keep `aggregateStats` in its own file with no Nest decorators so E11 can lift it.
 - Audit metadata for `forget` must not include the statement (PRD §86 data minimization — the user asked to forget it).
 
 ---
 
-### E06-06 `feat(api): add deterministic safety pre-check and safety-persona policy`
+### E06-06 `feat(api): add deterministic safety pre-check and safety-persona policy` — #82
 
-**Part of epic:** E06 · **Blocked by:** none (needs E01-06 merged) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
+**Part of epic:** E06 · **Blocked by:** none (needs E01-06 (#26) merged) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-PRD §14.8 requires a Safety Layer that evaluates "health, eating, emotional distress, relationship, and professional-sensitivity requests" and may allow, allow with conservative framing, restrict, redirect, or escalate to professional-care guidance. §81 forbids diagnosis, medication changes, dangerous restriction and training through serious pain; §82 requires crisis content to trigger safety protocols and forbids therapist claims; §45 (pain) and §18 (trust) reinforce it. §88 requires the safety decision to be logged — `ai_invocations.safetyDecision` exists (E01-01) and is empty. E04's planner already accepts free text with no check; E06-03 and E09 will accept more.
+PRD §14.8 requires a Safety Layer that evaluates "health, eating, emotional distress, relationship, and professional-sensitivity requests" and may allow, allow with conservative framing, restrict, redirect, or escalate to professional-care guidance. §81 forbids diagnosis, medication changes, dangerous restriction and training through serious pain; §82 requires crisis content to trigger safety protocols and forbids therapist claims; §45 (pain) and §18 (trust) reinforce it. §88 requires the safety decision to be logged — `ai_invocations.safetyDecision` exists (E01-01 (#21)) and is empty. E04's planner already accepts free text with no check; E06-03 (#70) and E09 will accept more.
 
 #### Proposed solution
 
@@ -641,12 +644,12 @@ Files (new) under `apps/api/src/coach/safety/`:
   1. `precheck(text)` (pure, exported for tests): run all rules; any `definite` match → `{decision:'redirect', category, source:'precheck', matchedRule, userFacingNote: SAFETY_REDIRECT_COPY[category]}`; no match → `{decision:'allow', category:'none', source:'precheck'}`; only `ambiguous` matches → continue.
   2. Ambiguous → `AiGatewayService.invoke({ persona: 'safety', userId, promptVersion, instructions, input: { text, surface, matchedRules }, schema: safetyModelSchema, schemaName: 'safety_decision', maxOutputTokens: 200 })`. `ok` → map to `SafetyDecision` with `source:'model'` (+ copy/note); `{ok:false}` → `{decision:'conservative', category: first ambiguous category, source:'model_unavailable', userFacingNote: SAFETY_CONSERVATIVE_NOTE}` (fail toward caution, never toward silence and never toward blocking the deterministic product).
   3. Log Pino `safety decision=<d> category=<c> source=<s> surface=<surface> rule=<id>` — never the text.
-- Gateway change (E01-06 file `apps/api/src/ai/gateway/ai-gateway.types.ts`/`ai-gateway.service.ts`): add optional `safetyDecision?: SafetyDecision` to `invoke` options; when present it is written to `ai_invocations.safetyDecision` for that call. Additive, backward-compatible. The `safety` persona's own invocation row records its output as its `safetyDecision` too.
-- Call-site retrofit in this child: `OnboardingService.propose` (E04-02) runs `evaluate({surface:'planner'})` over the concatenated free-text answers; `redirect` → the proposal step returns the copy and the deterministic templates (`/onboarding/skip-ai` path) instead of calling the planner; `conservative` → instructions appended. E06-03 (coach) and E09 (workout, media) call it themselves.
+- Gateway change (E01-06 (#26) file `apps/api/src/ai/gateway/ai-gateway.types.ts`/`ai-gateway.service.ts`): add optional `safetyDecision?: SafetyDecision` to `invoke` options; when present it is written to `ai_invocations.safetyDecision` for that call. Additive, backward-compatible. The `safety` persona's own invocation row records its output as its `safetyDecision` too.
+- Call-site retrofit in this child: `OnboardingService.propose` (E04-02 (#101)) runs `evaluate({surface:'planner'})` over the concatenated free-text answers; `redirect` → the proposal step returns the copy and the deterministic templates (`/onboarding/skip-ai` path) instead of calling the planner; `conservative` → instructions appended. E06-03 (#70) (coach) and E09 (workout, media) call it themselves.
 
 No endpoints. No audit (decisions live on `ai_invocations` and `coach_messages`).
 
-**UI (frontend-dev)** — n/a (E06-07 renders `safety` on messages).
+**UI (frontend-dev)** — n/a (E06-07 (#86) renders `safety` on messages).
 
 **Tests (testing-dev)**
 - Fixture `apps/api/src/coach/safety/__fixtures__/safety-cases.json` — ≥ 40 entries `{ text, expected: { decision, category }, viaModel?: boolean, modelReply?: {...} }` covering: "I have sharp chest pain when I run" → redirect/injury (precheck); "my knee hurts a bit after squats" → viaModel, model says conservative; "legs are sore from yesterday" → allow (precheck, `sore` alone); "I want to fast for 5 days" → redirect/disordered_eating; "should I skip lunch to hit my goal" → viaModel; "I don't want to be alive" → redirect/crisis; "feeling hopeless about this project" → viaModel; "should I stop taking my blood pressure meds before workouts" → redirect/medication; "I'm 20 weeks pregnant, can I keep lifting" → viaModel → conservative; "help me plan my week" → allow; plus Spanish/mixed-case variants of the definite phrases.
@@ -697,23 +700,23 @@ No endpoints. No audit (decisions live on `ai_invocations` and `coach_messages`)
 
 ---
 
-### E06-07 `feat(web): add Coach screen with proposal cards, diff view and attachments`
+### E06-07 `feat(web): add Coach screen with proposal cards, diff view and attachments` — #86
 
-**Part of epic:** E06 · **Blocked by:** E06-03, E06-04 · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev → docs-dev
+**Part of epic:** E06 · **Blocked by:** E06-03 (#70), E06-04 (#76) · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-PRD §66 defines the Coach screen: chat with suggested prompts, context-aware ("the user should not need to restate active goals"), never the only way to reach AI. §15 requires proposals to render as a diff with **Accept / Edit / Keep current plan**; §128 requires a "Why this?" on important recommendations; §67 fixes the response shape and CTA ("Start 10 minutes"); §123 requires mobile-first. The `/coach` destination exists as a placeholder since E02-05; the API surface arrives with E06-03/E06-04.
+PRD §66 defines the Coach screen: chat with suggested prompts, context-aware ("the user should not need to restate active goals"), never the only way to reach AI. §15 requires proposals to render as a diff with **Accept / Edit / Keep current plan**; §128 requires a "Why this?" on important recommendations; §67 fixes the response shape and CTA ("Start 10 minutes"); §123 requires mobile-first. The `/coach` destination exists as a placeholder since E02-05 (#51); the API surface arrives with E06-03 (#70)/E06-04 (#76).
 
 #### Proposed solution
 
 **Data (database-dev)** — n/a.
 
-**API (backend-dev)** — n/a (uses E06-03, E06-04, E03-04 attachments).
+**API (backend-dev)** — n/a (uses E06-03 (#70), E06-04 (#76), E03-04 (#83) attachments).
 
 **UI (frontend-dev)**
 
-Route: replace the E02-05 placeholder at `/coach` in `apps/web/src/App.tsx` with `CoachPage`; add `/coach/:conversationId`. `DESTINATIONS` already has `coach` (E02-05) — no registry change. `resolveActiveDestination` must own `/coach/*` (check `apps/web/src/config/destinations.ts` `DESTINATION_ROUTES`).
+Route: replace the E02-05 (#51) placeholder at `/coach` in `apps/web/src/App.tsx` with `CoachPage`; add `/coach/:conversationId`. `DESTINATIONS` already has `coach` (E02-05 (#51)) — no registry change. `resolveActiveDestination` must own `/coach/*` (check `apps/web/src/config/destinations.ts` `DESTINATION_ROUTES`).
 
 `apps/web/src/types/index.ts`: `CoachConversation`, `CoachMessage`, `CoachReply` (mirror of the contract incl. `INTERVENTION_TYPES`), `PlanChange`, `DiffEntry`, `ProposalSummary`, `ProposalDetail`, `SafetyInfo`, `SuggestedPrompt`.
 
@@ -725,11 +728,11 @@ Components under `apps/web/src/components/coach/` (all new):
 - `CoachPage.tsx` (`pages/CoachPage.tsx`): layout gate `useMediaQuery(theme.breakpoints.down('sm'))` — **local** layout choice, documented in a comment as not one of the five coupled gates. `<sm`: conversation list screen; tapping opens the conversation full-screen with an AppBar back arrow (`navigate('/coach')`); `/coach` with no id shows the list. `≥sm`: 280 px `ConversationList` side panel + `ConversationView`; `/coach` with no id opens a new empty conversation with prompt chips.
 - `ConversationList.tsx` — `{items, activeId, onSelect, onNew, onDelete}`; MUI `List`; delete via confirm dialog.
 - `ConversationView.tsx` — `role="log" aria-live="polite" aria-relevant="additions"` scrollable message area (auto-scroll on new message; do not steal focus), `SuggestedPromptChips` when the conversation is empty, `CoachComposer` pinned at the bottom (on phones sits above `BottomNav`; do not alter `<main>`'s `pb`).
-- `MessageBubble.tsx` — `{message}`; USER right-aligned; COACH left with: `content`, `RecommendedActionCard` (`Start <n> min` → `navigate('/today?commitment=<id>&action=start')`, or `/today` when no id — E05's Start flow route; verify the exact query params against E05-05), `fallback_action` as secondary text "Fallback: <title> (<n> min)", `FrictionQuestion` (`options` as toggle buttons that send the chosen option as the next user message), `ProposalCard` when `structured.proposal`, `WhyThisExpander` (MUI `Accordion`, summary "Why this?", body `reasoning_summary`; absent when `structured` is null), `SafetyNote` (`Alert severity="info"` with `userFacingNote` for `conservative`/`redirect`); SYSTEM messages centred, muted ("Plan updated to v2").
+- `MessageBubble.tsx` — `{message}`; USER right-aligned; COACH left with: `content`, `RecommendedActionCard` (`Start <n> min` → `navigate('/today?commitment=<id>&action=start')`, or `/today` when no id — E05's Start flow route; verify the exact query params against E05-05 (#48)), `fallback_action` as secondary text "Fallback: <title> (<n> min)", `FrictionQuestion` (`options` as toggle buttons that send the chosen option as the next user message), `ProposalCard` when `structured.proposal`, `WhyThisExpander` (MUI `Accordion`, summary "Why this?", body `reasoning_summary`; absent when `structured` is null), `SafetyNote` (`Alert severity="info"` with `userFacingNote` for `conservative`/`redirect`); SYSTEM messages centred, muted ("Plan updated to v2").
 - `ProposalCard.tsx` — `{proposal, onAccept, onEdit, onReject}`: title "I recommend changing your <domain> plan", `summary`, `PlanChangeDiff`, buttons **Accept** (contained), **Edit** (outlined → `EditProposalDialog`), **Keep current plan** (text). After decision: status chip (Accepted → "Plan updated (v<N>)" with link to `/path`; Rejected → "Kept current plan"); buttons disabled; expired → "This proposal expired".
 - `PlanChangeDiff.tsx` — `{entries: DiffEntry[], dense?: boolean}`; ≥sm: table (`<caption>` "Proposed changes", columns Change / Before / After / Why); <sm: stacked cards "Wednesday 18:30 → Saturday 09:00". Exported for E10's Weekly Review.
 - `EditProposalDialog.tsx` — edits `after.preferredTime` / `triggerValue` / durations per entry (simple fields, no free-form JSON), submits `editProposal` then `acceptProposal`.
-- `CoachComposer.tsx` — multiline `TextField` (Enter sends, Shift+Enter newline, `aria-label="Message the coach"`), attach button opening `MediaAttachmentPicker` (E03-06) limited to 4 with thumbnails and remove, send `IconButton` disabled while pending or empty; keeps focus after send.
+- `CoachComposer.tsx` — multiline `TextField` (Enter sends, Shift+Enter newline, `aria-label="Message the coach"`), attach button opening `MediaAttachmentPicker` (E03-06 (#91)) limited to 4 with thumbnails and remove, send `IconButton` disabled while pending or empty; keeps focus after send.
 - `SuggestedPromptChips.tsx` — `Chip` buttons from `getSuggestedPrompts()`, `aria-label` = label, click sends `text`.
 - `RecommendedActionCard.tsx`, `FrictionQuestion.tsx`, `WhyThisExpander.tsx`, `SafetyNote.tsx`.
 
@@ -746,7 +749,7 @@ A11y: all actions are `<button>`s with names; diff table has caption and `scope=
 - `config/destinations.test.ts`: `/coach/abc` resolves to `coach`.
 - Visual harness `apps/web/visual/main.tsx`: add a `coach` scenario; regenerate baselines in the pinned Playwright container.
 
-**Docs (docs-dev)** — `docs/specs/coach-and-memory.md` §"Coach screen" (layout at the `sm` boundary, component map); `CLAUDE.md` no change beyond the E06-03 endpoint block.
+**Docs (docs-dev)** — `docs/specs/coach-and-memory.md` §"Coach screen" (layout at the `sm` boundary, component map); `CLAUDE.md` no change beyond the E06-03 (#70) endpoint block.
 
 #### Acceptance criteria
 
@@ -779,25 +782,25 @@ A11y: all actions are `<button>`s with names; diff table has caption and `scope=
 #### Out of scope
 
 - Editing/deleting individual messages; conversation renaming; markdown rendering in replies (plain text only).
-- The Weekly Review screen (E10-04) — it imports `PlanChangeDiff` from here.
+- The Weekly Review screen (E10-04 (#84)) — it imports `PlanChangeDiff` from here.
 
 #### Notes for the implementing agent
 
 - Follow `apps/web/src/pages/UserNotificationsPage.tsx` + `hooks/useNotificationEvents.ts` for the hook/page split and `components/settings/PersonalAccessTokens.tsx` for confirm-dialog patterns.
-- `useMediaQuery(down('sm'))` inside `CoachPage` is a page-local layout switch, like `PersonaModelTable` (E01-07) — say so in a comment; do not add a shared constant.
+- `useMediaQuery(down('sm'))` inside `CoachPage` is a page-local layout switch, like `PersonaModelTable` (E01-07 (#27)) — say so in a comment; do not add a shared constant.
 - Optimistic ids: prefix `tmp-`; never send them to the API.
-- The Start flow route params must match E05-05's implementation — read `apps/web/src/App.tsx` for the actual path before wiring `RecommendedActionCard`.
+- The Start flow route params must match E05-05 (#48)'s implementation — read `apps/web/src/App.tsx` for the actual path before wiring `RecommendedActionCard`.
 - MSW handlers use `*/api/...` patterns (see `apps/web/src/__tests__/mocks/handlers.ts`).
 
 ---
 
-### E06-08 `feat(web): add AI memory settings page with confirm, forget and do-not-use`
+### E06-08 `feat(web): add AI memory settings page with confirm, forget and do-not-use` — #90
 
-**Part of epic:** E06 · **Blocked by:** E06-05 · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev → docs-dev
+**Part of epic:** E06 · **Blocked by:** E06-05 (#78) · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-PRD §85 requires users to inspect durable memories and inferred preferences with the controls **Edit**, **Forget**, **Do not use for coaching**; §17 Tier 3 says durable inferences "should be inspectable and removable"; §127 lists "delete memory"; VISION §23 puts the user "in control of what becomes durable coaching memory". The API exists (E06-05); the settings hub has an "AI" section (E01-08) with only the key card.
+PRD §85 requires users to inspect durable memories and inferred preferences with the controls **Edit**, **Forget**, **Do not use for coaching**; §17 Tier 3 says durable inferences "should be inspectable and removable"; §127 lists "delete memory"; VISION §23 puts the user "in control of what becomes durable coaching memory". The API exists (E06-05 (#78)); the settings hub has an "AI" section (E01-08 (#28)) with only the key card.
 
 #### Proposed solution
 
@@ -805,7 +808,7 @@ PRD §85 requires users to inspect durable memories and inferred preferences wit
 
 **UI (frontend-dev)**
 
-- Registry first: in `apps/web/src/config/userSettingsSections.tsx`, section `AI` (created by E01-08) gains a card `{ title: 'AI Memory', description: 'See what the coach has learned about you. Confirm, edit, forget, or exclude anything from coaching.', Icon: PsychologyIcon, path: '/settings/ai-memory' }` — no `permission` (own resource).
+- Registry first: in `apps/web/src/config/userSettingsSections.tsx`, section `AI` (created by E01-08 (#28)) gains a card `{ title: 'AI Memory', description: 'See what the coach has learned about you. Confirm, edit, forget, or exclude anything from coaching.', Icon: PsychologyIcon, path: '/settings/ai-memory' }` — no `permission` (own resource).
 - Route `/settings/ai-memory` → `pages/UserAiMemoryPage.tsx` in `App.tsx`, next to `/settings/tokens`; the page wraps `components/settings/AiMemorySettings.tsx` in the same shell `UserTokensPage.tsx` uses (`UserSettingsSection`).
 - `hooks/useMemoryInsights.ts` — `{insights, loading, error, refresh, create, edit, confirm, setDoNotUse, forget, propose}` over `services/api.ts` functions `getMemoryInsights({includeDoNotUse: true})`, `createMemoryInsight`, `updateMemoryInsight`, `confirmMemoryInsight`, `setMemoryInsightDoNotUse`, `deleteMemoryInsight`, `proposeMemoryInsights`. Types `MemoryInsight`, `MemoryInsightCategory` in `types/index.ts`.
 - `components/settings/AiMemorySettings.tsx` — intro copy: "The coach only plans with insights you've confirmed. Anything marked 'Don't use for coaching' stays here for you but is never sent to the AI. Forget removes it permanently." Toolbar: **Add insight** (opens `AddMemoryInsightDialog`: category select + statement ≤ 280), **Propose insights** (calls `propose`; shows "Not enough history yet" for `insufficient_data`, "Coach unavailable" for `ai_unavailable`, "Try again in a few minutes" on 429). Groups by category with headings in the order IDENTITY, WORK, FAMILY, HEALTH, COACHING_PREFERENCE, NOTIFICATION_PREFERENCE, PATTERN; empty state per page: "Nothing remembered yet. Confirmed insights appear here as the coach notices patterns, or add your own."
@@ -864,29 +867,29 @@ A11y: switch has an accessible name including the statement ("Use 'Morning worko
 
 ---
 
-### E06-09 `test(tests): E06 end-to-end verification`
+### E06-09 `test(tests): E06 end-to-end verification` — #93
 
-**Part of epic:** E06 · **Blocked by:** E06-03, E06-04, E06-05, E06-06, E06-07, E06-08 · **Component:** tests, docs · **Priority:** P0 · **Agents:** testing-dev → ops-dev → docs-dev
+**Part of epic:** E06 · **Blocked by:** E06-03 (#70), E06-04 (#76), E06-05 (#78), E06-06 (#82), E06-07 (#86), E06-08 (#90) · **Component:** tests, docs · **Priority:** P0 · **Agents:** testing-dev → ops-dev → docs-dev
 
 #### Problem statement
 
-The epic's promise (PRD §68: "My schedule changed. I can't work out Wednesday anymore." → plan queried → adjustment proposed → diff → approval; §15 mutation protocol; §14.8 safety; §85 memory control) must be demonstrated against the real stack (DB + API + UI) with the fake OpenAI server from E01-10, and the design must be written down so E09/E10 extend it instead of re-deriving it.
+The epic's promise (PRD §68: "My schedule changed. I can't work out Wednesday anymore." → plan queried → adjustment proposed → diff → approval; §15 mutation protocol; §14.8 safety; §85 memory control) must be demonstrated against the real stack (DB + API + UI) with the fake OpenAI server from E01-10 (#30), and the design must be written down so E09/E10 extend it instead of re-deriving it.
 
 #### Proposed solution
 
 **Data (database-dev)** — n/a. **API (backend-dev)** — n/a.
 
-**Fake server (testing-dev)** — extend `tools/fake-openai/server.mjs` (E01-10) with **schema-driven scenarios** (the API, not the browser, calls the fake server, so headers cannot be set from Playwright):
+**Fake server (testing-dev)** — extend `tools/fake-openai/server.mjs` (E01-10 (#30)) with **schema-driven scenarios** (the API, not the browser, calls the fake server, so headers cannot be set from Playwright):
 - `tools/fake-openai/scenarios/index.mjs` exporting `matchScenario(body) → responseJson | null`, keyed on `body.text.format.name` (the gateway sends the strict JSON schema name) and, within a schema, on a keyword in the serialized `input`:
-  - `coach_reply` + input contains `Wednesday` → `coach-proposal.json`: `intervention_type: 'PLAN_CHALLENGE'`, `reasoning_summary`, `user_message`, `proposal: { kind:'plan_change', planId: '<PLACEHOLDER:planId>', summary: 'Move Wednesday workout to Saturday morning', changes: [{ op:'move', target:{type:'routine', id:'<PLACEHOLDER:routineId>'}, before:{preferredTime:'18:30', triggerValue:'WED'}, after:{preferredTime:'09:00', triggerValue:'SAT'}, reason:'You said Wednesday no longer works.' }] }`. Placeholders are filled by scanning the serialized input for the first `planId`/`routineId` values the context assembler rendered (the renderer emits `planId: <uuid>` / `routineId: <uuid>` lines — E06-02 guarantees the format), which keeps the hallucination guard honest.
+  - `coach_reply` + input contains `Wednesday` → `coach-proposal.json`: `intervention_type: 'PLAN_CHALLENGE'`, `reasoning_summary`, `user_message`, `proposal: { kind:'plan_change', planId: '<PLACEHOLDER:planId>', summary: 'Move Wednesday workout to Saturday morning', changes: [{ op:'move', target:{type:'routine', id:'<PLACEHOLDER:routineId>'}, before:{preferredTime:'18:30', triggerValue:'WED'}, after:{preferredTime:'09:00', triggerValue:'SAT'}, reason:'You said Wednesday no longer works.' }] }`. Placeholders are filled by scanning the serialized input for the first `planId`/`routineId` values the context assembler rendered (the renderer emits `planId: <uuid>` / `routineId: <uuid>` lines — E06-02 (#63) guarantees the format), which keeps the hallucination guard honest.
   - `coach_reply` + input contains `procrastinating` → `coach-activation.json` (`ACTIVATION_REDUCTION`, `recommended_action` with `commitmentId` from the first `commitmentId:` line, 10 min).
   - `coach_reply` otherwise → `coach-normal.json` (`NORMAL_REMINDER`, no proposal).
   - `safety_decision` → `safety-conservative.json` (`{decision:'conservative', category:'injury'}`) when input contains `hurts`, else `{decision:'allow', category:'none'}`.
   - `insight_proposal` → `pattern-insights.json` (two insights: HEALTH "Morning workouts are more reliable than evening ones", WORK "Large ambiguous tasks get postponed").
-  - Unknown schema → existing E01-10 generic placeholder generator.
+  - Unknown schema → existing E01-10 (#30) generic placeholder generator.
 - Existing `x-fake-behaviour` header semantics unchanged.
 
-**E2E (testing-dev)** — `tests/e2e/specs/coach.spec.ts` (new), using `loginAsTestUser(page, { email, role: 'contributor', withAiKey: true })` (E01-10 helper) and `page.request` (shares the browser cookies) to seed via the API:
+**E2E (testing-dev)** — `tests/e2e/specs/coach.spec.ts` (new), using `loginAsTestUser(page, { email, role: 'contributor', withAiKey: true })` (E01-10 (#30) helper) and `page.request` (shares the browser cookies) to seed via the API:
 - `beforeEach`: seed Best Self, a HEALTH outcome, a plan with v1 ACTIVE and a routine "Strength workout" (`triggerValue 'WED'`, `preferredTime '18:30'`, 40/15 min) plus next week's commitments — through `POST /api/outcomes`, `/api/outcomes/:id/plans`, `/api/routines`, `/api/commitments` (E02) — or through the onboarding endpoints (E04) if those are simpler; keep the helper in `tests/e2e/helpers/seed.helper.ts` (new).
 - Test 1 "user-initiated plan change becomes plan v2 after accept" (PRD §68, §15): go to `/coach`; type the sentence; expect optimistic bubble; expect proposal card with text `Wednesday` and `Saturday`; expand **Why this?** and expect the reasoning text; `GET /api/plans/:id/versions` via `page.request` → still 1 version; click **Accept**; expect "Plan updated (v2)"; go to `/path`; expect `v2` with `Active` and the rationale "Move Wednesday workout to Saturday morning", `v1` `Superseded`; API → 2 versions.
 - Test 2 "keep current plan leaves v1 active": same setup; click **Keep current plan**; API → 1 version; card shows "Kept current plan".
@@ -898,7 +901,7 @@ The epic's promise (PRD §68: "My schedule changed. I can't work out Wednesday a
 
 **Docs (docs-dev)**
 - `docs/specs/coach-and-memory.md` (new): purpose; the coaching contract (fields, intervention ladder mapping, size limits, `nullable` vs strict schema); orchestration sequence (PRD §115 mapped to `CoachService.sendMessage` steps); context scopes/budgets table; mutation protocol state machine (`PROPOSED → EDITED → ACCEPTED | REJECTED | EXPIRED`) and what accept touches (versions, future commitments) and never touches (past, evidence); safety policy (rules, decision flow, copy ownership, fail-to-conservative); memory tiers and user controls; hallucination guard; observability fields; **rejected alternatives** (streaming first; letting the model call a "mutate plan" tool; storing memory as free text; soft-deleting forgotten insights; a shared breakpoint constant for the coach layout); extension points for E09/E10.
-- `docs/API.md`: verify the Coach, Plan Proposals and Memory Insights sections (E06-03/04/05) are complete and cross-linked; add the fake-server scenario table to `docs/TESTING.md` "E2E Testing with Playwright".
+- `docs/API.md`: verify the Coach, Plan Proposals and Memory Insights sections (E06-03 (#70)/04/05) are complete and cross-linked; add the fake-server scenario table to `docs/TESTING.md` "E2E Testing with Playwright".
 - `CLAUDE.md`: "Common Patterns" → "Calling an AI persona" (safety → assemble → invoke → validate → guard → proposal, never mutate) and "Proposing a plan change"; endpoint blocks for Coach / Proposals / Memory Insights; tables list.
 - `docs/epics/README.md`: E06 row links to this file and to `docs/specs/coach-and-memory.md`; `ROADMAP.md` E06 checklist.
 
@@ -935,6 +938,6 @@ The epic's promise (PRD §68: "My schedule changed. I can't work out Wednesday a
 #### Notes for the implementing agent
 
 - Seed via `page.request` rather than UI so the spec tests the coach, not onboarding; keep the seed helper reusable for E07–E10 verification specs.
-- The context renderer's `planId:`/`routineId:`/`commitmentId:` line format is the contract the fake server relies on — if E06-02 renders differently, fix the scenario matcher, not the renderer.
+- The context renderer's `planId:`/`routineId:`/`commitmentId:` line format is the contract the fake server relies on — if E06-02 (#63) renders differently, fix the scenario matcher, not the renderer.
 - `ops-dev` may rebuild containers and regenerate visual baselines; it must not run any git operations.
 - Spec authoring style: `tests/e2e/specs/auth.spec.ts`; helpers in `tests/e2e/helpers/`.

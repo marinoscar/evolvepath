@@ -1,6 +1,9 @@
 # E01 — AI Provider Configuration & Bring-Your-Own-Key
 
 <!-- epic-meta: slug=ai-configuration-byok phase=1 -->
+<!-- epic-issue: #20 -->
+
+> GitHub epic: [#20](https://github.com/marinoscar/evolvepath/issues/20)
 
 ## Epic
 
@@ -14,39 +17,39 @@ The repository is a generic production foundation (OAuth, RBAC, settings hub, en
 
 - **Settings + write-only secret + test connection** is exactly what the email feature already does: `apps/api/src/email/email-settings.service.ts` (own `system_settings` row key, `describeForAdmin()` that never throws, `If-Match` versioning, audit `email_settings:replace`), `apps/api/src/email/email-test-send.service.ts` (HTTP 200 with `{ success, error, attemptedAt }`, audit `email_settings:test`), `apps/api/src/email/dto/update-email-settings.dto.ts` (`blankable` fields, `nestjs-zod` `createZodDto`), `apps/api/src/email/email-settings.schema.ts` (compile-time "carries no secret" proof). The web twins are `apps/web/src/hooks/useEmailSettings.ts` and `apps/web/src/pages/Admin/EmailSettingsPage.tsx`.
 - **Secrets** live in `apps/api/src/credentials/credentials.service.ts` (`getSecret`/`describe`/`setSecret`/`deleteSecret`, keyed `(purpose, name)`, AES-256-GCM with per-purpose sub-keys, "blank preserves"). No migration is needed for per-user keys: purpose `ai:openai:user`, name `<userId>`; platform key purpose `ai:openai`, name `platform`.
-- **Settings UI** is registry-driven (CLAUDE.md "MANDATORY: Settings UI Pattern"): `apps/web/src/config/adminSections.tsx` (`ADMIN_SECTIONS`), `apps/web/src/config/userSettingsSections.tsx` (`USER_SETTINGS_SECTIONS`), shared `apps/web/src/components/settings/SettingsHub.tsx`. The spec file those rules cite, `docs/specs/settings-ui.md`, does not exist (referenced from CLAUDE.md, `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `EmailSettingsPage.tsx`) — E01-11 creates it.
+- **Settings UI** is registry-driven (CLAUDE.md "MANDATORY: Settings UI Pattern"): `apps/web/src/config/adminSections.tsx` (`ADMIN_SECTIONS`), `apps/web/src/config/userSettingsSections.tsx` (`USER_SETTINGS_SECTIONS`), shared `apps/web/src/components/settings/SettingsHub.tsx`. The spec file those rules cite, `docs/specs/settings-ui.md`, does not exist (referenced from CLAUDE.md, `docs/ARCHITECTURE.md`, `docs/TESTING.md`, `EmailSettingsPage.tsx`) — E01-11 (#31) creates it.
 - **Route gating**: `apps/web/src/components/common/ProtectedRoute.tsx` checks authentication only; there is no onboarding gate. It is the insertion point for the BYOK gate. `/activate` already renders outside `Layout`; `/setup/ai-key` follows that shape.
 - **Error envelope**: `apps/api/src/common/filters/http-exception.filter.ts` overwrites any `code` an exception supplies (mapping status → `BAD_REQUEST`, `CONFLICT`, … `ERROR`); a body that must reach the client verbatim is wrapped with `withVerbatimErrorBody()` from `apps/api/src/common/exceptions/verbatim-error-body.exception.ts`. The 412 `AI_KEY_REQUIRED` response uses that.
-- **Storage** is S3-only (`STORAGE_PROVIDER` token, `download(key)` returns a `Readable`); `ObjectsService.getById(id, userId)` enforces ownership; processors merge results into `metadata._processing` (`apps/api/src/storage/processing/object-processing.service.ts`). E03-03 will write video frames as `metadata._processing['video-frames'] = { frames: [{ objectId, timestampMs }], durationMs, width, height }`; E01-06's resolver reads exactly that shape.
+- **Storage** is S3-only (`STORAGE_PROVIDER` token, `download(key)` returns a `Readable`); `ObjectsService.getById(id, userId)` enforces ownership; processors merge results into `metadata._processing` (`apps/api/src/storage/processing/object-processing.service.ts`). E03-03 (#79) will write video frames as `metadata._processing['video-frames'] = { frames: [{ objectId, timestampMs }], durationMs, width, height }`; E01-06 (#26)'s resolver reads exactly that shape.
 - **Tests**: API integration specs use `createTestApp({ overrideProviders })` from `apps/api/test/helpers/test-app.helper.ts` (see `apps/api/test/settings/email-settings.integration.spec.ts` for the override pattern); web tests use Vitest + RTL + MSW (`apps/web/src/__tests__/mocks/handlers.ts`) and `vitest-axe`; visual baselines live in `tests/visual/specs/*-snapshots/` and are regenerated only inside `mcr.microsoft.com/playwright:v1.62.1-noble`; behavioural e2e lives in `tests/e2e/` against Docker Compose with the `/testing/login` page (`tests/e2e/helpers/auth.helper.ts`).
 - **Observability**: OTel is wired (`apps/api/src/instrumentation.ts`; `trace.getTracer('evolvepath-api')` in `apps/api/src/common/decorators/trace.decorator.ts`); Pino logging via `LoggingInterceptor`.
 
 Product constraints this epic fixes for every later epic: personas are `planner`, `coach`, `pattern_analyst`, `workout_programmer`, `weekly_reviewer`, `notification_copywriter`, `safety`, `media_analyst` (vision); AI never mutates plans directly (PRD §15) — the gateway returns structured output, callers decide; internal chain of thought is never stored or exposed (PRD §16, §88).
 
-Related specs after this epic ships: `docs/specs/ai-configuration.md` (new, E01-12), `docs/specs/ai-gateway.md` (new, E01-12), `docs/specs/settings-ui.md` (new, E01-11).
+Related specs after this epic ships: `docs/specs/ai-configuration.md` (new, E01-12 (#32)), `docs/specs/ai-gateway.md` (new, E01-12 (#32)), `docs/specs/settings-ui.md` (new, E01-11 (#31)).
 
 ### Scope
 
-- [ ] E01-01 feat(db): add ai_invocations table for AI observability
-- [ ] E01-02 feat(api): add AI persona registry, settings schema and model version filter
-- [ ] E01-03 feat(api): add OpenAI provider over the Responses API with structured and image input
-- [ ] E01-04 feat(api): add admin AI settings endpoints with live model catalog and test connection
-- [ ] E01-05 feat(api): add per-user OpenAI key endpoints and aiKey status on /auth/me
-- [ ] E01-06 feat(api): add AI gateway with invocation logging and attachment resolution
-- [ ] E01-07 feat(web): add AI settings admin page with persona model selectors
-- [ ] E01-08 feat(web): add user OpenAI key settings page and shared key form
-- [ ] E01-09 feat(web): gate signed-in users without an OpenAI key behind the setup flow
-- [ ] E01-10 test(tests): add fake OpenAI server and end-to-end AI key and admin flows
-- [ ] E01-11 docs(docs): create the missing docs/specs/settings-ui.md
-- [ ] E01-12 docs(docs): document AI configuration, BYOK and the "Adding an AI persona" recipe
+- [ ] #21 feat(db): add ai_invocations table for AI observability (E01-01)
+- [ ] #22 feat(api): add AI persona registry, settings schema and model version filter (E01-02)
+- [ ] #23 feat(api): add OpenAI provider over the Responses API with structured and image input (E01-03)
+- [ ] #24 feat(api): add admin AI settings endpoints with live model catalog and test connection (E01-04)
+- [ ] #25 feat(api): add per-user OpenAI key endpoints and aiKey status on /auth/me (E01-05)
+- [ ] #26 feat(api): add AI gateway with invocation logging and attachment resolution (E01-06)
+- [ ] #27 feat(web): add AI settings admin page with persona model selectors (E01-07)
+- [ ] #28 feat(web): add user OpenAI key settings page and shared key form (E01-08)
+- [ ] #29 feat(web): gate signed-in users without an OpenAI key behind the setup flow (E01-09)
+- [ ] #30 test(tests): add fake OpenAI server and end-to-end AI key and admin flows (E01-10)
+- [ ] #31 docs(docs): create the missing docs/specs/settings-ui.md (E01-11)
+- [ ] #32 docs(docs): document AI configuration, BYOK and the "Adding an AI persona" recipe (E01-12)
 
 ### Out of scope
 
 - Any product feature that *uses* the gateway (onboarding planner, coach chat, workout programming) — E04+ call `AiGatewayService.invoke()`; this epic ships the gateway and proves it with a probe.
 - A second provider (Anthropic, Gemini, Azure OpenAI). The `AiProvider` interface and `provider: enum(['openai'])` leave the door open; nothing else is built.
 - Platform-key fallback for users without a key. The gateway reads only the user's key; the platform key serves only the admin catalog and admin test (decision recorded in `docs/specs/ai-configuration.md`).
-- Media upload UI, MIME/size enforcement, video frame sampling, HEIC normalisation, signed-URL attachment mode, storage quotas — E03. E01-06 ships the attachment *resolver* (inline base64 mode) so E03 has a consumer.
-- Streaming responses, tool calling, conversation memory, prompt templates per persona (E06), safety classifier (E06-06).
+- Media upload UI, MIME/size enforcement, video frame sampling, HEIC normalisation, signed-URL attachment mode, storage quotas — E03. E01-06 (#26) ships the attachment *resolver* (inline base64 mode) so E03 has a consumer.
+- Streaming responses, tool calling, conversation memory, prompt templates per persona (E06), safety classifier (E06-06 (#82)).
 - Distributed rate limiting (`@nestjs/throttler`, Redis). The test throttles are per-process sliding windows and documented as such.
 - Usage-based billing, per-user spend caps, cost dashboards.
 - A credentials admin UI beyond the two key fields this epic adds.
@@ -55,18 +58,18 @@ Related specs after this epic ships: `docs/specs/ai-configuration.md` (new, E01-
 ### Sequencing
 
 ```
-E01-01 (db)  ─┐
-E01-02 (api) ─┼─► E01-04 (admin API) ─► E01-07 (admin page) ─┐
-E01-03 (api) ─┤                                              ├─► E01-10 (fake server + e2e) ─► E01-12 (docs)
-              └─► E01-05 (user key API) ─► E01-08 (key page) ─► E01-09 (gate) ─┘
-E01-03 + E01-05 ─► E01-06 (gateway)  (parallel with the web work; E01-10 does not depend on it)
-E01-11 (settings-ui spec) — independent; can be picked up any time
+E01-01 (#21) (db)  ─┐
+E01-02 (#22) (api) ─┼─► E01-04 (#24) (admin API) ─► E01-07 (#27) (admin page) ─┐
+E01-03 (#23) (api) ─┤                                              ├─► E01-10 (#30) (fake server + e2e) ─► E01-12 (#32) (docs)
+              └─► E01-05 (#25) (user key API) ─► E01-08 (#28) (key page) ─► E01-09 (#29) (gate) ─┘
+E01-03 (#23) + E01-05 (#25) ─► E01-06 (#26) (gateway)  (parallel with the web work; E01-10 (#30) does not depend on it)
+E01-11 (#31) (settings-ui spec) — independent; can be picked up any time
 ```
 
-- **Parallel start**: E01-01, E01-02, E01-03, E01-11 have no dependencies. E01-01 and E01-02 are each under an hour; run them first so E01-04/E01-05 are unblocked.
-- **Critical path**: E01-03 → E01-05 → E01-08 → E01-09 → E01-10 → E01-12. The gate (E01-09) is what changes every existing e2e test's landing page, so E01-10 must land in the same PR train.
-- **Contract freeze**: the gateway signature in E01-06 and the persona keys in E01-02 are consumed by E02–E12. Change them only through this epic.
-- **Frontend fixtures**: E01-08 makes `User.aiKey` required in `apps/web/src/types/index.ts`, which breaks compilation of every fixture that builds a `User` (`apps/web/src/__tests__/utils/test-utils.tsx`, `apps/web/src/__tests__/mocks/data.ts`, `apps/web/src/__tests__/mocks/handlers.ts`, `apps/web/visual/main.tsx`). That is intentional; fix them in E01-08.
+- **Parallel start**: E01-01 (#21), E01-02 (#22), E01-03 (#23), E01-11 (#31) have no dependencies. E01-01 (#21) and E01-02 (#22) are each under an hour; run them first so E01-04 (#24)/E01-05 (#25) are unblocked.
+- **Critical path**: E01-03 (#23) → E01-05 (#25) → E01-08 (#28) → E01-09 (#29) → E01-10 (#30) → E01-12 (#32). The gate (E01-09 (#29)) is what changes every existing e2e test's landing page, so E01-10 (#30) must land in the same PR train.
+- **Contract freeze**: the gateway signature in E01-06 (#26) and the persona keys in E01-02 (#22) are consumed by E02–E12. Change them only through this epic.
+- **Frontend fixtures**: E01-08 (#28) makes `User.aiKey` required in `apps/web/src/types/index.ts`, which breaks compilation of every fixture that builds a `User` (`apps/web/src/__tests__/utils/test-utils.tsx`, `apps/web/src/__tests__/mocks/data.ts`, `apps/web/src/__tests__/mocks/handlers.ts`, `apps/web/visual/main.tsx`). That is intentional; fix them in E01-08 (#28).
 
 ### Manual end-to-end verification
 
@@ -120,13 +123,13 @@ export PGURL="postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@$POSTGRES_HOST:$POS
 
 ## Child issues
 
-### E01-01 `feat(db): add ai_invocations table for AI observability`
+### E01-01 `feat(db): add ai_invocations table for AI observability` — #21
 
 **Part of epic:** E01 · **Blocked by:** none · **Component:** database · **Priority:** P0 · **Agents:** database-dev → docs-dev
 
 #### Problem statement
 
-PRD §88 requires every AI operation to be observable internally: model, prompt version, structured input and output, validation result, latency, token use, safety decision. PRD §117 requires the prompt version to be captured in logs. PRD §16 and §88 forbid storing hidden chain of thought. Nothing in the schema can hold this today. The table is created first so E01-04 (admin test), E01-05 (user key test, whose `lastTest` is derived from it) and E01-06 (the gateway) can all write to it, and so that E06 can later record `safetyDecision` and user acceptance without another migration.
+PRD §88 requires every AI operation to be observable internally: model, prompt version, structured input and output, validation result, latency, token use, safety decision. PRD §117 requires the prompt version to be captured in logs. PRD §16 and §88 forbid storing hidden chain of thought. Nothing in the schema can hold this today. The table is created first so E01-04 (#24) (admin test), E01-05 (#25) (user key test, whose `lastTest` is derived from it) and E01-06 (#26) (the gateway) can all write to it, and so that E06 can later record `safetyDecision` and user acceptance without another migration.
 
 #### Proposed solution
 
@@ -193,17 +196,17 @@ model AiInvocation {
 }
 ```
 
-Add `aiInvocations AiInvocation[] @relation("UserAiInvocations")` to `model User`. Column notes (put them as comments in the schema): `model` is nullable because a user-key test that skips the generate probe has no model; `errorMessage` is redacted and capped at 2000 chars by the writer (E01-06 `AiKeyRedactor`), never by the DB; `input`/`output` hold the structured request/response after redaction, capped at 32 KiB with a `{ "_truncated": true }` marker — **never** raw provider bodies, never reasoning/chain of thought; `safetyDecision` is free text reserved for E06-06 (`allow` / `conservative` / `redirect`).
+Add `aiInvocations AiInvocation[] @relation("UserAiInvocations")` to `model User`. Column notes (put them as comments in the schema): `model` is nullable because a user-key test that skips the generate probe has no model; `errorMessage` is redacted and capped at 2000 chars by the writer (E01-06 (#26) `AiKeyRedactor`), never by the DB; `input`/`output` hold the structured request/response after redaction, capped at 32 KiB with a `{ "_truncated": true }` marker — **never** raw provider bodies, never reasoning/chain of thought; `safetyDecision` is free text reserved for E06-06 (#82) (`allow` / `conservative` / `redirect`).
 
 Migration: `cd apps/api && npm run prisma:migrate:dev -- --name add_ai_invocations`. Then `npm run prisma:generate`. Seed: no change (`apps/api/prisma/seed.ts` untouched — no new permissions).
 
-**API (backend-dev)** — n/a (writers arrive in E01-04/05/06).
+**API (backend-dev)** — n/a (writers arrive in E01-04 (#24)/05/06).
 
 **UI (frontend-dev)** — n/a.
 
 **Tests (testing-dev)** — `apps/api/test/prisma/ai-invocations.integration.spec.ts` (new, `useMockDatabase: false`, skipped unless `DATABASE_URL`/test DB from `infra/compose/test.compose.yml` is reachable, same guard the other DB-backed specs use): inserts a row with every nullable column null and `latencyMs: 0`; inserts a row with `userId` of a created user, deletes the user, asserts the invocation survives with `userId: null`; asserts the three enums accept exactly their listed values (Prisma type check at compile time + a runtime `$queryRaw` on `pg_enum` for `ai_invocation_status`).
 
-**Docs (docs-dev)** — CLAUDE.md "Database Tables": add `ai_invocations - AI call telemetry (model, tokens, latency, validation result, redacted I/O); no chain of thought`. `docs/ARCHITECTURE.md` database section: one row in the table list. (Full narrative lands in E01-12.)
+**Docs (docs-dev)** — CLAUDE.md "Database Tables": add `ai_invocations - AI call telemetry (model, tokens, latency, validation result, redacted I/O); no chain of thought`. `docs/ARCHITECTURE.md` database section: one row in the table list. (Full narrative lands in E01-12 (#32).)
 
 #### Acceptance criteria
 
@@ -245,13 +248,13 @@ Migration: `cd apps/api && npm run prisma:migrate:dev -- --name add_ai_invocatio
 
 ---
 
-### E01-02 `feat(api): add AI persona registry, settings schema and model version filter`
+### E01-02 `feat(api): add AI persona registry, settings schema and model version filter` — #22
 
 **Part of epic:** E01 · **Blocked by:** none · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev
 
 #### Problem statement
 
-PRD §14 defines multiple logical AI responsibilities ("they may use the same underlying model initially") and PRD §118 asks for model tiering (small model for extraction/notification rewrite, strong reasoning model for planning and weekly review). The product owner requires per-persona model selection restricted to GPT ≥ 5.4. Three pure, dependency-free building blocks are needed before any endpoint: the persona registry (the one list the dispatcher, the admin page and the docs read — same promise `notification-events.ts` makes), the Zod shape of the `'ai'` settings row, and the model-id filter. Shipping them alone keeps E01-03/04/05 small and lets E02+ import `PERSONA_KEYS` immediately.
+PRD §14 defines multiple logical AI responsibilities ("they may use the same underlying model initially") and PRD §118 asks for model tiering (small model for extraction/notification rewrite, strong reasoning model for planning and weekly review). The product owner requires per-persona model selection restricted to GPT ≥ 5.4. Three pure, dependency-free building blocks are needed before any endpoint: the persona registry (the one list the dispatcher, the admin page and the docs read — same promise `notification-events.ts` makes), the Zod shape of the `'ai'` settings row, and the model-id filter. Shipping them alone keeps E01-03 (#23)/04/05 small and lets E02+ import `PERSONA_KEYS` immediately.
 
 #### Proposed solution
 
@@ -302,7 +305,7 @@ export type AiProviderKind = (typeof AI_PROVIDER_KINDS)[number];
 export const aiSettingsSchema = z.object({
   provider: z.enum(AI_PROVIDER_KINDS).nullable(),
   enabled: z.boolean(),
-  baseUrl: z.url().optional(),                       // https-only in production is enforced by the service (E01-04), not here
+  baseUrl: z.url().optional(),                       // https-only in production is enforced by the service (E01-04 (#24)), not here
   defaultModel: z.string().trim().min(1).nullable(),
   personaModels: z.partialRecord(z.enum(PERSONA_KEYS), z.string().trim().min(1).nullable()),
 });
@@ -335,7 +338,7 @@ export function filterSupportedModels<T extends { id: string }>(models: T[]): T[
 - `apps/api/src/ai/ai-settings.schema.spec.ts`: `DEFAULT_AI_SETTINGS` parses; `personaModels: { coach: null }` parses; `personaModels: { bogus: 'gpt-5.4' }` fails; `baseUrl: 'not a url'` fails; `provider: 'anthropic'` fails.
 - `apps/api/src/ai/model-catalog/model-version-filter.spec.ts` — table-driven: `gpt-5.4` ✓, `gpt-5.4-mini` ✓, `gpt-5.4-2026-03-01` ✓, `gpt-5.10` ✓ (numeric compare, not string), `gpt-6` ✓, `GPT-5.4` ✓ (case-insensitive), `gpt-5.3` ✗, `gpt-5` ✗ (= 5.0), `gpt-4o` ✗, `gpt-4.1` ✗, `o3` ✗, `chatgpt-5.4-latest` ✗, `gpt-5.4-realtime-preview` ✗, `gpt-5.5-audio` ✗; sort: `['gpt-5.4-mini','gpt-6','gpt-5.10','gpt-5.4']` → `['gpt-6','gpt-5.10','gpt-5.4','gpt-5.4-mini']`.
 
-**Docs (docs-dev)** — none in this child (E01-12 writes the recipe).
+**Docs (docs-dev)** — none in this child (E01-12 (#32) writes the recipe).
 
 #### Acceptance criteria
 
@@ -364,8 +367,8 @@ export function filterSupportedModels<T extends { id: string }>(models: T[]): T[
 
 #### Out of scope
 
-- Reading/writing the settings row (E01-04).
-- Fetching a live catalog (E01-04).
+- Reading/writing the settings row (E01-04 (#24)).
+- Fetching a live catalog (E01-04 (#24)).
 - Persona prompt text (E04+; prompts live with their callers, versioned per PRD §117).
 
 #### Notes for the implementing agent
@@ -373,13 +376,13 @@ export function filterSupportedModels<T extends { id: string }>(models: T[]): T[
 - Zod 4 is in use (`"zod": "^4.4.3"`): `z.url()`, `z.partialRecord()`, `z.iso.datetime()` exist; do not import from `zod/v3`.
 - Copy the header comment style of `notification-events.ts` — the registry entry is the whole contract for "add a persona".
 - `PERSONA_KEYS` must be a `readonly` tuple literal (not derived from `AI_PERSONAS.map`) so `z.enum(PERSONA_KEYS)` and `Partial<Record<PersonaKey, …>>` type-check; the spec asserts the two lists agree.
-- Keep the filter free of Nest imports; E01-04 unit-tests the catalog service by mocking the provider and relying on this module untouched.
+- Keep the filter free of Nest imports; E01-04 (#24) unit-tests the catalog service by mocking the provider and relying on this module untouched.
 
 ---
 
-### E01-03 `feat(api): add OpenAI provider over the Responses API with structured and image input`
+### E01-03 `feat(api): add OpenAI provider over the Responses API with structured and image input` — #23
 
-**Part of epic:** E01 · **Blocked by:** E01-02 · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev
+**Part of epic:** E01 · **Blocked by:** E01-02 (#22) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev
 
 #### Problem statement
 
@@ -387,7 +390,7 @@ PRD §16 requires critical AI operations to produce validated structured output;
 
 #### Proposed solution
 
-A provider-neutral interface plus one implementation. Providers **throw** a typed `AiProviderError`; the gateway (E01-06) and the two test services (E01-04, E01-05) are the never-throw boundaries.
+A provider-neutral interface plus one implementation. Providers **throw** a typed `AiProviderError`; the gateway (E01-06 (#26)) and the two test services (E01-04 (#24), E01-05 (#25)) are the never-throw boundaries.
 
 **Data (database-dev)** — n/a.
 
@@ -437,7 +440,7 @@ export type AiErrorCode = (typeof AI_ERROR_CODES)[number];
 export class AiProviderError extends Error {
   constructor(readonly code: AiErrorCode, message: string, readonly status?: number, readonly providerRequestId?: string | null) {}
 }
-export class AiKeyRequiredException extends HttpException { /* E01-06 */ }
+export class AiKeyRequiredException extends HttpException { /* E01-06 (#26) */ }
 ```
 
 `apps/api/src/ai/gateway/ai-key-redactor.ts` (new): `AiKeyRedactor` wraps `SecretRedactor` from `apps/api/src/email/base-email.provider.ts` (`protect(secret)`, `apply(text)`) and adds a regex pass `/\bsk-[A-Za-z0-9_-]{8,}\b/g → 'sk-***'` so a key echoed by the provider in a different form is still scrubbed; `apply()` also caps at 2000 chars (append `…`). Exported `redactAiText(text, secrets)` helper for one-shot use.
@@ -477,7 +480,7 @@ Register in `ai.module.ts`: `providers: [OpenAiProvider, AiProviderRegistry]`, `
 - `strict-json-schema.spec.ts`: `z.object({ a: z.string(), b: z.number().optional() })` → `required: ['a','b']`, `b` nullable, `additionalProperties: false`; nested object handled; `z.record` throws.
 - `ai-provider.registry.spec.ts`: `get('openai')` is the `OpenAiProvider` instance; unknown kind throws.
 
-**Docs (docs-dev)** — none here; `.env.example` and CLAUDE.md env vars land in E01-12 (E01-04 needs `OPENAI_BASE_URL` documented for the fake server; add the two lines to `infra/compose/.env.example` in this child, no trailing comments after values).
+**Docs (docs-dev)** — none here; `.env.example` and CLAUDE.md env vars land in E01-12 (#32) (E01-04 (#24) needs `OPENAI_BASE_URL` documented for the fake server; add the two lines to `infra/compose/.env.example` in this child, no trailing comments after values).
 
 #### Acceptance criteria
 
@@ -502,7 +505,7 @@ Register in `ai.module.ts`: `providers: [OpenAiProvider, AiProviderRegistry]`, `
 #### Manual test script
 
 1. `cd apps/api && npm test -- providers gateway/strict-json-schema gateway/ai-key-redactor` → green.
-2. With a real key exported: `node -e "..."` is not required; instead run the E01-10 fake server locally (`node tools/fake-openai/server.mjs`) once it exists and point `OPENAI_BASE_URL=http://localhost:8089/v1` for the E01-04 manual script.
+2. With a real key exported: `node -e "..."` is not required; instead run the E01-10 (#30) fake server locally (`node tools/fake-openai/server.mjs`) once it exists and point `OPENAI_BASE_URL=http://localhost:8089/v1` for the E01-04 (#24) manual script.
 
 #### Out of scope
 
@@ -513,25 +516,25 @@ Register in `ai.module.ts`: `providers: [OpenAiProvider, AiProviderRegistry]`, `
 #### Notes for the implementing agent
 
 - Node 24 `fetch` is global; do not add `node-fetch`, `undici` or `axios`.
-- The `metadata` field is the only way to correlate a provider-side log with an `ai_invocations` row; E01-06 passes `{ invocationId, persona, promptVersion }`.
+- The `metadata` field is the only way to correlate a provider-side log with an `ai_invocations` row; E01-06 (#26) passes `{ invocationId, persona, promptVersion }`.
 - `SecretRedactor` lives in `apps/api/src/email/base-email.provider.ts`; import it rather than copying — the class is generic despite its home.
 - Keep the provider free of Prisma and settings knowledge; it receives `auth` and a request and nothing else.
 
 ---
 
-### E01-04 `feat(api): add admin AI settings endpoints with live model catalog and test connection`
+### E01-04 `feat(api): add admin AI settings endpoints with live model catalog and test connection` — #24
 
-**Part of epic:** E01 · **Blocked by:** E01-01, E01-02, E01-03 · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
+**Part of epic:** E01 · **Blocked by:** E01-01 (#21), E01-02 (#22), E01-03 (#23) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-An administrator must be able to choose the provider, store the platform key, see which GPT ≥ 5.4 models the platform key can reach, assign a model per persona (PRD §118 tiering), and prove the connection works with the provider's real error in front of them — the same diagnostic loop `POST /email-settings/test` already gives for mail. Without this, the user-key test (E01-05) has no default model to probe and later epics have no model to call.
+An administrator must be able to choose the provider, store the platform key, see which GPT ≥ 5.4 models the platform key can reach, assign a model per persona (PRD §118 tiering), and prove the connection works with the provider's real error in front of them — the same diagnostic loop `POST /email-settings/test` already gives for mail. Without this, the user-key test (E01-05 (#25)) has no default model to probe and later epics have no model to call.
 
 #### Proposed solution
 
 Structurally copy the email settings feature: `AiSettingsService` / `AiSettingsController` / `AiAdminTestService` / `UpdateAiSettingsDto` mirror `apps/api/src/email/{email-settings.service,email-settings.controller,email-test-send.service,dto/update-email-settings.dto}.ts`. Add `AiModelCatalogService` (live fetch, short TTL) and `TestThrottle`.
 
-**Data (database-dev)** — n/a. Writes `system_settings` row key `'ai'` (E01-02 schema) and `credentials` `(purpose 'ai:openai', name 'platform')`; reads/writes `ai_invocations` (E01-01).
+**Data (database-dev)** — n/a. Writes `system_settings` row key `'ai'` (E01-02 (#22) schema) and `credentials` `(purpose 'ai:openai', name 'platform')`; reads/writes `ai_invocations` (E01-01 (#21)).
 
 **API (backend-dev)**
 
@@ -541,7 +544,7 @@ Structurally copy the email settings feature: `AiSettingsService` / `AiSettingsC
 export const AI_PLATFORM_CREDENTIAL_PURPOSE = 'ai:openai';
 export const AI_PLATFORM_CREDENTIAL_NAME = 'platform';
 export const AI_PLATFORM_CREDENTIAL_LABEL = 'OpenAI platform API key';
-export const AI_USER_CREDENTIAL_PURPOSE = 'ai:openai:user';   // name = userId (E01-05)
+export const AI_USER_CREDENTIAL_PURPOSE = 'ai:openai:user';   // name = userId (E01-05 (#25))
 export const AI_USER_CREDENTIAL_LABEL = 'OpenAI API key';
 ```
 
@@ -553,7 +556,7 @@ export const AI_USER_CREDENTIAL_LABEL = 'OpenAI API key';
 | GET | `/api/ai-settings/models?refresh=true` | `SYSTEM_SETTINGS_READ` | query `refresh?: boolean` | **200 always** `AiModelsResponseDto { success, models: [{ id, created }], fetchedAt: string \| null, source: 'live' \| 'cache' \| null, error: string \| null }` filtered by `filterSupportedModels`; 429 when `refresh=true` exceeds 10/min per user |
 | POST | `/api/ai-settings/test` | `SYSTEM_SETTINGS_WRITE` | no body | **200 always** `AiTestResultDto { success, providerKind: 'openai' \| null, model: string \| null, latencyMs: number \| null, error: string \| null, attemptedAt, checks: { listModels: 'passed' \| 'failed' \| 'skipped', generate: same } }`; 429 over 5/min per user |
 
-`AiSettingsService` (`apps/api/src/ai/ai-settings.service.ts`): `get(): Promise<AiSettings>` (throws on an invalid stored row, like `EmailSettingsService.get`), `describeForAdmin()` (never throws; invalid row → defaults + `settingsError`), `update(input, userId, expectedVersion?)`: strip `platformApiKey`; parse with `aiSettingsSchema`; **validate models** — `defaultModel` and every non-null `personaModels[*]` must pass `isSupportedModelId`, else `BadRequestException('Model "gpt-5.3" is not supported: EvolvePath requires GPT 5.4 or newer.')`; **https rule** — when `config.nodeEnv === 'production'` and `baseUrl` does not start with `https://` → 400; version check → `ConflictException`; if `platformApiKey` non-blank → `credentials.setSecret(AI_PLATFORM_CREDENTIAL_PURPOSE, AI_PLATFORM_CREDENTIAL_NAME, key, { label, updatedByUserId })` **before** the row upsert (a failed key write must not leave a saved row claiming a key); upsert row `'ai'` with `version: { increment: 1 }`; `catalog.invalidate()`; audit `prisma.auditEvent.create({ action: 'ai_settings:replace', targetType: 'system_settings', targetId: 'ai', meta: { provider, enabled, defaultModel, personaModels, platformKeyReplaced: boolean } })` — never the key or hint. `resolveModel(persona: PersonaKey): string | null` = `personaModels[persona] ?? defaultModel` (used by E01-06). `resolveBaseUrl(): string` = `settings.baseUrl ?? config.get('ai.openai.baseUrl')`.
+`AiSettingsService` (`apps/api/src/ai/ai-settings.service.ts`): `get(): Promise<AiSettings>` (throws on an invalid stored row, like `EmailSettingsService.get`), `describeForAdmin()` (never throws; invalid row → defaults + `settingsError`), `update(input, userId, expectedVersion?)`: strip `platformApiKey`; parse with `aiSettingsSchema`; **validate models** — `defaultModel` and every non-null `personaModels[*]` must pass `isSupportedModelId`, else `BadRequestException('Model "gpt-5.3" is not supported: EvolvePath requires GPT 5.4 or newer.')`; **https rule** — when `config.nodeEnv === 'production'` and `baseUrl` does not start with `https://` → 400; version check → `ConflictException`; if `platformApiKey` non-blank → `credentials.setSecret(AI_PLATFORM_CREDENTIAL_PURPOSE, AI_PLATFORM_CREDENTIAL_NAME, key, { label, updatedByUserId })` **before** the row upsert (a failed key write must not leave a saved row claiming a key); upsert row `'ai'` with `version: { increment: 1 }`; `catalog.invalidate()`; audit `prisma.auditEvent.create({ action: 'ai_settings:replace', targetType: 'system_settings', targetId: 'ai', meta: { provider, enabled, defaultModel, personaModels, platformKeyReplaced: boolean } })` — never the key or hint. `resolveModel(persona: PersonaKey): string | null` = `personaModels[persona] ?? defaultModel` (used by E01-06 (#26)). `resolveBaseUrl(): string` = `settings.baseUrl ?? config.get('ai.openai.baseUrl')`.
 
 `AiModelCatalogService` (`apps/api/src/ai/model-catalog/ai-model-catalog.service.ts`): in-memory `{ models, fetchedAt }` with 5-minute TTL; `list({ refresh }): Promise<AiModelsResult>`: no platform key (`credentials.getSecret` null) → `{ success: false, models: [], source: null, error: 'No platform API key is configured. Save one, then refresh.' }`; provider null/disabled → same shape with the reason; otherwise provider `listModels` → `filterSupportedModels` → cache; `AiProviderError` → `{ success: false, models: cached ?? [], source: cached ? 'cache' : null, error: message }`. `invalidate()`.
 
@@ -563,7 +566,7 @@ export const AI_USER_CREDENTIAL_LABEL = 'OpenAI API key';
 
 DTOs in `apps/api/src/ai/dto/`: `ai-settings-response.dto.ts` (with `AiSettingsResponseCarriesNoSecret` proof over the response type: no `platformApiKey`/`apiKey`/`secret` key), `update-ai-settings.dto.ts`, `ai-persona.dto.ts`, `ai-models-response.dto.ts`, `ai-test-result.dto.ts` — all `createZodDto`. Controller `apps/api/src/ai/ai-settings.controller.ts`: `@ApiTags('AI Settings') @Controller('ai-settings')`; `If-Match` parsing copied verbatim from `EmailSettingsController.replaceSettings` (`Number.isInteger` guard). Register tag `AI Settings` in `apps/api/src/openapi/tags.ts` under "Account & Settings" after `Email Settings` (description: provider, platform key write-only, per-persona models, live catalog ≥ 5.4, test returns 200 with the provider's error). Module: add the services + controller; export `AiSettingsService`.
 
-**UI (frontend-dev)** — n/a (E01-07).
+**UI (frontend-dev)** — n/a (E01-07 (#27)).
 
 **Tests (testing-dev)**
 
@@ -571,7 +574,7 @@ DTOs in `apps/api/src/ai/dto/`: `ai-settings-response.dto.ts` (with `AiSettingsR
 - Integration `apps/api/test/ai/ai-settings.integration.spec.ts` (new) via `createTestApp({ overrideProviders: [{ provide: OpenAiProvider, useValue: mockProvider }, { provide: CredentialsService, useValue: mockCredentials }] })`, users from `apps/api/test/helpers/auth-mock.helper.ts` plus a read-only user as in `email-settings.integration.spec.ts`: GET 401/403/200 with `platformKeyStatus`; GET degrades an invalid stored row to 200 + `settingsError`; PUT 409 on stale `If-Match`; PUT 400 for `defaultModel: 'gpt-5.3'` and for `personaModels: { bogus: 'gpt-5.4' }`; PUT with `platformApiKey` calls `setSecret` with `('ai:openai','platform')` and the submitted key **never appears in the serialised response** (`JSON.stringify(res.body)` does not include it); blank key preserves (`setSecret` not called); `/models` 200 `success: false` with no key; `/models` filters `gpt-5.3` out; `/models?refresh=true` 11th call in a minute → 429 with `Retry-After`; `/test` 403 for read-only; `/test` 200 `success: false` when provider null; `/test` 200 `success: true` with `checks.generate: 'passed'` when the mock returns `{"ok":true}`; audit rows `ai_settings:replace` and `ai_settings:test` created; 6th `/test` in a minute → 429 and no audit row.
 - OpenAPI: `apps/api/test/openapi/openapi-document.spec.ts` already asserts no undeclared/orphan tags — it must stay green with `AI Settings` declared.
 
-**Docs (docs-dev)** — `docs/API.md`: new section "AI Settings (Admin)" with the five endpoints (full narrative in E01-12; add the section stub here so the endpoints are never undocumented).
+**Docs (docs-dev)** — `docs/API.md`: new section "AI Settings (Admin)" with the five endpoints (full narrative in E01-12 (#32); add the section stub here so the endpoints are never undocumented).
 
 #### Acceptance criteria
 
@@ -596,7 +599,7 @@ DTOs in `apps/api/src/ai/dto/`: `ai-settings-response.dto.ts` (with `AiSettingsR
 
 #### Manual test script
 
-1. Stack up with the fake server (epic script steps 1–3), sign in as admin with "Seed an OpenAI key" ticked (or, before E01-09 lands, without it).
+1. Stack up with the fake server (epic script steps 1–3), sign in as admin with "Seed an OpenAI key" ticked (or, before E01-09 (#29) lands, without it).
 2. In devtools: `const t = localStorage.getItem('access_token'); const h = { 'content-type': 'application/json', authorization: 'Bearer ' + t };`
 3. `fetch('/api/ai-settings',{headers:h}).then(r=>r.json()).then(console.log)` → `provider: null`, `platformKeyStatus.configured: false`, `version: 0`.
 4. `fetch('/api/ai-settings',{method:'PUT',headers:{...h,'if-match':'0'},body:JSON.stringify({provider:'openai',enabled:true,defaultModel:null,personaModels:{},platformApiKey:'sk-test-platform-000000000000'})}).then(r=>r.json()).then(console.log)` → `platformKeyStatus.configured: true`, `hint: '••••0000'`, `version: 1`, and the response text does not contain `sk-test`.
@@ -607,8 +610,8 @@ DTOs in `apps/api/src/ai/dto/`: `ai-settings-response.dto.ts` (with `AiSettingsR
 
 #### Out of scope
 
-- The admin page (E01-07).
-- Per-user key endpoints (E01-05).
+- The admin page (E01-07 (#27)).
+- Per-user key endpoints (E01-05 (#25)).
 - Distributed throttling.
 
 #### Notes for the implementing agent
@@ -621,9 +624,9 @@ DTOs in `apps/api/src/ai/dto/`: `ai-settings-response.dto.ts` (with `AiSettingsR
 
 ---
 
-### E01-05 `feat(api): add per-user OpenAI key endpoints and aiKey status on /auth/me`
+### E01-05 `feat(api): add per-user OpenAI key endpoints and aiKey status on /auth/me` — #25
 
-**Part of epic:** E01 · **Blocked by:** E01-01, E01-02, E01-03 · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev
+**Part of epic:** E01 · **Blocked by:** E01-01 (#21), E01-02 (#22), E01-03 (#23) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev
 
 #### Problem statement
 
@@ -651,8 +654,8 @@ A `UserAiKeyService` + `UserAiKeyController` under `apps/api/src/ai/user-key/`, 
 - `status(userId): Promise<UserAiKeyStatus>` = `describe` + `lastTest` from `prisma.aiInvocation.findFirst({ where: { userId, operation: 'test_connection', keyScope: 'user' }, orderBy: { createdAt: 'desc' } })` mapped to `{ attemptedAt: createdAt, success: status === 'succeeded', model, error: errorMessage }` + `platform` from `AiSettingsService.describeForAdmin()`-free `get()` wrapped in try/catch (unreadable settings → `{ provider: null, enabled: false, hasDefaultModel: false }`).
 - `set(userId, apiKey, actorUserId = userId)`: `const replaced = (await credentials.describe(...)) !== null`; `credentials.setSecret(AI_USER_CREDENTIAL_PURPOSE, userId, apiKey, { label: AI_USER_CREDENTIAL_LABEL, updatedByUserId: actorUserId })`; audit `{ actorUserId, action: 'ai_user_key:set', targetType: 'user', targetId: userId, meta: { replaced } }` — never the hint. The key is **not trimmed server-side** (the form trims; `CredentialsService` stores byte-for-byte by design) and no `sk-` prefix is enforced (soft UI hint only).
 - `deleteForUser(userId, actorUserId = userId)`: `credentials.deleteSecret(...)` (no-op when absent); audit `ai_user_key:delete` only when a row existed. Exists from day one so a future user hard-delete can call it — stated in `docs/specs/ai-configuration.md`.
-- `getSecretForUser(userId): Promise<string | null>` — the only read path the gateway uses (E01-06).
-- `test(userId): Promise<AiTestResult>`: refuse-as-result when no user key ("No OpenAI API key is saved for your account."); `checks.listModels` with the **user** key against `AiSettingsService.resolveBaseUrl()`; `checks.generate`: probe (same body as E01-04) with the **user key** only when the platform has `provider === 'openai' && enabled && defaultModel`, else `'skipped'` with `model: null`; `ai_invocations` row `operation: 'test_connection', keyScope: 'user', userId`; audit `ai_user_key:test` `{ success, checks, model, error }` (redacted). Throttle bucket `user_test`.
+- `getSecretForUser(userId): Promise<string | null>` — the only read path the gateway uses (E01-06 (#26)).
+- `test(userId): Promise<AiTestResult>`: refuse-as-result when no user key ("No OpenAI API key is saved for your account."); `checks.listModels` with the **user** key against `AiSettingsService.resolveBaseUrl()`; `checks.generate`: probe (same body as E01-04 (#24)) with the **user key** only when the platform has `provider === 'openai' && enabled && defaultModel`, else `'skipped'` with `model: null`; `ai_invocations` row `operation: 'test_connection', keyScope: 'user', userId`; audit `ai_user_key:test` `{ success, checks, model, error }` (redacted). Throttle bucket `user_test`.
 
 `UserAiKeyController` (`apps/api/src/ai/user-key/user-ai-key.controller.ts`): `@ApiTags('AI Key') @Controller('me/ai-key')`; every handler reads `@CurrentUser('id')` — there is no `:userId` parameter by design. DTOs in `apps/api/src/ai/user-key/dto/{set-user-ai-key.dto.ts, user-ai-key-status.dto.ts}` (`createZodDto`; status DTO carries a `CarriesNoSecret` proof). Register tag `AI Key` in `apps/api/src/openapi/tags.ts` under "Account & Settings" (description: the caller's own OpenAI key — write-only, testable, removable; the key is never returned).
 
@@ -662,7 +665,7 @@ Test auth: `apps/api/src/test-auth/dto/test-login.dto.ts` gains `withAiKey: z.pr
 
 `AiModule`: add `UserAiKeyService`, `UserAiKeyController`; export `UserAiKeyService`.
 
-**UI (frontend-dev)** — only the checkbox on `TestLoginPage.tsx` above (dev-only page). Pages arrive in E01-08.
+**UI (frontend-dev)** — only the checkbox on `TestLoginPage.tsx` above (dev-only page). Pages arrive in E01-08 (#28).
 
 **Tests (testing-dev)**
 
@@ -670,7 +673,7 @@ Test auth: `apps/api/src/test-auth/dto/test-login.dto.ts` gains `withAiKey: z.pr
 - Integration `apps/api/test/ai/user-ai-key.integration.spec.ts` (new), overriding `OpenAiProvider` and `CredentialsService`: a **viewer** can GET/PUT/DELETE/test (no permission needed); PUT 400 for `apiKey: 'short'` and for `'has space in it 12345678'`; PUT response and `GET /auth/me` never contain the submitted key; `GET /auth/me` includes `aiKey.configured` flipping false → true → false across PUT/DELETE; DELETE twice → 204 both; `/test` 200 with `success: false` and the provider's 401 text verbatim (redacted key) when the mock throws `auth`; `/test` 6th call in a minute → 429; `lastTest` reflects the latest `ai_invocations` row; audit rows `ai_user_key:set|delete|test` created; `POST /api/auth/test/login` with `withAiKey: true` (urlencoded `withAiKey=on` too) calls `setSecret` with `'ai:openai:user'` and a value starting `sk-test-e2e-`.
 - Existing `apps/api/src/auth/auth.service.spec.ts`: extend for `aiKey` in `getCurrentUser`.
 
-**Docs (docs-dev)** — `docs/API.md` stub section "AI Key (current user)" with the four endpoints and the `aiKey` field on `GET /auth/me` (narrative in E01-12).
+**Docs (docs-dev)** — `docs/API.md` stub section "AI Key (current user)" with the four endpoints and the `aiKey` field on `GET /auth/me` (narrative in E01-12 (#32)).
 
 #### Acceptance criteria
 
@@ -706,7 +709,7 @@ Test auth: `apps/api/src/test-auth/dto/test-login.dto.ts` gains `withAiKey: z.pr
 
 #### Out of scope
 
-- The settings page and setup page (E01-08/09).
+- The settings page and setup page (E01-08 (#28)/09).
 - Admin visibility into which users have keys.
 - Key rotation reminders/expiry.
 
@@ -719,9 +722,9 @@ Test auth: `apps/api/src/test-auth/dto/test-login.dto.ts` gains `withAiKey: z.pr
 
 ---
 
-### E01-06 `feat(api): add AI gateway with invocation logging and attachment resolution`
+### E01-06 `feat(api): add AI gateway with invocation logging and attachment resolution` — #26
 
-**Part of epic:** E01 · **Blocked by:** E01-03, E01-05 · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev
+**Part of epic:** E01 · **Blocked by:** E01-03 (#23), E01-05 (#25) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev
 
 #### Problem statement
 
@@ -772,7 +775,7 @@ Every exit writes one row via `AiInvocationLogService.record()` (`apps/api/src/a
 
 OTel span `ai.invoke` (`SpanKind.CLIENT`, tracer `trace.getTracer('evolvepath-api')`): attributes `gen_ai.system='openai'`, `gen_ai.operation.name='chat'`, `gen_ai.request.model`, `gen_ai.response.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `ai.persona`, `ai.prompt_version`, `ai.key_scope='user'`, `ai.invocation_id`, `ai.attachment_count`, `ai.status`, `ai.error_code`, `enduser.id`. **Never** prompt or completion content. Span status `ERROR` only when `status === 'failed'` (refusal/invalid_output are OK spans with `ai.status` set). Log line (Nest `Logger`, info on success, warn otherwise): `AI invoke id=<uuid> persona=<k> model=<m> scope=user status=<s> latencyMs=<n> tokens=<in>/<out> user=<userId>`.
 
-`AiKeyRequiredException` (`gateway/ai-errors.ts`): `withVerbatimErrorBody(new HttpException({ statusCode: 412, code: 'AI_KEY_REQUIRED', message: 'An OpenAI API key is required. Add one under Settings → OpenAI API Key.' }, 412))` so the filter sends the body verbatim (its default mapping would overwrite `code`). The gateway never throws it; export `assertAiKeyAvailable(result)` — throws it when `result.ok === false && result.error.code === 'no_user_key'` — for HTTP controllers in later epics, so the web app's 412 handling (E01-09) can redirect to setup.
+`AiKeyRequiredException` (`gateway/ai-errors.ts`): `withVerbatimErrorBody(new HttpException({ statusCode: 412, code: 'AI_KEY_REQUIRED', message: 'An OpenAI API key is required. Add one under Settings → OpenAI API Key.' }, 412))` so the filter sends the body verbatim (its default mapping would overwrite `code`). The gateway never throws it; export `assertAiKeyAvailable(result)` — throws it when `result.ok === false && result.error.code === 'no_user_key'` — for HTTP controllers in later epics, so the web app's 412 handling (E01-09 (#29)) can redirect to setup.
 
 `AiAttachmentResolverService` (`apps/api/src/ai/attachments/ai-attachment-resolver.service.ts`, new) `resolve(userId, attachments): Promise<AiContentPart[]>`:
 
@@ -791,7 +794,7 @@ OTel span `ai.invoke` (`SpanKind.CLIENT`, tracer `trace.getTracer('evolvepath-ap
 - `ai-attachment-resolver.service.spec.ts` (mock `ObjectsService`, `createMockStorageProvider()` from `apps/api/test/mocks/storage-provider.mock.ts`, `PrismaService`): foreign object (`getById` throws `NotFoundException`) → `attachment`; `status:'processing'` → `attachment`; image inlined with correct data URL mime; oversize buffer → `attachment`; video with two frames → two image parts in `timestampMs` order; video without `_processing['video-frames']` → "has not been processed yet"; 11 images → "Too many images"; `text/plain` → unsupported.
 - Integration `apps/api/test/ai/ai-gateway.integration.spec.ts` (new): boots `AppModule` with `createTestApp`, resolves `AiGatewayService` from `context.module`, overrides `OpenAiProvider` with a mock returning `{"ok":true}`; asserts `invoke` succeeds for a seeded user key and that `prismaMock.aiInvocation.create` was called with `keyScope:'user'`; asserts `AiKeyRequiredException` serialises as `{ statusCode: 412, code: 'AI_KEY_REQUIRED', message }` by registering a throwaway test route via `registerRoutes`.
 
-**Docs (docs-dev)** — none here; `docs/specs/ai-gateway.md` is E01-12.
+**Docs (docs-dev)** — none here; `docs/specs/ai-gateway.md` is E01-12 (#32).
 
 #### Acceptance criteria
 
@@ -816,13 +819,13 @@ OTel span `ai.invoke` (`SpanKind.CLIENT`, tracer `trace.getTracer('evolvepath-ap
 #### Manual test script
 
 1. Stack up with the fake server; admin configured with `defaultModel: 'gpt-5.4'` (epic steps 6–7); signed in with a seeded key.
-2. Until E04 ships a caller, exercise the gateway from a Jest integration run: `cd apps/api && npm test -- ai-gateway.integration` → green; then `psql "$PGURL" -c "select persona, prompt_version, status, output_valid from ai_invocations where operation='invoke';"` shows nothing (mock DB) — the DB-backed proof is E01-10's e2e `admin-ai-settings.spec.ts` test-connection rows plus the E04 onboarding proposal.
+2. Until E04 ships a caller, exercise the gateway from a Jest integration run: `cd apps/api && npm test -- ai-gateway.integration` → green; then `psql "$PGURL" -c "select persona, prompt_version, status, output_valid from ai_invocations where operation='invoke';"` shows nothing (mock DB) — the DB-backed proof is E01-10 (#30)'s e2e `admin-ai-settings.spec.ts` test-connection rows plus the E04 onboarding proposal.
 3. Temporarily set `AI_REQUEST_TIMEOUT_MS=100` in `.env`, restart `api`, call `POST /api/ai-settings/test` with the fake server header behaviour `timeout` (`docker compose … exec api sh -c 'curl -s -X POST http://fake-openai:8089/v1/responses -H "authorization: Bearer sk-test-x" -H "x-fake-behaviour: timeout"'` hangs as expected); the API test result shows `error: 'OpenAI request timed out after 100 ms'`. Restore the value.
 
 #### Out of scope
 
-- Signed-URL attachment mode, HEIC/EXIF normalisation, per-user storage quota (E03-05).
-- Safety pre-check (E06-06) — `safetyDecision` stays null.
+- Signed-URL attachment mode, HEIC/EXIF normalisation, per-user storage quota (E03-05 (#87)).
+- Safety pre-check (E06-06 (#82)) — `safetyDecision` stays null.
 - Retry/backoff, streaming, caching of stable summaries (PRD §118 "cache stable summaries" is a caller concern).
 
 #### Notes for the implementing agent
@@ -835,13 +838,13 @@ OTel span `ai.invoke` (`SpanKind.CLIENT`, tracer `trace.getTracer('evolvepath-ap
 
 ---
 
-### E01-07 `feat(web): add AI settings admin page with persona model selectors`
+### E01-07 `feat(web): add AI settings admin page with persona model selectors` — #27
 
-**Part of epic:** E01 · **Blocked by:** E01-04 · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev
+**Part of epic:** E01 · **Blocked by:** E01-04 (#24) · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev
 
 #### Problem statement
 
-The admin API from E01-04 needs its registry-declared destination (CLAUDE.md "Settings UI Pattern" rules 1–4): a card in `ADMIN_SECTIONS`, a route, and a page that mirrors `EmailSettingsPage` so an administrator can select the provider, store the platform key write-only, refresh the live catalog, pick a default and per-persona models (PRD §118), and test the connection with the provider's error shown verbatim — on a phone as well as a desktop (PRD §123 mobile-first).
+The admin API from E01-04 (#24) needs its registry-declared destination (CLAUDE.md "Settings UI Pattern" rules 1–4): a card in `ADMIN_SECTIONS`, a route, and a page that mirrors `EmailSettingsPage` so an administrator can select the provider, store the platform key write-only, refresh the live catalog, pick a default and per-persona models (PRD §118), and test the connection with the provider's error shown verbatim — on a phone as well as a desktop (PRD §123 mobile-first).
 
 #### Proposed solution
 
@@ -849,7 +852,7 @@ Clone the email settings page and hook, add a persona/model table that degrades 
 
 **Data (database-dev)** — n/a.
 
-**API (backend-dev)** — n/a (E01-04).
+**API (backend-dev)** — n/a (E01-04 (#24)).
 
 **UI (frontend-dev)**
 
@@ -879,7 +882,7 @@ Clone the email settings page and hook, add a persona/model table that degrades 
 - `config/settingsRegistry.test.ts` / `config/destinations.test.ts`: add the new route to the owned-routes list so "claims every route in App.tsx" stays green; assert the AI card's `permission === 'system_settings:read'`.
 - Visual: regenerate `tests/visual/specs/admin-hub.spec.ts-snapshots/*` inside `mcr.microsoft.com/playwright:v1.62.1-noble` (`cd tests/visual && npm run test:update`); add `tests/visual/specs/ai-settings.spec.ts` capturing `/admin/settings/ai` at 1440×900 and 390×844 (MSW is not available in the harness — the page's loading/error state is what gets captured unless the harness gains a stub; capture the hub card instead if that is the case and say so in the spec).
 
-**Docs (docs-dev)** — CLAUDE.md "Access Control"/settings pointers unchanged; E01-12 documents the page.
+**Docs (docs-dev)** — CLAUDE.md "Access Control"/settings pointers unchanged; E01-12 (#32) documents the page.
 
 #### Acceptance criteria
 
@@ -908,7 +911,7 @@ Clone the email settings page and hook, add a persona/model table that degrades 
 
 #### Out of scope
 
-- The user key form (E01-08).
+- The user key form (E01-08 (#28)).
 - Cost/usage display.
 - Model descriptions/pricing.
 
@@ -922,13 +925,13 @@ Clone the email settings page and hook, add a persona/model table that degrades 
 
 ---
 
-### E01-08 `feat(web): add user OpenAI key settings page and shared key form`
+### E01-08 `feat(web): add user OpenAI key settings page and shared key form` — #28
 
-**Part of epic:** E01 · **Blocked by:** E01-05 · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev
+**Part of epic:** E01 · **Blocked by:** E01-05 (#25) · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev
 
 #### Problem statement
 
-Users need a place to add, test, replace and remove their own OpenAI key (E01-05 API), reachable from the per-user settings hub as a registry card (CLAUDE.md rules 1–4). The same form and instructions must be reusable by the first-login setup screen (E01-09), so the form is built as a shared component with two variants rather than two pages that drift.
+Users need a place to add, test, replace and remove their own OpenAI key (E01-05 (#25) API), reachable from the per-user settings hub as a registry card (CLAUDE.md rules 1–4). The same form and instructions must be reusable by the first-login setup screen (E01-09 (#29)), so the form is built as a shared component with two variants rather than two pages that drift.
 
 #### Proposed solution
 
@@ -936,7 +939,7 @@ Shared `OpenAiKeyForm` + `OpenAiKeyInstructions` components, a `useMyAiKey` hook
 
 **Data (database-dev)** — n/a.
 
-**API (backend-dev)** — n/a (E01-05).
+**API (backend-dev)** — n/a (E01-05 (#25)).
 
 **UI (frontend-dev)**
 
@@ -944,13 +947,13 @@ Shared `OpenAiKeyForm` + `OpenAiKeyInstructions` components, a `useMyAiKey` hook
 
 `apps/web/src/services/api.ts`: `getMyAiKey()`, `setMyAiKey(apiKey)`, `deleteMyAiKey()`, `testMyAiKey()`.
 
-`apps/web/src/hooks/useMyAiKey.ts` (new): `{ status, isLoading, loadError, isSaving, saveError, isTesting, testResult, isRemoving, save(apiKey): Promise<boolean>, test(): Promise<void>, remove(): Promise<boolean>, clearTestResult, clearSaveError, refresh }`; after a successful `save` **and** after a successful `remove`, call `refreshUser()` from `useAuth()` so `user.aiKey` (and therefore the gate in E01-09) updates without a reload; 429 on test → `testResult = { success: false, error }`; 400 on save → `saveError` with the API message.
+`apps/web/src/hooks/useMyAiKey.ts` (new): `{ status, isLoading, loadError, isSaving, saveError, isTesting, testResult, isRemoving, save(apiKey): Promise<boolean>, test(): Promise<void>, remove(): Promise<boolean>, clearTestResult, clearSaveError, refresh }`; after a successful `save` **and** after a successful `remove`, call `refreshUser()` from `useAuth()` so `user.aiKey` (and therefore the gate in E01-09 (#29)) updates without a reload; 429 on test → `testResult = { success: false, error }`; 400 on save → `saveError` with the API message.
 
 `apps/web/src/components/ai/OpenAiKeyInstructions.tsx` (new): props `{ variant: 'setup' | 'settings' }`. Numbered steps: (1) Sign in at platform.openai.com, (2) open **API keys**, (3) click **Create new secret key**, (4) name it "EvolvePath", (5) copy the key — it is shown once, (6) paste it below. Link `https://platform.openai.com/api-keys` with `target="_blank" rel="noopener noreferrer"`. Note: "Billing must be enabled on your OpenAI account or requests will fail." `settings` variant renders inside a collapsed `Accordion` ("How do I get a key?"); `setup` variant renders open.
 
 `apps/web/src/components/ai/OpenAiKeyForm.tsx` (new): props `{ status: MyAiKeyStatus | AiKeySummary | null; variant: 'setup' | 'settings'; onSave(apiKey: string): Promise<boolean>; onTest(): Promise<void>; onRemove?: () => Promise<boolean>; isSaving: boolean; isTesting: boolean; testResult: AiTestResult | null; clearTestResult(): void; saveError: string | null }`. Behaviour: password `TextField` (`autoComplete="off"`, `spellCheck={false}`) with show/hide toggle (`aria-label="Show key"/"Hide key"`); value is trimmed on paste and on submit; soft helper hint "OpenAI keys usually start with sk-" shown (not blocking) when the value is non-empty and does not start with `sk-`; Save button label "Save key" (settings) / "Save and continue" (setup), disabled while empty, saving or testing; **Test key** button: when the field has a value it saves first then tests? — no: keep it simple and honest: *Test key* is enabled only when `status.configured` is true and the field is empty ("Save the key, then test it"); a persistent, dismissible result `Alert` with `checks` and a `<pre>` carrying the verbatim error; status line "Configured · ••••abcd · last tested <relative> (worked|failed)" or "No key saved"; **Remove key** (only when `onRemove` is given and `status.configured`) opens a confirm `Dialog` whose text states "You will be asked for a key again before you can use EvolvePath"; confirm calls `onRemove`. a11y: labelled controls; `aria-live="polite"` status; the dialog traps focus (MUI default) and returns focus to the button.
 
-`apps/web/src/pages/UserAiKeyPage.tsx` (new): route `/settings/ai-key`, wrapped like the other user settings pages (`UserSettingsSection` chrome with title "OpenAI API Key", subtitle "EvolvePath uses your own OpenAI key for every AI feature. It is stored encrypted and never shown again."); renders `OpenAiKeyInstructions variant="settings"` and `OpenAiKeyForm variant="settings"` bound to `useMyAiKey` (with `onRemove`). After a successful remove, the E01-09 gate will redirect to setup — nothing to do here beyond `refreshUser()`.
+`apps/web/src/pages/UserAiKeyPage.tsx` (new): route `/settings/ai-key`, wrapped like the other user settings pages (`UserSettingsSection` chrome with title "OpenAI API Key", subtitle "EvolvePath uses your own OpenAI key for every AI feature. It is stored encrypted and never shown again."); renders `OpenAiKeyInstructions variant="settings"` and `OpenAiKeyForm variant="settings"` bound to `useMyAiKey` (with `onRemove`). After a successful remove, the E01-09 (#29) gate will redirect to setup — nothing to do here beyond `refreshUser()`.
 
 `apps/web/src/config/userSettingsSections.tsx`: new section between `Account` and `Security`: `{ label: 'AI', cards: [{ title: 'OpenAI API Key', description: 'Add, test or remove the OpenAI API key that powers your coaching.', Icon: KeyIcon (from '@mui/icons-material/Key'), path: '/settings/ai-key' }] }` — no `permission` (own resource, `@Auth()` only).
 
@@ -965,9 +968,9 @@ Shared `OpenAiKeyForm` + `OpenAiKeyInstructions` components, a `useMyAiKey` hook
 - `pages/UserAiKeyPage.test.tsx`: title/subtitle; loads status; instructions collapsed; full save → status line updates.
 - `config/userSettingsSections.test.ts`: the AI section exists with exactly one card, no `permission`, path `/settings/ai-key`; `settingsPageTitle(USER_SETTINGS_SECTIONS, '/settings', 'Settings', '/settings/ai-key') === 'OpenAI API Key'`.
 - `config/destinations.test.ts`: add `/settings/ai-key` to owned routes.
-- Visual: regenerate `tests/visual/specs/user-hub.spec.ts-snapshots/user-hub-1440x900.png` inside the pinned container (new card changes the grid); add an `ai-key` capture of `/settings/ai-key` at 390×844 if the harness can render it without MSW (see E01-07 note).
+- Visual: regenerate `tests/visual/specs/user-hub.spec.ts-snapshots/user-hub-1440x900.png` inside the pinned container (new card changes the grid); add an `ai-key` capture of `/settings/ai-key` at 390×844 if the harness can render it without MSW (see E01-07 (#27) note).
 
-**Docs (docs-dev)** — E01-12.
+**Docs (docs-dev)** — E01-12 (#32).
 
 #### Acceptance criteria
 
@@ -995,7 +998,7 @@ Shared `OpenAiKeyForm` + `OpenAiKeyInstructions` components, a `useMyAiKey` hook
 
 #### Out of scope
 
-- The gate and the setup route (E01-09).
+- The gate and the setup route (E01-09 (#29)).
 - Showing usage/cost for the key.
 
 #### Notes for the implementing agent
@@ -1008,9 +1011,9 @@ Shared `OpenAiKeyForm` + `OpenAiKeyInstructions` components, a `useMyAiKey` hook
 
 ---
 
-### E01-09 `feat(web): gate signed-in users without an OpenAI key behind the setup flow`
+### E01-09 `feat(web): gate signed-in users without an OpenAI key behind the setup flow` — #29
 
-**Part of epic:** E01 · **Blocked by:** E01-08 · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev
+**Part of epic:** E01 · **Blocked by:** E01-08 (#28) · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev
 
 #### Problem statement
 
@@ -1064,9 +1067,9 @@ export function RequireAiKey() {
 - `services/api.test.ts`: a 412 `AI_KEY_REQUIRED` response throws `ApiError` with that `code` and dispatches the event.
 - `contexts/AuthContext.test.tsx`: the event triggers `refreshUser`.
 - `config/destinations.test.ts`: `/setup/ai-key` listed as deliberately unowned (like `/activate`).
-- e2e: `tests/e2e/helpers/auth.helper.ts` — `TestUserOptions.withAiKey?: boolean` (default `true`): when true, check `[data-testid="test-with-ai-key"]` before submitting; when false, `waitForURL('/setup/ai-key')` instead of `'/'`. All existing e2e specs keep passing because the default seeds a key. The specs themselves land in E01-10.
+- e2e: `tests/e2e/helpers/auth.helper.ts` — `TestUserOptions.withAiKey?: boolean` (default `true`): when true, check `[data-testid="test-with-ai-key"]` before submitting; when false, `waitForURL('/setup/ai-key')` instead of `'/'`. All existing e2e specs keep passing because the default seeds a key. The specs themselves land in E01-10 (#30).
 
-**Docs (docs-dev)** — E01-12 (`docs/ARCHITECTURE.md` route table gains `/setup/ai-key`; `docs/TESTING.md` gains `withAiKey`).
+**Docs (docs-dev)** — E01-12 (#32) (`docs/ARCHITECTURE.md` route table gains `/setup/ai-key`; `docs/TESTING.md` gains `withAiKey`).
 
 #### Acceptance criteria
 
@@ -1095,7 +1098,7 @@ export function RequireAiKey() {
 
 #### Out of scope
 
-- Onboarding wizard gating order (E04-05 adds "onboarding complete" after this gate).
+- Onboarding wizard gating order (E04-05 (#106) adds "onboarding complete" after this gate).
 - Remembering a dismissed setup (there is no dismiss; the key is mandatory).
 
 #### Notes for the implementing agent
@@ -1104,13 +1107,13 @@ export function RequireAiKey() {
 - `ActivateDevicePage.tsx` is the layout reference for a full-screen page outside `Layout`.
 - The five coupled breakpoint gates are untouched — the setup page is outside `Layout`, so `showRail`/`BottomNav` do not apply to it.
 - `destinations.test.ts` must list `/setup/ai-key` as deliberately unowned or it fails.
-- The e2e helper change is small but it is the reason E01-10 must follow immediately: until the specs exist nothing proves the default.
+- The e2e helper change is small but it is the reason E01-10 (#30) must follow immediately: until the specs exist nothing proves the default.
 
 ---
 
-### E01-10 `test(tests): add fake OpenAI server and end-to-end AI key and admin flows`
+### E01-10 `test(tests): add fake OpenAI server and end-to-end AI key and admin flows` — #30
 
-**Part of epic:** E01 · **Blocked by:** E01-04, E01-05, E01-09 · **Component:** tests, infra · **Priority:** P0 · **Agents:** testing-dev → ops-dev
+**Part of epic:** E01 · **Blocked by:** E01-04 (#24), E01-05 (#25), E01-09 (#29) · **Component:** tests, infra · **Priority:** P0 · **Agents:** testing-dev → ops-dev
 
 #### Problem statement
 
@@ -1133,7 +1136,7 @@ A zero-dependency Node HTTP server, a Compose overlay that points the API at it,
 - `GET /healthz` → 200 `ok`.
 - Auth: `Authorization: Bearer sk-test-…` (prefix `sk-test-`) required on `/v1/*`; otherwise 401 `{ "error": { "message": "Incorrect API key provided: sk-***", "type": "invalid_request_error", "code": "invalid_api_key" } }`.
 - `GET /v1/models` → `{ "object": "list", "data": [ {id:'gpt-5.4'}, {id:'gpt-5.4-mini'}, {id:'gpt-5.3'}, {id:'gpt-4o'}, {id:'gpt-5.5-realtime'} ] }` each with `object:'model', created: <fixed epoch>, owned_by:'openai'` — so the ≥ 5.4 filter is observable in the UI.
-- `POST /v1/responses`: reject unknown `model` (not in the list) with 404 `{ error: { message: "The model \`x\` does not exist or you do not have access to it.", code: "model_not_found" } }`; header `x-fake-behaviour` selects: `rate_limit` → 429 `{ error: { message: "Rate limit reached for gpt-5.4", type: "rate_limit_error" } }` + `retry-after: 1`; `timeout` → never responds (ends when the client aborts); `refusal` → a message whose content is `[{ type: 'refusal', refusal: "I can't help with that." }]`; `invalid_json` → `output_text` `"not json {"`; default → build the object from `body.text.format.schema`: for each `required` key by `type`: `string` → `"placeholder"`, `number`/`integer` → `0`, `boolean` → `true`, `array` → `[]`, `object` → recurse, `enum` → first value, `["x","null"]` → `null`; so the probe schema `{ ok: boolean }` yields `{"ok":true}`. Response: `{ id: 'resp_<n>', object: 'response', model: body.model, status: 'completed', output: [{ type: 'message', id: 'msg_<n>', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(obj), annotations: [] }] }], usage: { input_tokens: 42, output_tokens: 7, total_tokens: 49, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } }, incomplete_details: null }` with header `x-request-id: fake-<n>`. Any request whose body has `store !== false` → 400 `{ error: { message: "fake-openai: store must be false" } }` (guards the E01-03 invariant end to end).
+- `POST /v1/responses`: reject unknown `model` (not in the list) with 404 `{ error: { message: "The model \`x\` does not exist or you do not have access to it.", code: "model_not_found" } }`; header `x-fake-behaviour` selects: `rate_limit` → 429 `{ error: { message: "Rate limit reached for gpt-5.4", type: "rate_limit_error" } }` + `retry-after: 1`; `timeout` → never responds (ends when the client aborts); `refusal` → a message whose content is `[{ type: 'refusal', refusal: "I can't help with that." }]`; `invalid_json` → `output_text` `"not json {"`; default → build the object from `body.text.format.schema`: for each `required` key by `type`: `string` → `"placeholder"`, `number`/`integer` → `0`, `boolean` → `true`, `array` → `[]`, `object` → recurse, `enum` → first value, `["x","null"]` → `null`; so the probe schema `{ ok: boolean }` yields `{"ok":true}`. Response: `{ id: 'resp_<n>', object: 'response', model: body.model, status: 'completed', output: [{ type: 'message', id: 'msg_<n>', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(obj), annotations: [] }] }], usage: { input_tokens: 42, output_tokens: 7, total_tokens: 49, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } }, incomplete_details: null }` with header `x-request-id: fake-<n>`. Any request whose body has `store !== false` → 400 `{ error: { message: "fake-openai: store must be false" } }` (guards the E01-03 (#23) invariant end to end).
 - `tools/fake-openai/README.md` (new): how to run (`node tools/fake-openai/server.mjs`), the behaviours, and that it is test infrastructure only.
 
 `infra/compose/fake-openai.compose.yml` (new):
@@ -1167,7 +1170,7 @@ services:
 
 `tests/e2e/playwright.config.ts`: `webServer.command` becomes `cd ../../infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up`; add a second readiness probe comment (the API `health/live` URL is enough since `api` depends on the fake server being healthy).
 
-`tests/e2e/helpers/auth.helper.ts`: `withAiKey?: boolean` (default `true`) per E01-09; export `loginAsAdmin(page, email, { withAiKey })` pass-through.
+`tests/e2e/helpers/auth.helper.ts`: `withAiKey?: boolean` (default `true`) per E01-09 (#29); export `loginAsAdmin(page, email, { withAiKey })` pass-through.
 
 `tests/e2e/specs/ai-key-gate.spec.ts` (new):
 1. login `withAiKey: false` → URL `/setup/ai-key`; heading visible; no `[data-testid="bottom-nav"]`/app bar; `/`, `/settings`, `/admin/settings` all redirect back.
@@ -1186,7 +1189,7 @@ services:
 7. viewport 390×844 → persona cards visible, table absent.
 8. DB proof through the API surface: `GET /api/me/ai-key` `lastTest` non-null after a user test; and `GET /api/ai-settings` `version` incremented twice.
 
-**Docs (docs-dev)** — `docs/TESTING.md` E2E section: fake server, overlay, `withAiKey`, behaviours header; `tools/fake-openai/README.md`. (E01-12 completes.)
+**Docs (docs-dev)** — `docs/TESTING.md` E2E section: fake server, overlay, `withAiKey`, behaviours header; `tools/fake-openai/README.md`. (E01-12 (#32) completes.)
 
 **Ops (ops-dev)** — build/run the overlay stack, run the e2e suite, report; no git operations.
 
@@ -1225,27 +1228,27 @@ services:
 - `SECRETS_ENCRYPTION_KEY` in the overlay: 32 bytes base64 (`fake-openai-e2e-key-000000000000`); `.env` overrides via `env_file` precedence rules already documented in `base.compose.yml`.
 - Do not modify `base.compose.yml`; overlay only.
 - `tests/e2e` pins `@playwright/test ^1.40.0`; visual tests pin 1.62.1 — they are separate projects, do not merge them.
-- Selectors: prefer roles/labels (`getByRole('button', { name: 'Save and continue' })`) over test ids; add `data-testid` only where E01-08/09 already define them.
+- Selectors: prefer roles/labels (`getByRole('button', { name: 'Save and continue' })`) over test ids; add `data-testid` only where E01-08 (#28)/09 already define them.
 
 ---
 
-### E01-11 `docs(docs): create the missing docs/specs/settings-ui.md`
+### E01-11 `docs(docs): create the missing docs/specs/settings-ui.md` — #31
 
 **Part of epic:** E01 · **Blocked by:** none · **Component:** docs · **Priority:** P0 · **Agents:** docs-dev
 
 #### Problem statement
 
-CLAUDE.md's "MANDATORY: Settings UI Pattern" section cites `docs/specs/settings-ui.md` five times as the place that holds the rationale, the rejected alternatives and §5 on the breakpoint gates; `docs/ARCHITECTURE.md` (lines ~899 and ~992), `docs/TESTING.md` (~910) and `apps/web/src/pages/Admin/EmailSettingsPage.tsx` link it too. The file does not exist. This epic adds three settings surfaces (E01-07/08/09) whose issues instruct agents to follow that spec, so the dead link must become a real document before those children run.
+CLAUDE.md's "MANDATORY: Settings UI Pattern" section cites `docs/specs/settings-ui.md` five times as the place that holds the rationale, the rejected alternatives and §5 on the breakpoint gates; `docs/ARCHITECTURE.md` (lines ~899 and ~992), `docs/TESTING.md` (~910) and `apps/web/src/pages/Admin/EmailSettingsPage.tsx` link it too. The file does not exist. This epic adds three settings surfaces (E01-07 (#27)/08/09) whose issues instruct agents to follow that spec, so the dead link must become a real document before those children run.
 
 #### Proposed solution
 
 Write `docs/specs/settings-ui.md` (new) from the code as it is, not from memory. Sections:
 
 1. **Purpose and scope** — the two hubs (`/admin/settings`, `/settings`), what "registry-driven hub" means, the epic #90 history (issues #91–#96) in two sentences.
-2. **The five MANDATORY rules** — restate each rule from CLAUDE.md verbatim, then the rationale below it: (1) registry declaration first; (2) never a new tab on an existing settings page — the reachability-vs-content distinction with `UsersPage.tsx` (Users/Allowlist) as the legitimate tab example and `SystemSettingsPage`'s former three tabs as the anti-example; (3) the card `permission` is the controller's exact string, with the verified mapping (`system_settings:read/write` → `system-settings.controller.ts` and `email-settings.controller.ts`, `users:read` → `users.controller.ts`, `allowlist:read` gates content inside Users & Allowlist; after E01-04, `ai-settings.controller.ts`); (4) reuse `SettingsHub` — the 4-prop binding in `UserSettingsHubPage.tsx`; (5) the five coupled breakpoint gates.
+2. **The five MANDATORY rules** — restate each rule from CLAUDE.md verbatim, then the rationale below it: (1) registry declaration first; (2) never a new tab on an existing settings page — the reachability-vs-content distinction with `UsersPage.tsx` (Users/Allowlist) as the legitimate tab example and `SystemSettingsPage`'s former three tabs as the anti-example; (3) the card `permission` is the controller's exact string, with the verified mapping (`system_settings:read/write` → `system-settings.controller.ts` and `email-settings.controller.ts`, `users:read` → `users.controller.ts`, `allowlist:read` gates content inside Users & Allowlist; after E01-04 (#24), `ai-settings.controller.ts`); (4) reuse `SettingsHub` — the 4-prop binding in `UserSettingsHubPage.tsx`; (5) the five coupled breakpoint gates.
 3. **Registry shapes** — `SettingsCardDef` (`title, description, Icon, path?, disabled?, permission?, alwaysShow?`), `SettingsSectionDef`, `visibleSettingsSections(sections, hasPermission, query)` (title-only search, empty sections dropped, `alwaysShow` semantics), `settingsPageTitle(sections, hubPath, hubTitle, pathname)` (longest-prefix, segment-boundary, `null` outside the hub) — from `apps/web/src/config/adminSections.tsx`; `USER_SETTINGS_SECTIONS` declares data only and re-uses the helpers.
 4. **`SettingsHub` props** — from `apps/web/src/components/settings/SettingsHub.tsx`: `sections`, `hubKey`, `title`, `subtitle`; what the component owns (search field, grouped grid ≥ sm, drill-down list < sm, scroll restoration keyed by `hubKey`).
-5. **Breakpoints** — the five gates by file and expression (`Layout.tsx` `showRail` `up('sm')`; `BottomNav` `down('sm')`; `<main>` `pb: { xs: 10, sm: 3 }`; `SettingsHub.tsx` `isCompactWindow`; `AppBar.tsx` `isCompactWindow`), why `sm` (600) and not `md` (900), and why there is deliberately no shared constant (a constant would invite gating new things on it; the five are coupled by meaning, not by value). Note that a component-local `useMediaQuery(down('sm'))` for layout inside one page (e.g. `PersonaModelTable`, E01-07) is allowed and is not a sixth gate.
+5. **Breakpoints** — the five gates by file and expression (`Layout.tsx` `showRail` `up('sm')`; `BottomNav` `down('sm')`; `<main>` `pb: { xs: 10, sm: 3 }`; `SettingsHub.tsx` `isCompactWindow`; `AppBar.tsx` `isCompactWindow`), why `sm` (600) and not `md` (900), and why there is deliberately no shared constant (a constant would invite gating new things on it; the five are coupled by meaning, not by value). Note that a component-local `useMediaQuery(down('sm'))` for layout inside one page (e.g. `PersonaModelTable`, E01-07 (#27)) is allowed and is not a sixth gate.
 6. **Rejected alternatives** — tab strips per area; ungoverned routes (a route without a card is invisible to hub, rail and title); role-based gating instead of permission strings (the split-brain `destinations.ts` describes); gating at `md`; a second copy of the gate helpers for the user hub.
 7. **Accessibility requirements** — hub cards are links with accessible names; search is a labelled `input type="search"`; the drill-down list uses list semantics; AppBar back arrow has `aria-label`; page titles come from the registry so `document.title`/heading match; axe runs in the page tests.
 8. **Testing** — `apps/web/src/__tests__/config/settingsRegistry.test.ts`, `destinations.test.ts` (route ownership invariant that reads `App.tsx`), `components/settings/SettingsHub.test.tsx`; the visual harness (`apps/web/visual/main.tsx`, `tests/visual/`, pinned `mcr.microsoft.com/playwright:v1.62.1-noble`, `npm run test:update`).
@@ -1281,7 +1284,7 @@ Cross-link: add the file to `docs/ARCHITECTURE.md`'s existing references (alread
 #### Out of scope
 
 - Changing any rule; this documents what exists.
-- Documenting the AI pages (E01-12 links them from here once they exist).
+- Documenting the AI pages (E01-12 (#32) links them from here once they exist).
 
 #### Notes for the implementing agent
 
@@ -1291,9 +1294,9 @@ Cross-link: add the file to `docs/ARCHITECTURE.md`'s existing references (alread
 
 ---
 
-### E01-12 `docs(docs): document AI configuration, BYOK and the "Adding an AI persona" recipe`
+### E01-12 `docs(docs): document AI configuration, BYOK and the "Adding an AI persona" recipe` — #32
 
-**Part of epic:** E01 · **Blocked by:** E01-01, E01-02, E01-03, E01-04, E01-05, E01-06, E01-07, E01-08, E01-09, E01-10, E01-11 · **Component:** docs · **Priority:** P0 · **Agents:** docs-dev
+**Part of epic:** E01 · **Blocked by:** E01-01 (#21), E01-02 (#22), E01-03 (#23), E01-04 (#24), E01-05 (#25), E01-06 (#26), E01-07 (#27), E01-08 (#28), E01-09 (#29), E01-10 (#30), E01-11 (#31) · **Component:** docs · **Priority:** P0 · **Agents:** docs-dev
 
 #### Problem statement
 
@@ -1306,19 +1309,19 @@ Every later epic will call the gateway, add personas, and run e2e against the fa
 **Docs (docs-dev)**
 
 1. `docs/API.md`:
-   - New section **"AI Settings (Admin)"** after "Settings": `GET /ai-settings`, `PUT /ai-settings` (If-Match, write-only `platformApiKey`, 400 model < 5.4, 409), `GET /ai-settings/personas`, `GET /ai-settings/models?refresh=` (200 always, filter, `source`, 429 on refresh), `POST /ai-settings/test` (200 always, `checks`, 429). Request/response JSON examples with the DTO shapes from E01-04.
+   - New section **"AI Settings (Admin)"** after "Settings": `GET /ai-settings`, `PUT /ai-settings` (If-Match, write-only `platformApiKey`, 400 model < 5.4, 409), `GET /ai-settings/personas`, `GET /ai-settings/models?refresh=` (200 always, filter, `source`, 429 on refresh), `POST /ai-settings/test` (200 always, `checks`, 429). Request/response JSON examples with the DTO shapes from E01-04 (#24).
    - New section **"AI Key (current user)"**: `GET/PUT/DELETE /me/ai-key`, `POST /me/ai-key/test`, with the note that the key is never returned and `lastTest` is derived from `ai_invocations`.
    - `GET /auth/me` example gains `"aiKey": { "configured": true, "hint": "••••abcd" }`.
    - "Error Codes" table: `AI_KEY_REQUIRED` | 412 | The caller has no OpenAI key; complete `/setup/ai-key`. "Rate Limits": replace the "not implemented" note's absolute claim with the per-user, per-process throttles on `/ai-settings/test` (5/min), `/ai-settings/models?refresh=true` (10/min), `/me/ai-key/test` (5/min), `Retry-After` header.
 2. `CLAUDE.md`:
    - "API Endpoints (MVP)": subsections **AI Settings (Admin)** and **AI Key (current user)** listing the nine routes; `GET /api/auth/me` note.
-   - "Database Tables": `ai_invocations` (if E01-01 did not already add it, add; otherwise expand to "…model, tokens, latency, validation result, redacted I/O; never chain of thought").
+   - "Database Tables": `ai_invocations` (if E01-01 (#21) did not already add it, add; otherwise expand to "…model, tokens, latency, validation result, redacted I/O; never chain of thought").
    - "Environment Variables": new **AI** block — `OPENAI_BASE_URL` (default `https://api.openai.com/v1`; the fake server overlay sets `http://fake-openai:8089/v1`), `AI_REQUEST_TIMEOUT_MS` (default 60000), `AI_MAX_IMAGE_BYTES` (default 20971520), `AI_MAX_IMAGES_PER_CALL` (default 10); and a sentence under `SECRETS_ENCRYPTION_KEY` that it now also protects the platform and per-user OpenAI keys.
    - "Security Guidelines": bullet "OpenAI keys (platform and per-user) are encrypted in `credentials`, write-only through the API, redacted from every error, log, audit row and `ai_invocations` row; the gateway uses only the caller's key".
    - "Common Patterns": new recipe **"Adding an AI persona"** modelled on "Adding a Notification", three steps: (1) add the entry to `AI_PERSONAS` in `apps/api/src/ai/ai-personas.ts` and the key to `PERSONA_KEYS` (label/description are user-facing copy on the admin page; `tier` guides the admin's model choice; declare `vision` only if the persona will receive attachments) — no migration, the admin page and `GET /ai-settings/personas` pick it up; (2) define the output contract as a Zod object with explicit keys (no `z.record`, no unions of objects — strict mode) and a versioned prompt (`'<persona>.v1'`) beside the caller; (3) call `AiGatewayService.invoke({ persona, userId, promptVersion, instructions, input, attachments?, schema, schemaName })` from a service whose module `imports: [AiModule]`, branch on `result.ok`, keep the deterministic path working when `ok:false` (PRD §120), and never persist AI output without user approval where PRD §15 applies. Point at `AiAdminTestService` as the smallest worked example of a call.
    - "Specialized Subagents" unchanged.
 3. `docs/specs/ai-configuration.md` (new): goals; the settings row `'ai'` and its schema; platform vs user key addresses and why two purposes; the admin endpoints and the catalog (live, 5-min TTL, invalidated on save, never stored — storing it would bump `version` and 409 every save); the ≥ 5.4 filter rules with the test table; test semantics (refuse-as-result, probe, throttle buckets and the per-process caveat with `@nestjs/throttler` as upgrade); the web gate mechanics (`aiKey` on `/auth/me`, `RequireAiKey`, exempt routes, 412 handling); **decisions and rejected alternatives**: a `user_credentials` table (rejected — `credentials` already keyed by purpose/name with sub-keys), caching the catalog in the settings row (rejected — version churn), platform-key fallback for keyless users (rejected — cost attribution and the gate's promise), gate via a separate `/me/ai-key` fetch on boot (rejected — waterfall and the visual harness's fake `AuthContext`), client-side video sampling (rejected — E03 samples server-side so the gateway sees the same frames every time); **user deletion note**: any future hard-delete must call `UserAiKeyService.deleteForUser(userId)` (credentials have no FK to users); the manual E2E script (link to `docs/epics/E01-ai-configuration-byok.md`).
-4. `docs/specs/ai-gateway.md` (new): the `invoke` contract (types verbatim from E01-06), the step order, error codes and what callers should do for each, the `ai_invocations` row and what is/isn't stored, the OTel span attributes, the log line format, attachments (inline mode, limits, video frame shape from E03), `AiKeyRequiredException`/`assertAiKeyAvailable`, and "how to test a caller" (override `OpenAiProvider` in `createTestApp`, or run against the fake server).
+4. `docs/specs/ai-gateway.md` (new): the `invoke` contract (types verbatim from E01-06 (#26)), the step order, error codes and what callers should do for each, the `ai_invocations` row and what is/isn't stored, the OTel span attributes, the log line format, attachments (inline mode, limits, video frame shape from E03), `AiKeyRequiredException`/`assertAiKeyAvailable`, and "how to test a caller" (override `OpenAiProvider` in `createTestApp`, or run against the fake server).
 5. `docs/SECURITY-ARCHITECTURE.md`: in §14 "Encrypted Credential Storage" add **"BYOK lifecycle"**: creation (`PUT /me/ai-key`, audit `ai_user_key:set`), use (gateway `getSecret` at the moment of the call, never cached), test (`ai_user_key:test`), removal (`ai_user_key:delete`, idempotent), key rotation runbook link, what is redacted where, and that keys never enter `system_settings`, logs, spans or `ai_invocations`.
 6. `docs/TESTING.md`: E2E section — the fake OpenAI server (`tools/fake-openai/server.mjs`), the Compose overlay, `x-fake-behaviour`, `withAiKey` in `loginAsTestUser`; API section — overriding `OpenAiProvider`/`CredentialsService` in integration specs (`apps/api/test/ai/*.integration.spec.ts` as examples); web section — the AI MSW handlers and `setAiKeyConfigured`.
 7. `infra/compose/.env.example`: an **AI** block with the four variables above, comments on the line above each value, **no trailing comments after values** (the file header explains why); note that `OPENAI_BASE_URL` is normally unset.

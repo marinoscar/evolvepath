@@ -1,6 +1,9 @@
 # E05 — Today Screen, Commitments Lifecycle & Start Flow
 
 <!-- epic-meta: slug=today-commitments-start-flow phase=2 -->
+<!-- epic-issue: #34 -->
+
+> GitHub epic: [#34](https://github.com/marinoscar/evolvepath/issues/34)
 
 ## Epic
 
@@ -10,24 +13,24 @@ Make `/` the product's primary surface: a Today screen that answers "what matter
 
 ### Background
 
-- E02 ships the domain model this epic drives: `Outcome`, `Plan`/`PlanVersion`, `Routine`, `Commitment` (status enum `PLANNED, READY, STARTED, COMPLETED, PARTIALLY_COMPLETED, RESCHEDULED, SKIPPED, MISSED, CANCELLED`; `fullVersion`/`shortVersion`/`minimumVersion`; `rescheduleCount`; `skipReason`), `Evidence` (source `USER_LOG | TIMER | WORKOUT_LOG | APP_FLOW`), `Reflection`, `DomainMode` (`GROW | MAINTAIN | RECOVER | PAUSE`), and the commitments module `apps/api/src/commitments/` with `POST /commitments/:id/transition` and its transition matrix (E02-04). E05 adds **intent-named actions** on top of that matrix; it does not re-implement it.
-- E02-05 replaces `apps/web/src/config/destinations.ts` `DESTINATIONS` with Today / Path / Coach / Progress / Profile; the `today` destination owns `/`. Today is a placeholder there. E05-04 makes it real.
-- E04-01 adds `user_profiles` (`timezone`, `coachingStyle GENTLE|BALANCED|DIRECT`, `weekdayMinutes`, `quietHours`). The scorer's "stated availability" and the local-day boundary come from that row.
-- E01 fixes the AI contract: `AiGatewayService.invoke({persona, userId, promptVersion, instructions, input, schema, schemaName})` → `{ok:true, output}` | `{ok:false, error:{code,message}}`, never throws for provider problems. E05 uses only the `coach` persona (insight + decomposition) and always has a deterministic fallback. E01-10's fake OpenAI server (`infra/compose/fake-openai.compose.yml`, `tools/fake-openai/server.mjs`) is what the e2e runs against.
+- E02 ships the domain model this epic drives: `Outcome`, `Plan`/`PlanVersion`, `Routine`, `Commitment` (status enum `PLANNED, READY, STARTED, COMPLETED, PARTIALLY_COMPLETED, RESCHEDULED, SKIPPED, MISSED, CANCELLED`; `fullVersion`/`shortVersion`/`minimumVersion`; `rescheduleCount`; `skipReason`), `Evidence` (source `USER_LOG | TIMER | WORKOUT_LOG | APP_FLOW`), `Reflection`, `DomainMode` (`GROW | MAINTAIN | RECOVER | PAUSE`), and the commitments module `apps/api/src/commitments/` with `POST /commitments/:id/transition` and its transition matrix (E02-04 (#47)). E05 adds **intent-named actions** on top of that matrix; it does not re-implement it.
+- E02-05 (#51) replaces `apps/web/src/config/destinations.ts` `DESTINATIONS` with Today / Path / Coach / Progress / Profile; the `today` destination owns `/`. Today is a placeholder there. E05-04 (#46) makes it real.
+- E04-01 (#100) adds `user_profiles` (`timezone`, `coachingStyle GENTLE|BALANCED|DIRECT`, `weekdayMinutes`, `quietHours`). The scorer's "stated availability" and the local-day boundary come from that row.
+- E01 fixes the AI contract: `AiGatewayService.invoke({persona, userId, promptVersion, instructions, input, schema, schemaName})` → `{ok:true, output}` | `{ok:false, error:{code,message}}`, never throws for provider problems. E05 uses only the `coach` persona (insight + decomposition) and always has a deterministic fallback. E01-10 (#30)'s fake OpenAI server (`infra/compose/fake-openai.compose.yml`, `tools/fake-openai/server.mjs`) is what the e2e runs against.
 - Existing patterns to copy: `apps/api/src/pat/pat.controller.ts` (`@Auth()` + ownership-scoped service, `ParseUUIDPipe`, `nestjs-zod` DTOs), `apps/api/src/email/email-settings.service.ts` (direct `prisma.auditEvent.create` with `action '<domain>:<verb>'`), `apps/api/src/openapi/tags.ts` (every `@ApiTags` name declared in a group), `apps/api/test/helpers/test-app.helper.ts` (`createTestApp` + `overrideProviders`), `apps/web/src/__tests__/mocks/handlers.ts` (MSW), `tests/e2e/helpers/auth.helper.ts` (`loginAsTestUser` via `/testing/login`).
 - Shell facts that constrain the UI: `apps/web/src/components/common/Layout.tsx` mounts the rail at `up('sm')` and pads `<main>` `pb: { xs: 10, sm: 3 }`; `BottomNav` self-gates at `down('sm')`. `/activate` is the model for a full-screen route inside `ProtectedRoute` but outside `Layout` — `/start/:commitmentId` follows it. None of the five coupled breakpoint gates (CLAUDE.md, Settings UI rule 5) are touched by this epic.
 - No new permissions. Every endpoint here is a per-user resource: plain `@Auth()` with ownership resolved by `userId`, and a foreign or missing id is a **404** (never 403 — do not leak existence).
-- Specs this epic produces: `docs/specs/today-and-nba.md` (E05-07). Specs it reads: `docs/specs/domain-model.md` (E02-08), `docs/specs/ai-gateway.md` (E01-12).
+- Specs this epic produces: `docs/specs/today-and-nba.md` (E05-07 (#55)). Specs it reads: `docs/specs/domain-model.md` (E02-08 (#62)), `docs/specs/ai-gateway.md` (E01-12 (#32)).
 
 ### Scope
 
-- [ ] E05-01 `feat(api): add deterministic next-best-action engine and GET /today`
-- [ ] E05-02 `feat(api): add commitment action endpoints with evidence and AI decomposition`
-- [ ] E05-03 `feat(api): add daily check-in and end-of-day reflection endpoints`
-- [ ] E05-04 `feat(web): add Today screen with next-best-action and domain cards`
-- [ ] E05-05 `feat(web): add full-screen Start flow with server-derived timer`
-- [ ] E05-06 `feat(web): add quick-add sheet and commitment editor`
-- [ ] E05-07 `test(tests): E05 end-to-end verification`
+- [ ] #38 `feat(api): add deterministic next-best-action engine and GET /today` (E05-01)
+- [ ] #40 `feat(api): add commitment action endpoints with evidence and AI decomposition` (E05-02)
+- [ ] #43 `feat(api): add daily check-in and end-of-day reflection endpoints` (E05-03)
+- [ ] #46 `feat(web): add Today screen with next-best-action and domain cards` (E05-04)
+- [ ] #48 `feat(web): add full-screen Start flow with server-derived timer` (E05-05)
+- [ ] #52 `feat(web): add quick-add sheet and commitment editor` (E05-06)
+- [ ] #55 `test(tests): E05 end-to-end verification` (E05-07)
 
 ### Out of scope
 
@@ -41,15 +44,15 @@ Make `/` the product's primary surface: a Today screen that answers "what matter
 
 ### Sequencing
 
-- E05-01, E05-02, E05-03 are API-only and independent of each other; run them in parallel. All three depend on E02-01/E02-04 (models + matrix) and E04-01 (`user_profiles.timezone`). E05-01's check-in input is optional until E05-03 lands (scorer treats missing check-in as `NORMAL`).
-- E05-04 depends on E05-01 + E05-02 + E05-03 (it renders check-in chips and the reflection prompt). E05-05 depends on E05-02 only and can run in parallel with E05-04; E05-06 depends on E02-04's `POST /commitments` and E05-04 (the FAB lives on Today).
-- Critical path: E02-04 → E05-02 → E05-04 → E05-07. E05-07 is last.
+- E05-01 (#38), E05-02 (#40), E05-03 (#43) are API-only and independent of each other; run them in parallel. All three depend on E02-01 (#36)/E02-04 (#47) (models + matrix) and E04-01 (#100) (`user_profiles.timezone`). E05-01 (#38)'s check-in input is optional until E05-03 (#43) lands (scorer treats missing check-in as `NORMAL`).
+- E05-04 (#46) depends on E05-01 (#38) + E05-02 (#40) + E05-03 (#43) (it renders check-in chips and the reflection prompt). E05-05 (#48) depends on E05-02 (#40) only and can run in parallel with E05-04 (#46); E05-06 (#52) depends on E02-04 (#47)'s `POST /commitments` and E05-04 (#46) (the FAB lives on Today).
+- Critical path: E02-04 (#47) → E05-02 (#40) → E05-04 (#46) → E05-07 (#55). E05-07 (#55) is last.
 
 ### Manual end-to-end verification
 
 1. Clean clone. `cp infra/compose/.env.example infra/compose/.env`; set `SECRETS_ENCRYPTION_KEY=$(openssl rand -base64 32)`, `INITIAL_ADMIN_EMAIL=<you>`, `OPENAI_BASE_URL=http://fake-openai:8089/v1`.
 2. `cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up`. In another shell: `cd apps/api && npm run prisma:migrate && npm run prisma:seed`.
-3. Open http://localhost:3535/testing/login, sign in as `owner@test.local` role `admin` with the AI-key checkbox (E01-10 `withAiKey`). Complete onboarding (E04) **or** seed directly with the CLI: `evopath login`, then
+3. Open http://localhost:3535/testing/login, sign in as `owner@test.local` role `admin` with the AI-key checkbox (E01-10 (#30) `withAiKey`). Complete onboarding (E04) **or** seed directly with the CLI: `evopath login`, then
    `evopath api POST /api/outcomes --data '{"domain":"WORK","title":"Ship the Q4 proposal","whyItMatters":"Free my evenings","importance":5}'` → note `outcomeId`;
    `evopath api POST /api/commitments --data '{"domain":"WORK","outcomeId":"<outcomeId>","title":"Draft the proposal storyline","scheduledStart":"<today 09:00 local ISO>","fullVersion":{"title":"Draft the storyline","minutes":25},"shortVersion":{"title":"Write the decision statement","minutes":10},"minimumVersion":{"title":"Open the doc and write one sentence","minutes":5},"importance":5}'`;
    repeat for a FAMILY commitment (`"Phone-free dinner"`, 19:00, minutes 45) and a HEALTH commitment (`"Upper A"`, 18:00, full 38 / short 20 / minimum 10).
@@ -67,25 +70,25 @@ Make `/` the product's primary surface: a Today screen that answers "what matter
 
 ## Child issues
 
-### E05-01 `feat(api): add deterministic next-best-action engine and GET /today`
+### E05-01 `feat(api): add deterministic next-best-action engine and GET /today` — #38
 
-**Part of epic:** E05 · **Blocked by:** E02-04, E04-01 · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
+**Part of epic:** E05 · **Blocked by:** E02-04 (#47), E04-01 (#100) · **Component:** api · **Priority:** P0 · **Agents:** backend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-PRD §12 requires Today to show one recommended action with rationale, duration, fallback and mode; PRD §13 requires that ranking to be **deterministic** ("The AI should not freely invent priority. The deterministic engine generates candidates."), and PRD §120 requires Today to work when AI is unavailable. VISION §21 gives the eight coach modes the intervention mode enum encodes. Nothing in the API computes any of this today; the web app's `/` is a placeholder (E02-05).
+PRD §12 requires Today to show one recommended action with rationale, duration, fallback and mode; PRD §13 requires that ranking to be **deterministic** ("The AI should not freely invent priority. The deterministic engine generates candidates."), and PRD §120 requires Today to work when AI is unavailable. VISION §21 gives the eight coach modes the intervention mode enum encodes. Nothing in the API computes any of this today; the web app's `/` is a placeholder (E02-05 (#51)).
 
 #### Proposed solution
 
 A new `apps/api/src/today/` module with a pure scorer, a candidate loader, a deterministic mode/sizing resolver, `GET /today`, and a separate non-blocking `GET /today/insight` backed by the `coach` persona with a template fallback.
 
-**Data (database-dev)** — n/a (reads `commitments`, `outcomes`, `plans`/`plan_versions`, `domain_modes`, `evidence`, `user_profiles`, and — once E05-03 lands — `daily_check_ins`). No migration.
+**Data (database-dev)** — n/a (reads `commitments`, `outcomes`, `plans`/`plan_versions`, `domain_modes`, `evidence`, `user_profiles`, and — once E05-03 (#43) lands — `daily_check_ins`). No migration.
 
 **API (backend-dev)**
 
 Files (all new):
 
-- `apps/api/src/today/today.module.ts` — imports `PrismaModule`, `AiModule` (for `AiGatewayService`), `CommitmentsModule` (E02-04, for the card mapper); exports `TodayService`.
+- `apps/api/src/today/today.module.ts` — imports `PrismaModule`, `AiModule` (for `AiGatewayService`), `CommitmentsModule` (E02-04 (#47), for the card mapper); exports `TodayService`.
 - `apps/api/src/today/today.controller.ts` — `@ApiTags('Today')`, `@Controller('today')`.
 - `apps/api/src/today/today.service.ts` — `getToday(userId, now = new Date())`, `getInsight(userId)`.
 - `apps/api/src/today/local-date.ts` — `localDate(now: Date, timeZone: string): string` (`YYYY-MM-DD` via `Intl.DateTimeFormat`, no date library), `localDayBounds(dateLocal, timeZone): {start: Date, end: Date}`, `greetingFor(now, timeZone): 'morning'|'afternoon'|'evening'` (05–11 / 12–17 / else).
@@ -139,7 +142,7 @@ Term definitions (each is `weight × factor`, factor ∈ [0,1]):
 
 - `importance` = `importance / 5`.
 - `urgency` = `max(scheduleUrgency, deadlineUrgency)`; `scheduleUrgency = clamp(1 − hoursUntil(scheduledStart)/12, 0, 1)` (overdue → 1); `deadlineUrgency = outcomeTargetDate ? clamp(1 − daysUntil/7, 0, 1) : 0`.
-- `repeatedAvoidance` = `min(rescheduleCount, 3) / 3` — read from the live row; E02-04 carries `rescheduleCount` onto the new row it creates on every reschedule, so the count survives the move.
+- `repeatedAvoidance` = `min(rescheduleCount, 3) / 3` — read from the live row; E02-04 (#47) carries `rescheduleCount` onto the new row it creates on every reschedule, so the count survives the move.
 - `planRelevance` = `planIsActive ? 1 : planId ? 0.5 : 0` (quick-adds with no plan score 0 here, not excluded).
 - `domainBalance` = `modeFactor × (completedTodayByDomain[domain] === 0 ? 1 : 0.25)`, `modeFactor` GROW 1, RECOVER 0.75, MAINTAIN 0.5. PAUSE never reaches the scorer (excluded by the loader; the scorer throws if it sees one — a programming error, not a data state).
 - `contextualFit` = 1 if `now ∈ [scheduledStart − 60 min, (scheduledEnd ?? scheduledStart + chosenMinutes) + 60 min]`, else 0.
@@ -166,7 +169,7 @@ Rationale is a template per mode filled from the candidate (e.g. `DIAGNOSE`: "Yo
 
 Pre-rule: if a `STARTED` commitment exists today, it **is** the NBA (`interventionMode: 'ACT'`, rationale "You already started this — continue.", `durationMinutes` = its `timerMinutes` remainder); the scorer still runs for the rest so `confidence` is defined.
 
-Candidate loader (`candidate-loader.service.ts`): commitments of the user with `scheduledStart` inside `localDayBounds(dateLocal, timezone)` and status ∈ {PLANNED, READY, STARTED} (`RESCHEDULED` is terminal under E02-04; the live row a reschedule creates is the candidate on whichever day it now lands), joined to outcome (`whyItMatters`, `successDefinition`, `targetDate`), plan version (`isActive`), and the user's `domain_modes`; **domains in `PAUSE` are excluded from candidates but still returned as a domain card with `mode: 'PAUSE'`**. Timezone = `user_profiles.timezone ?? 'UTC'`. `availableMinutesRemaining = max(0, (weekdayMinutes ?? 60) − minutesCompletedToday)`. Yesterday's rows are never candidates (no catch-up debt, VISION §33; E11 closes them).
+Candidate loader (`candidate-loader.service.ts`): commitments of the user with `scheduledStart` inside `localDayBounds(dateLocal, timezone)` and status ∈ {PLANNED, READY, STARTED} (`RESCHEDULED` is terminal under E02-04 (#47); the live row a reschedule creates is the candidate on whichever day it now lands), joined to outcome (`whyItMatters`, `successDefinition`, `targetDate`), plan version (`isActive`), and the user's `domain_modes`; **domains in `PAUSE` are excluded from candidates but still returned as a domain card with `mode: 'PAUSE'`**. Timezone = `user_profiles.timezone ?? 'UTC'`. `availableMinutesRemaining = max(0, (weekdayMinutes ?? 60) − minutesCompletedToday)`. Yesterday's rows are never candidates (no catch-up debt, VISION §33; E11 closes them).
 
 Endpoints:
 
@@ -186,7 +189,7 @@ export const commitmentCardSchema = z.object({
   rescheduleCount: z.number().int(),
   startedAt: z.string().datetime().nullable(),
   timer: z.object({ activeSince: z.string().datetime().nullable(), activeSeconds: z.number().int(), timerMinutes: z.number().int().nullable() }).nullable(),
-  availableActions: z.array(commitmentActionEnum),   // computed from E02-04's matrix: ['start','complete',...]
+  availableActions: z.array(commitmentActionEnum),   // computed from E02-04 (#47)'s matrix: ['start','complete',...]
 });
 export const todayResponseSchema = z.object({
   greeting: z.string(),                    // "Good morning, Alex"
@@ -207,7 +210,7 @@ export const todayResponseSchema = z.object({
 });
 ```
 
-`GET /today` never calls AI. `GET /today/insight` (`today-insight.service.ts`): builds `instructions` from `coachingStyle` (E04-01) and `input = {dateLocal, checkIn, nba, domains: counts+modes, last7Days: {completed, missed, skipped}}`; calls `AiGatewayService.invoke({persona:'coach', userId, promptVersion:'today-insight.v1', schema: z.object({text: z.string().max(280)}), schemaName:'TodayInsight'})`; on `{ok:false}` (any code, including `no_user_key`/`ai_disabled`) returns the deterministic template (`apps/api/src/today/insight/insight-templates.ts`, keyed by intervention mode) with `source:'template'`. Cache: in-memory `Map<`${userId}:${dateLocal}`, TodayInsight>` in the service, evicted at the user's local midnight and on `POST /today/check-in` (E05-03 calls `TodayInsightService.invalidate(userId)`); documented as per-process. Timeout is the gateway's; the endpoint never blocks `GET /today`.
+`GET /today` never calls AI. `GET /today/insight` (`today-insight.service.ts`): builds `instructions` from `coachingStyle` (E04-01 (#100)) and `input = {dateLocal, checkIn, nba, domains: counts+modes, last7Days: {completed, missed, skipped}}`; calls `AiGatewayService.invoke({persona:'coach', userId, promptVersion:'today-insight.v1', schema: z.object({text: z.string().max(280)}), schemaName:'TodayInsight'})`; on `{ok:false}` (any code, including `no_user_key`/`ai_disabled`) returns the deterministic template (`apps/api/src/today/insight/insight-templates.ts`, keyed by intervention mode) with `source:'template'`. Cache: in-memory `Map<`${userId}:${dateLocal}`, TodayInsight>` in the service, evicted at the user's local midnight and on `POST /today/check-in` (E05-03 (#43) calls `TodayInsightService.invalidate(userId)`); documented as per-process. Timeout is the gateway's; the endpoint never blocks `GET /today`.
 
 Audit: none for reads. Log line on insight: `today.insight user=<id> source=<ai|template> latencyMs=<n>` (never the text).
 
@@ -215,7 +218,7 @@ Error codes: 401 unauthenticated; 500 only on programming errors (a PAUSE domain
 
 OpenAPI: add tag `Today` ("The signed-in user's day: next best action, domain cards, check-in, reflection and the coach insight.") to a new group `Product` in `apps/api/src/openapi/tags.ts` (the `openapi-document.spec.ts` assertion fails on an undeclared tag).
 
-**UI (frontend-dev)** — n/a (E05-04 consumes). Add the response types to `apps/web/src/types/index.ts` in E05-04.
+**UI (frontend-dev)** — n/a (E05-04 (#46) consumes). Add the response types to `apps/web/src/types/index.ts` in E05-04 (#46).
 
 **Tests (testing-dev)**
 
@@ -227,7 +230,7 @@ OpenAPI: add tag `Today` ("The signed-in user's day: next best action, domain ca
 - `apps/api/src/today/insight/today-insight.service.spec.ts` — `{ok:false}` from a stubbed gateway → template + `source:'template'`; second call same day does not invoke the gateway; `invalidate` forces a new call.
 - `apps/api/test/today/today.integration.spec.ts` (`createTestApp` + `overrideProviders: [{provide: AiGatewayService, useValue: stub}]`) — 401 without token; 200 shape validated with `todayResponseSchema.safeParse`; user B's commitments never appear for user A; `GET /today/insight` returns 200 with `source:'template'` when the stub rejects.
 
-**Docs (docs-dev)** — `docs/API.md` new section "Today"; CLAUDE.md "API Endpoints" adds `GET /api/today`, `GET /api/today/insight`; `docs/specs/today-and-nba.md` is created by E05-07 (this issue leaves a stub heading list in the PR description only).
+**Docs (docs-dev)** — `docs/API.md` new section "Today"; CLAUDE.md "API Endpoints" adds `GET /api/today`, `GET /api/today/insight`; `docs/specs/today-and-nba.md` is created by E05-07 (#55) (this issue leaves a stub heading list in the PR description only).
 
 #### Acceptance criteria
 
@@ -256,9 +259,9 @@ OpenAPI: add tag `Today` ("The signed-in user's day: next best action, domain ca
 
 1. Epic script steps 1–4 (seed three commitments), then `evopath api GET /api/today | jq '.data.nextBestAction'` → `commitmentId` of the WORK commitment, `version: "full"`, `durationMinutes: 25`, `interventionMode: "ACT"`, confidence between 0.2 and 0.95.
 2. `evopath api GET /api/today | jq '.data.domains[] | {domain, mode, n: (.commitments|length)}'` → three rows, one commitment each.
-3. Insert a `PAUSE` mode for HEALTH (`evopath api PUT /api/domain-modes/HEALTH --data '{"mode":"PAUSE"}'`, E02-04) → HEALTH card `mode: "PAUSE"`, its commitment absent from candidates (reschedule the WORK one two days out to see HEALTH would otherwise win — it does not).
+3. Insert a `PAUSE` mode for HEALTH (`evopath api PUT /api/domain-modes/HEALTH --data '{"mode":"PAUSE"}'`, E02-04 (#47)) → HEALTH card `mode: "PAUSE"`, its commitment absent from candidates (reschedule the WORK one two days out to see HEALTH would otherwise win — it does not).
 4. `evopath api GET /api/today/insight` → `{text, source:"ai"}` with fake-openai up; `docker compose stop fake-openai` → `source:"template"`, still 200.
-5. After E05-03: check in `LOW_ENERGY` → `version: "minimum"`, `durationMinutes: 5`, `interventionMode: "RECONNECT"`.
+5. After E05-03 (#43): check in `LOW_ENERGY` → `version: "minimum"`, `durationMinutes: 5`, `interventionMode: "RECONNECT"`.
 
 #### Out of scope
 
@@ -271,24 +274,24 @@ OpenAPI: add tag `Today` ("The signed-in user's day: next best action, domain ca
 - Zod v4 and `nestjs-zod` are the validation stack (see `apps/api/src/pat/dto/create-pat.dto.ts`); no class-validator.
 - Keep `scoreCandidate` free of Prisma, `Date.now()` and I/O — it receives `context.now`. The loader is the only place that touches the database.
 - Register `TodayModule` in `apps/api/src/app.module.ts`; register the `Today` tag or `test/openapi/openapi-document.spec.ts` fails.
-- Do not import the `daily_check_ins` Prisma delegate until E05-03 has merged; read `checkIn` through an injectable `CheckInReader` interface with a null implementation so E05-01 can land first.
-- The E02-04 matrix export name may differ from `availableActionsFor(commitment)`; use whatever E02-04 exports rather than re-deriving the matrix here.
+- Do not import the `daily_check_ins` Prisma delegate until E05-03 (#43) has merged; read `checkIn` through an injectable `CheckInReader` interface with a null implementation so E05-01 (#38) can land first.
+- The E02-04 (#47) matrix export name may differ from `availableActionsFor(commitment)`; use whatever E02-04 (#47) exports rather than re-deriving the matrix here.
 
 ---
 
-### E05-02 `feat(api): add commitment action endpoints with evidence and AI decomposition`
+### E05-02 `feat(api): add commitment action endpoints with evidence and AI decomposition` — #40
 
-**Part of epic:** E05 · **Blocked by:** E02-04 · **Component:** api, database · **Priority:** P0 · **Agents:** database-dev → backend-dev → testing-dev → docs-dev
+**Part of epic:** E05 · **Blocked by:** E02-04 (#47) · **Component:** api, database · **Priority:** P0 · **Agents:** database-dev → backend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-VISION §10 lists the verbs a work action must support (start for 5/10/20, continue, pause, reschedule, break this down) and PRD P4/§27 say starting is evidence distinct from completing. PRD §10.9 forbids inferring completion from plans, PRD §44 requires fallback versions to be usable and recorded as such (§101 Day 2: "Evidence: fallback completed"), and PRD §25 needs `rescheduleCount` to be a real counter. E02-04 exposes a generic `transition` endpoint; the UI and later epics need intent-named actions that also write evidence, persist timer state, and audit.
+VISION §10 lists the verbs a work action must support (start for 5/10/20, continue, pause, reschedule, break this down) and PRD P4/§27 say starting is evidence distinct from completing. PRD §10.9 forbids inferring completion from plans, PRD §44 requires fallback versions to be usable and recorded as such (§101 Day 2: "Evidence: fallback completed"), and PRD §25 needs `rescheduleCount` to be a real counter. E02-04 (#47) exposes a generic `transition` endpoint; the UI and later epics need intent-named actions that also write evidence, persist timer state, and audit.
 
 #### Proposed solution
 
-Nine action endpoints under `/commitments/:id/actions/*` in the existing commitments module, each a thin orchestration over E02-04's transition matrix plus evidence, timer fields and audit; one AI-backed proposal endpoint (`decompose`) that mutates nothing until `decompose/apply`.
+Nine action endpoints under `/commitments/:id/actions/*` in the existing commitments module, each a thin orchestration over E02-04 (#47)'s transition matrix plus evidence, timer fields and audit; one AI-backed proposal endpoint (`decompose`) that mutates nothing until `decompose/apply`.
 
-**Data (database-dev)** — migration `add_commitment_execution_fields` on `Commitment` (skip any column E02-01 already created with the same meaning):
+**Data (database-dev)** — migration `add_commitment_execution_fields` on `Commitment` (skip any column E02-01 (#36) already created with the same meaning):
 
 | Field | Type | Notes |
 |---|---|---|
@@ -303,11 +306,11 @@ Nine action endpoints under `/commitments/:id/actions/*` in the existing commitm
 | `decomposedFromId` | `String? @db.Uuid` | self-relation `Commitment.decomposedFrom`, `onDelete: SetNull` |
 | `skipNote` | `String?` | free text from `skip` (the enum goes in E02's `skipReason`) |
 
-Index `@@index([userId, status, activeSince])` (the "any STARTED commitment" lookup in E05-01). Seed: n/a.
+Index `@@index([userId, status, activeSince])` (the "any STARTED commitment" lookup in E05-01 (#38)). Seed: n/a.
 
 **API (backend-dev)**
 
-Files: `apps/api/src/commitments/actions/commitment-actions.controller.ts` (new, `@ApiTags('Commitments')` — reuse E02-04's tag), `commitment-actions.service.ts` (new), `commitment-timer.ts` (new, pure: `elapsedSeconds({activeSince, activeSeconds}, now)`), `dto/commitment-action.dtos.ts` (new, one Zod schema per body), `decomposition/decomposition.service.ts` (new), `decomposition/decomposition.schema.ts` (new).
+Files: `apps/api/src/commitments/actions/commitment-actions.controller.ts` (new, `@ApiTags('Commitments')` — reuse E02-04 (#47)'s tag), `commitment-actions.service.ts` (new), `commitment-timer.ts` (new, pure: `elapsedSeconds({activeSince, activeSeconds}, now)`), `dto/commitment-action.dtos.ts` (new, one Zod schema per body), `decomposition/decomposition.service.ts` (new), `decomposition/decomposition.schema.ts` (new).
 
 | Method | Path | Permission / guard | Request | Response |
 |---|---|---|---|---|
@@ -332,18 +335,18 @@ Semantics (`CommitmentActionsService`; every method loads the row with `where: {
 - **complete** — allowed from `PLANNED | READY | STARTED` (matrix); if running, folds elapsed into `activeSeconds`; `completedAt = now`, `minutesSpent = body.minutesSpent ?? round(activeSeconds/60)`, `versionUsed ??= FULL`. Evidence `{source: USER_LOG, type: 'completed', quantitativeValue: minutesSpent, qualitativeValue: {notes, versionUsed, fallbackUsed: versionUsed !== 'FULL'}}`. Audit `commitment:complete`.
 - **partial** — same as complete but → `PARTIALLY_COMPLETED`, evidence type `partially_completed`. Audit `commitment:partial`.
 - **fallback** — requires the named version to exist (400 `VERSION_NOT_DEFINED` otherwise); sets `versionUsed`; no status change; evidence `{source: APP_FLOW, type: 'fallback_selected', qualitativeValue: {version, fallbackUsed: true}}`. Audit `commitment:fallback`.
-- **reschedule** — delegates to E02-04's `CommitmentsService.transition(id, {to: 'RESCHEDULED', rescheduleTo: body.scheduledStart})` (see Notes); from `PLANNED | READY` (a `STARTED` row is 409 `ALREADY_STARTED`, checked before the matrix). Per E02-04 the original row closes as `RESCHEDULED` (terminal; it keeps its evidence) and a **new** `PLANNED` commitment is created copying domain/title/importance/commitmentType/outcomeId/planVersionId/routineId/versions, with `scheduledStart = body.scheduledStart`, `rescheduledFromId = original.id` and `rescheduleCount = original.rescheduleCount + 1`; when `body.scheduledEnd` is given it is set on the new row (overriding the duration E02-04 derives). The response is the `CommitmentCard` of the **new** row. Evidence `{source: APP_FLOW, type: 'rescheduled', qualitativeValue: {from: original.scheduledStart, to: scheduledStart, count: newRow.rescheduleCount}}` is written on the **new** row (the live intention carries its own move history; the original keeps only what happened before the move). Audit `commitment:reschedule` with `meta {from, to, rescheduleCount}` (unchanged).
+- **reschedule** — delegates to E02-04 (#47)'s `CommitmentsService.transition(id, {to: 'RESCHEDULED', rescheduleTo: body.scheduledStart})` (see Notes); from `PLANNED | READY` (a `STARTED` row is 409 `ALREADY_STARTED`, checked before the matrix). Per E02-04 (#47) the original row closes as `RESCHEDULED` (terminal; it keeps its evidence) and a **new** `PLANNED` commitment is created copying domain/title/importance/commitmentType/outcomeId/planVersionId/routineId/versions, with `scheduledStart = body.scheduledStart`, `rescheduledFromId = original.id` and `rescheduleCount = original.rescheduleCount + 1`; when `body.scheduledEnd` is given it is set on the new row (overriding the duration E02-04 (#47) derives). The response is the `CommitmentCard` of the **new** row. Evidence `{source: APP_FLOW, type: 'rescheduled', qualitativeValue: {from: original.scheduledStart, to: scheduledStart, count: newRow.rescheduleCount}}` is written on the **new** row (the live intention carries its own move history; the original keeps only what happened before the move). Audit `commitment:reschedule` with `meta {from, to, rescheduleCount}` (unchanged).
 - **skip** — → `SKIPPED`; `skipReason = reason`, `skipNote = text`; creates a `Reflection {relatedType: 'commitment', relatedId: id, userText: text, frictionTags: [reason]}` (a failed plan is information, P5) — no evidence row (a skip is not execution). Audit `commitment:skip` with `meta {reason}` (never the text).
 - **decompose** — `DecompositionService.propose(userId, commitment, hint)`: `AiGatewayService.invoke({persona:'coach', promptVersion:'decompose.v1', instructions: <coachingStyle-aware, "3–5 concrete steps, first step ≤ 10 minutes, no new goals">, input: {title, domain, versions, whyItMatters, rescheduleCount, hint}, schema: decompositionProposalSchema, schemaName: 'DecompositionProposal'})`. Schema: `{ steps: z.array(z.object({title: z.string().min(1).max(120), minutes: z.number().int().min(1).max(60)})).min(1).max(5), firstStep: z.object({title, minutes: int 1..15}), message: z.string().max(240), source: z.enum(['ai','template']) }`. On `{ok:false}` return the deterministic fallback `{steps: [{title: 'Open it and do the first 5 minutes', minutes: 5}], firstStep: same, message: 'The coach is unavailable — start with 5 minutes instead.', source: 'template'}` with HTTP 200. **Nothing is written.** Log `commitment.decompose source=<ai|template>`.
 - **decompose/apply** — validates the posted proposal with the same schema, creates a new `Commitment` `{userId, domain, outcomeId, planId (copied), title: firstStep.title, scheduledStart: now, fullVersion: {title: firstStep.title, minutes: firstStep.minutes}, minimumVersion: {title: firstStep.title, minutes: min(5, firstStep.minutes)}, steps, decomposedFromId: id, status: PLANNED, importance (copied)}`; the original is left untouched (it remains in the plan; the small one is today's move). Audit `commitment:decompose_apply` with `meta {sourceCommitmentId, stepCount}`.
 
-`CommitmentCard` is E05-01's `commitmentCardSchema`; put the mapper in `apps/api/src/commitments/commitment-card.mapper.ts` so E05-01 and this issue share it (whichever merges first creates it).
+`CommitmentCard` is E05-01 (#38)'s `commitmentCardSchema`; put the mapper in `apps/api/src/commitments/commitment-card.mapper.ts` so E05-01 (#38) and this issue share it (whichever merges first creates it).
 
 Error codes: 404 (unknown/foreign id), 409 `INVALID_TRANSITION` (from the matrix, message names current status and action), 409 `ALREADY_STARTED`, 400 `VERSION_NOT_DEFINED`, 400 Zod validation.
 
-OpenAPI: reuse tag `Commitments` (E02-04); add `@ApiOperation` summaries per action.
+OpenAPI: reuse tag `Commitments` (E02-04 (#47)); add `@ApiOperation` summaries per action.
 
-**UI (frontend-dev)** — n/a (E05-04/E05-05 consume).
+**UI (frontend-dev)** — n/a (E05-04 (#46)/E05-05 (#48) consume).
 
 **Tests (testing-dev)**
 
@@ -352,7 +355,7 @@ OpenAPI: reuse tag `Commitments` (E02-04); add `@ApiOperation` summaries per act
 - `apps/api/src/commitments/decomposition/decomposition.schema.spec.ts` — rejects 6 steps, a 20-minute first step, empty titles.
 - `apps/api/test/commitments/commitment-actions.integration.spec.ts` — full app with `AiGatewayService` stub: start → complete produces two evidence rows in order; reschedule twice (second on the returned id) → live row `rescheduleCount 2` with `rescheduledFromId` set, both moved-from rows `RESCHEDULED`; user B gets 404 on user A's id for every route; audit rows `commitment:<action>` exist with `targetType 'commitment'`; response bodies validate against `commitmentCardSchema`.
 
-**Docs (docs-dev)** — `docs/API.md` "Commitment actions" subsection under the E02 Commitments section; CLAUDE.md "API Endpoints" adds the ten routes and the `Database Tables` line for `commitments` gains "(+ execution fields, E05-02)".
+**Docs (docs-dev)** — `docs/API.md` "Commitment actions" subsection under the E02 Commitments section; CLAUDE.md "API Endpoints" adds the ten routes and the `Database Tables` line for `commitments` gains "(+ execution fields, E05-02 (#40))".
 
 #### Acceptance criteria
 
@@ -389,13 +392,13 @@ OpenAPI: reuse tag `Commitments` (E02-04); add `@ApiOperation` summaries per act
 #### Out of scope
 
 - Focus-session rows and distraction notes (E07); workout runner start (E09) — HEALTH commitments use this generic start.
-- Bulk actions, undo, editing a commitment's text (E05-06 uses E02-04's `PATCH /commitments/:id`).
+- Bulk actions, undo, editing a commitment's text (E05-06 (#52) uses E02-04 (#47)'s `PATCH /commitments/:id`).
 - Notifications on completion (E12).
 
 #### Notes for the implementing agent
 
-- **Reschedule follows E02-04's new-row model** (decision): `POST …/actions/reschedule` is a thin wrapper over `transition {to: 'RESCHEDULED', rescheduleTo}` and does not re-implement it. E02-04 is the single owner of the transition matrix, in which `RESCHEDULED` is terminal with zero exits, so a moved commitment is closed and a fresh `PLANNED` row carries the intention forward. `rescheduleCount` travels with it (`original.rescheduleCount + 1`), so E07's avoidance detection and the E05-01 scorer read it from the live row exactly as the PRD intends, while the closed rows stay as terminal history (PRD §103: evidence outlives its commitment; the `RESCHEDULED` rows are the moved-from record). The `rescheduled` evidence row is written on the new row. Consequences: `RESCHEDULED` is never a candidate, never startable and never editable; the E05-01 loader and the `CandidateCommitment` status union list `PLANNED | READY | STARTED` only; the UI must use the returned card's `id` after a reschedule (the original id is now terminal).
-- Paused = `STARTED` with `activeSince: null`; do not add a PAUSED status (PRD §10.7 is the enum, E02-01 owns it).
+- **Reschedule follows E02-04 (#47)'s new-row model** (decision): `POST …/actions/reschedule` is a thin wrapper over `transition {to: 'RESCHEDULED', rescheduleTo}` and does not re-implement it. E02-04 (#47) is the single owner of the transition matrix, in which `RESCHEDULED` is terminal with zero exits, so a moved commitment is closed and a fresh `PLANNED` row carries the intention forward. `rescheduleCount` travels with it (`original.rescheduleCount + 1`), so E07's avoidance detection and the E05-01 (#38) scorer read it from the live row exactly as the PRD intends, while the closed rows stay as terminal history (PRD §103: evidence outlives its commitment; the `RESCHEDULED` rows are the moved-from record). The `rescheduled` evidence row is written on the new row. Consequences: `RESCHEDULED` is never a candidate, never startable and never editable; the E05-01 (#38) loader and the `CandidateCommitment` status union list `PLANNED | READY | STARTED` only; the UI must use the returned card's `id` after a reschedule (the original id is now terminal).
+- Paused = `STARTED` with `activeSince: null`; do not add a PAUSED status (PRD §10.7 is the enum, E02-01 (#36) owns it).
 - Call `AiGatewayService.invoke` outside any `$transaction`; it never throws for provider errors but check `ok` before touching `output`.
 - Audit with direct `prisma.auditEvent.create` as in `apps/api/src/email/email-settings.service.ts`; `targetType: 'commitment'`.
 - Zod v4 + `nestjs-zod` DTOs; Fastify (no Express `res`). Use `@HttpCode(HttpStatus.OK)` on the POST actions and `CREATED` on `decompose/apply`.
@@ -403,17 +406,17 @@ OpenAPI: reuse tag `Commitments` (E02-04); add `@ApiOperation` summaries per act
 
 ---
 
-### E05-03 `feat(api): add daily check-in and end-of-day reflection endpoints`
+### E05-03 `feat(api): add daily check-in and end-of-day reflection endpoints` — #43
 
-**Part of epic:** E05 · **Blocked by:** E02-04, E04-01 · **Component:** api, database · **Priority:** P0 · **Agents:** database-dev → backend-dev → testing-dev → docs-dev
+**Part of epic:** E05 · **Blocked by:** E02-04 (#47), E04-01 (#100) · **Component:** api, database · **Priority:** P0 · **Agents:** database-dev → backend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-PRD §73: an optional one-tap "How does today feel?" (Normal / Packed / Low energy / Unexpected problem) that "can alter suggested action size" — the E05-01 scorer needs a persisted per-day answer. PRD §74: an optional end-of-day reflection with quick options that "creates structured friction data" for the weekly review (E10) and pattern analysis (E06). Both must stay brief ("avoid daily emotional interrogation").
+PRD §73: an optional one-tap "How does today feel?" (Normal / Packed / Low energy / Unexpected problem) that "can alter suggested action size" — the E05-01 (#38) scorer needs a persisted per-day answer. PRD §74: an optional end-of-day reflection with quick options that "creates structured friction data" for the weekly review (E10) and pattern analysis (E06). Both must stay brief ("avoid daily emotional interrogation").
 
 #### Proposed solution
 
-A `daily_check_ins` table (one row per user per local day, upserted) and two endpoints in the `today` module; reflections reuse E02-01's `Reflection` model with `relatedType: 'day'`.
+A `daily_check_ins` table (one row per user per local day, upserted) and two endpoints in the `today` module; reflections reuse E02-01 (#36)'s `Reflection` model with `relatedType: 'day'`.
 
 **Data (database-dev)** — migration `add_daily_check_ins`:
 
@@ -433,7 +436,7 @@ model DailyCheckIn {
 }
 ```
 
-`Reflection` (E02-01) must carry `relatedType String`, `relatedId String`, `userText String?`, `frictionTags String[]`; if E02-01 named them differently, adapt the service — do not add a second reflections table. Seed: n/a.
+`Reflection` (E02-01 (#36)) must carry `relatedType String`, `relatedId String`, `userText String?`, `frictionTags String[]`; if E02-01 (#36) named them differently, adapt the service — do not add a second reflections table. Seed: n/a.
 
 **API (backend-dev)** — files: `apps/api/src/today/check-in/check-in.service.ts` (new), `apps/api/src/today/reflection/day-reflection.service.ts` (new), `apps/api/src/today/dto/check-in.dto.ts`, `dto/day-reflection.dto.ts` (new); routes added to `today.controller.ts`.
 
@@ -444,12 +447,12 @@ model DailyCheckIn {
 | POST | `/api/today/reflection` | `@Auth()` | `{ quickOption: 'PLAN_WORKED' \| 'TOO_MUCH' \| 'BAD_TIMING' \| 'UNEXPECTED_CONFLICT' \| 'LOW_ENERGY' \| 'AVOIDED' \| 'OTHER', text?: string ≤ 1000 }` | 201 `{ id, dateLocal, quickOption, text, createdAt }` |
 | GET | `/api/today/reflection` | `@Auth()` | — | 200 today's latest day reflection or `null` |
 
-- `CheckInService.upsert(userId, feel, now)`: `dateLocal = localDate(now, timezone)` (E05-01 helper); `prisma.dailyCheckIn.upsert` on `(userId, dateLocal)`; then `TodayInsightService.invalidate(userId)`; audit `today:check_in` `meta {dateLocal, feel}`. Implements E05-01's `CheckInReader` (`readForDate(userId, dateLocal)`), replacing the null implementation.
+- `CheckInService.upsert(userId, feel, now)`: `dateLocal = localDate(now, timezone)` (E05-01 (#38) helper); `prisma.dailyCheckIn.upsert` on `(userId, dateLocal)`; then `TodayInsightService.invalidate(userId)`; audit `today:check_in` `meta {dateLocal, feel}`. Implements E05-01 (#38)'s `CheckInReader` (`readForDate(userId, dateLocal)`), replacing the null implementation.
 - `DayReflectionService.create(userId, dto, now)`: `prisma.reflection.create({relatedType: 'day', relatedId: dateLocal, userText: text, frictionTags: [quickOption]})`; audit `today:reflection` `meta {dateLocal, quickOption}` (never the text). Multiple reflections per day are allowed; `GET` returns the latest.
 
-Error codes: 400 Zod; 401. OpenAPI tag `Today` (E05-01).
+Error codes: 400 Zod; 401. OpenAPI tag `Today` (E05-01 (#38)).
 
-**UI (frontend-dev)** — n/a (E05-04 renders the chips and the prompt).
+**UI (frontend-dev)** — n/a (E05-04 (#46) renders the chips and the prompt).
 
 **Tests (testing-dev)**
 
@@ -492,37 +495,37 @@ Error codes: 400 Zod; 401. OpenAPI tag `Today` (E05-01).
 
 - Mood / perceived difficulty / satisfaction fields (PRD §10.10 optional; not in V1 UI).
 - Reflection prompts by notification (E12 N8/N9) and weekly aggregation (E10).
-- Per-commitment reflections (E05-02 skip creates those).
+- Per-commitment reflections (E05-02 (#40) skip creates those).
 
 #### Notes for the implementing agent
 
 - Store `dateLocal` as a `YYYY-MM-DD` string, not `@db.Date`: it is a label in the user's timezone, and Prisma's `Date` mapping would shift it through UTC.
-- Reuse `localDate` from `apps/api/src/today/local-date.ts` (E05-01); if E05-03 lands first, create that helper here with the same signature.
-- `PLAN_WORKED` is a valid reflection option but not a `SkipReason` (E05-02); keep the two enums separate.
+- Reuse `localDate` from `apps/api/src/today/local-date.ts` (E05-01 (#38)); if E05-03 (#43) lands first, create that helper here with the same signature.
+- `PLAN_WORKED` is a valid reflection option but not a `SkipReason` (E05-02 (#40)); keep the two enums separate.
 
 ---
 
-### E05-04 `feat(web): add Today screen with next-best-action and domain cards`
+### E05-04 `feat(web): add Today screen with next-best-action and domain cards` — #46
 
-**Part of epic:** E05 · **Blocked by:** E05-01, E05-02, E05-03, E02-05 · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev → docs-dev
+**Part of epic:** E05 · **Blocked by:** E05-01 (#38), E05-02 (#40), E05-03 (#43), E02-05 (#51) · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-VISION §27 ("Here is your path today") and PRD §12 define Today as the product's primary surface: greeting and state, one Next Best Action with `Start` and `Make it smaller`, Work/Family/Health cards, coach insight, quick add. PRD §120 requires the screen to render fully when AI is down, PRD §123 requires mobile-first, and E12 will deep-link into it (`/today?commitment=<id>&action=start`). Today `/` is E02-05's placeholder.
+VISION §27 ("Here is your path today") and PRD §12 define Today as the product's primary surface: greeting and state, one Next Best Action with `Start` and `Make it smaller`, Work/Family/Health cards, coach insight, quick add. PRD §120 requires the screen to render fully when AI is down, PRD §123 requires mobile-first, and E12 will deep-link into it (`/today?commitment=<id>&action=start`). Today `/` is E02-05 (#51)'s placeholder.
 
 #### Proposed solution
 
-`TodayPage` at `/` composed of small components over `GET /today`, with the insight loaded separately after first paint, per-commitment action menus wired to E05-02, check-in chips and an evening reflection prompt wired to E05-03, and a deep-link handler.
+`TodayPage` at `/` composed of small components over `GET /today`, with the insight loaded separately after first paint, per-commitment action menus wired to E05-02 (#40), check-in chips and an evening reflection prompt wired to E05-03 (#43), and a deep-link handler.
 
 **Data (database-dev)** — n/a.
 
-**API (backend-dev)** — n/a (consumes E05-01/02/03).
+**API (backend-dev)** — n/a (consumes E05-01 (#38)/02/03).
 
 **UI (frontend-dev)**
 
-Routes (`apps/web/src/App.tsx`): `<Route path="/" element={<TodayPage />} />` replaces the E02-05 placeholder (delete `apps/web/src/pages/HomePage.tsx`, `apps/web/src/components/home/QuickActions.tsx` and their tests if E02-05 left them). `/` stays owned by the `today` destination in `DESTINATIONS` (E02-05); no registry change. Deep link: `TodayPage` reads `useSearchParams()` on mount — `action=start` → `navigate('/start/<id>', {replace: true})`; `action ∈ {complete, fallback, skip, reschedule}` → opens that dialog on the matching card; unknown id → snackbar "That commitment is no longer on today's path"; params are removed with `setSearchParams({}, {replace: true})` after handling.
+Routes (`apps/web/src/App.tsx`): `<Route path="/" element={<TodayPage />} />` replaces the E02-05 (#51) placeholder (delete `apps/web/src/pages/HomePage.tsx`, `apps/web/src/components/home/QuickActions.tsx` and their tests if E02-05 (#51) left them). `/` stays owned by the `today` destination in `DESTINATIONS` (E02-05 (#51)); no registry change. Deep link: `TodayPage` reads `useSearchParams()` on mount — `action=start` → `navigate('/start/<id>', {replace: true})`; `action ∈ {complete, fallback, skip, reschedule}` → opens that dialog on the matching card; unknown id → snackbar "That commitment is no longer on today's path"; params are removed with `setSearchParams({}, {replace: true})` after handling.
 
-Types (`apps/web/src/types/index.ts`): `Domain`, `DomainMode`, `CommitmentStatus`, `CommitmentVersion`, `CommitmentCard`, `NextBestAction`, `InterventionMode`, `TodayResponse`, `TodayInsight`, `CheckInFeel`, `DailyCheckIn`, `ReflectionQuickOption`, `DayReflection`, `DecompositionProposal`, `SkipReason` — mirroring the E05-01/02/03 Zod schemas field for field.
+Types (`apps/web/src/types/index.ts`): `Domain`, `DomainMode`, `CommitmentStatus`, `CommitmentVersion`, `CommitmentCard`, `NextBestAction`, `InterventionMode`, `TodayResponse`, `TodayInsight`, `CheckInFeel`, `DailyCheckIn`, `ReflectionQuickOption`, `DayReflection`, `DecompositionProposal`, `SkipReason` — mirroring the E05-01 (#38)/02/03 Zod schemas field for field.
 
 `apps/web/src/services/api.ts` functions: `getToday()`, `getTodayInsight()`, `getCheckIn()`, `postCheckIn(feel)`, `postDayReflection({quickOption, text})`, `startCommitment(id, {minutes?})`, `pauseCommitment(id)`, `continueCommitment(id, {extraMinutes?})`, `completeCommitment(id, body)`, `partialCommitment(id, body)`, `useCommitmentFallback(id, version)`, `rescheduleCommitment(id, {scheduledStart, scheduledEnd?})`, `skipCommitment(id, {reason, text?})`, `proposeDecomposition(id, {hint?})`, `applyDecomposition(id, proposal)` — all through the existing `api` `ApiService` (no raw `fetch`).
 
@@ -530,7 +533,7 @@ Hooks: `apps/web/src/hooks/useToday.ts` (`{today, loading, error, refresh}`; ref
 
 Components (`apps/web/src/components/today/`): `TodayGreeting.tsx` (`{greeting, stateLine}`), `CheckInChips.tsx` (`{value, onChange}` — four MUI `Chip`s in a `role="radiogroup"`), `NextBestActionCard.tsx` (`{nba, onStart, onMakeSmaller, onFallback}` — title, `durationMinutes · domain`, rationale, primary `Button` "Start N min", secondary "Make it smaller"; when `interventionMode === 'RECOVER'` primary label is "Restart"; when `nba` is null renders "Nothing planned — add something small" with the quick-add trigger), `DomainCard.tsx` (`{domain, mode, commitments, onAction}` — header with mode tag when not GROW, `CommitmentRow` list, empty copy per domain), `CommitmentRow.tsx` (`{commitment, onAction}` — status icon, title, time, version chip when `versionUsed !== FULL`, `rescheduleCount` badge ≥ 1, primary action button from `availableActions[0]`, ⋯ `CommitmentActionsMenu`), `CommitmentActionsMenu.tsx` (renders only the `availableActions` the API sent), `CoachInsightCard.tsx` (`{insight, loading}` — skeleton → text; caption "template" when `source === 'template'`), `dialogs/CompleteDialog.tsx` (notes, minutes; Complete / Partially), `dialogs/RescheduleDialog.tsx` (MUI `DateTimePicker`, default tomorrow same time), `dialogs/SkipDialog.tsx` (reason radio from `SkipReason`, text), `dialogs/MakeItSmallerDialog.tsx` (proposal steps as editable list, first step highlighted, `Use this` → apply → navigate to `/start/<newId>`; template fallback shows "Start 5 min"), `ReflectionPrompt.tsx` (shown when local hour ≥ 18 or `?reflect=1`; seven quick-option chips + optional text; hidden after submit for the day via `localStorage` key `today.reflection.<dateLocal>`).
 
-Page: `apps/web/src/pages/TodayPage.tsx` — `Container maxWidth="lg"`; `Grid` `size={{ xs: 12, md: 5 }}` for greeting + chips + NBA + insight, `size={{ xs: 12, md: 7 }}` for the three domain cards (single column below `md`; the `sm` boundary is untouched — it belongs to the shell's five gates). The quick-add FAB (E05-06) is positioned `bottom: { xs: 80, sm: 24 }` so it clears `BottomNav` on phones.
+Page: `apps/web/src/pages/TodayPage.tsx` — `Container maxWidth="lg"`; `Grid` `size={{ xs: 12, md: 5 }}` for greeting + chips + NBA + insight, `size={{ xs: 12, md: 7 }}` for the three domain cards (single column below `md`; the `sm` boundary is untouched — it belongs to the shell's five gates). The quick-add FAB (E05-06 (#52)) is positioned `bottom: { xs: 80, sm: 24 }` so it clears `BottomNav` on phones.
 
 Responsive: no new `down('sm')`/`up('sm')` gates; the page uses `md` for its own two-column layout only. Visual harness: add a `today` scene to `apps/web/visual/main.tsx` with a fake `TodayResponse` and regenerate baselines in the pinned Playwright container.
 
@@ -546,7 +549,7 @@ A11y: NBA card is a `section` with `aria-labelledby`; each domain card `aria-lab
 - `apps/web/src/__tests__/hooks/useToday.test.ts`, `useCommitmentActions.test.ts` (optimistic update + rollback on 409).
 - `apps/web/src/__tests__/config/destinations.test.ts` — still passes (`/` owned by `today`).
 
-**Docs (docs-dev)** — `docs/specs/today-and-nba.md` UI section (E05-07 owns the file; this issue adds the component map to the PR); CLAUDE.md "Service URLs" unchanged.
+**Docs (docs-dev)** — `docs/specs/today-and-nba.md` UI section (E05-07 (#55) owns the file; this issue adds the component map to the PR); CLAUDE.md "Service URLs" unchanged.
 
 #### Acceptance criteria
 
@@ -578,7 +581,7 @@ A11y: NBA card is a `section` with `aria-labelledby`; each domain card `aria-lab
 
 #### Out of scope
 
-- Start flow screen (E05-05); quick-add sheet content (E05-06 — this issue only reserves the FAB slot).
+- Start flow screen (E05-05 (#48)); quick-add sheet content (E05-06 (#52) — this issue only reserves the FAB slot).
 - Momentum summary (E11) — render nothing when `momentum` is null; no placeholder card.
 - Family-specific copy ("I'm in") and workout cards (E08/E09).
 
@@ -591,13 +594,13 @@ A11y: NBA card is a `section` with `aria-labelledby`; each domain card `aria-lab
 
 ---
 
-### E05-05 `feat(web): add full-screen Start flow with server-derived timer`
+### E05-05 `feat(web): add full-screen Start flow with server-derived timer` — #48
 
-**Part of epic:** E05 · **Blocked by:** E05-02 · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev → docs-dev
+**Part of epic:** E05 · **Blocked by:** E05-02 (#40) · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-VISION §10: Start is "one of the most important buttons" and must support 5/10/20-minute starts, continue, pause; PRD §27 specifies the Start screen (title, why it matters, timer, one-sentence instruction, stop/continue, "Continue another 15 minutes?"); PRD §28 lists 5/10/20/custom, silent timer, continuation, completion evidence. PRD §11 allows execution screens to replace bottom navigation. A timer that lives only in React state dies on reload — E05-02 persists `startedAt`/`activeSince`/`activeSeconds` so the client can derive it.
+VISION §10: Start is "one of the most important buttons" and must support 5/10/20-minute starts, continue, pause; PRD §27 specifies the Start screen (title, why it matters, timer, one-sentence instruction, stop/continue, "Continue another 15 minutes?"); PRD §28 lists 5/10/20/custom, silent timer, continuation, completion evidence. PRD §11 allows execution screens to replace bottom navigation. A timer that lives only in React state dies on reload — E05-02 (#40) persists `startedAt`/`activeSince`/`activeSeconds` so the client can derive it.
 
 #### Proposed solution
 
@@ -605,7 +608,7 @@ VISION §10: Start is "one of the most important buttons" and must support 5/10/
 
 **Data (database-dev)** — n/a.
 
-**API (backend-dev)** — n/a; uses E05-02 `start`/`pause`/`continue`/`complete`/`partial` and E02-04 `GET /commitments/:id` (must return `CommitmentCard` fields incl. `timer`, `steps`, and `outcome: {whyItMatters, successDefinition}` — add the `outcome` include to E02-04's detail endpoint if missing, as a one-line change in this issue's backend step).
+**API (backend-dev)** — n/a; uses E05-02 (#40) `start`/`pause`/`continue`/`complete`/`partial` and E02-04 (#47) `GET /commitments/:id` (must return `CommitmentCard` fields incl. `timer`, `steps`, and `outcome: {whyItMatters, successDefinition}` — add the `outcome` include to E02-04 (#47)'s detail endpoint if missing, as a one-line change in this issue's backend step).
 
 **UI (frontend-dev)**
 
@@ -614,10 +617,10 @@ Route (`apps/web/src/App.tsx`): `<Route path="/start/:commitmentId" element={<St
 Page `apps/web/src/pages/StartFlowPage.tsx`: loads the commitment; if `status` is not `STARTED`, shows the pre-start view; otherwise the running view.
 
 - Pre-start view: title; "Why it matters" (`outcome.whyItMatters`, fallback `successDefinition`, hidden when both empty); `TimerPicker` (`5 / 10 / 20 / Custom` `ToggleButtonGroup`, custom = number input 1–180, default = the version's minutes when it is one of the presets, else 10); `StepsList` when `steps` is non-empty (else the version title as the one-sentence instruction); CTA `Begin MM:00` → `startCommitment(id, {minutes})`.
-- Running view: large `MM:SS` countdown (`aria-live="polite"` every 60 s, not every tick), `Pause`/`Continue`, `Done for now` (opens `CompleteDialog` from E05-04 → `complete` or `partial`), optional distraction note textarea (kept in component state; posted as `notes` on completion). At 00:00: prompt "Continue another 15?" → `continueCommitment(id, {extraMinutes: 15})` or `Done for now`.
+- Running view: large `MM:SS` countdown (`aria-live="polite"` every 60 s, not every tick), `Pause`/`Continue`, `Done for now` (opens `CompleteDialog` from E05-04 (#46) → `complete` or `partial`), optional distraction note textarea (kept in component state; posted as `notes` on completion). At 00:00: prompt "Continue another 15?" → `continueCommitment(id, {extraMinutes: 15})` or `Done for now`.
 - Timer derivation (`apps/web/src/hooks/useStartSession.ts` + pure `apps/web/src/utils/commitmentTimer.ts`): `elapsed = activeSeconds + (activeSince ? (now − activeSince) : 0)`, `remaining = timerMinutes*60 − elapsed`; `now` ticks locally with `setInterval(1000)` but the anchor is the server's `activeSince`; on mount/reload/focus the hook refetches the commitment and re-anchors, so a reload never resets the countdown. Clock skew guard: if `activeSince` is in the future by > 5 s, anchor at local `now` and log a console warning.
 - Leaving the page (browser back) does not pause the timer (server state is authoritative; Today shows "Continue" on the row). A `beforeunload` handler is not added.
-- Completion navigates to `/` with a snackbar "Recorded: N minutes on <title>" (evidence is written by E05-02; the client shows nothing it did not receive back).
+- Completion navigates to `/` with a snackbar "Recorded: N minutes on <title>" (evidence is written by E05-02 (#40); the client shows nothing it did not receive back).
 
 Responsive: full-viewport `Box` with `minHeight: 100dvh`, content max-width 600px centered; timer digits scale with `clamp(3rem, 12vw, 6rem)`. No shell gates involved. Wake lock: `navigator.wakeLock?.request('screen')` while running, released on pause/unmount (feature-detected, no error surfaced).
 
@@ -629,7 +632,7 @@ A11y: `role="timer"` on the countdown; buttons ≥ 44px; `Escape` does nothing d
 - `apps/web/src/__tests__/pages/StartFlowPage.test.tsx` (fake timers + MSW) — pre-start shows why-it-matters and steps; `Begin 10:00` posts `{minutes:10}`; countdown advances with `vi.advanceTimersByTime`; remount with the same MSW state resumes at the right remaining time (the reload case); `Pause` posts and freezes; at 00:00 prompt appears; `Continue another 15` posts `{extraMinutes:15}`; `Done for now` → complete → navigates to `/`; 404 commitment shows "not found" with a link to `/`.
 - `apps/web/src/__tests__/config/destinations.test.ts` — `/start/:commitmentId` is deliberately unowned.
 
-**Docs (docs-dev)** — `docs/specs/today-and-nba.md` "Start flow" section (via E05-07); CLAUDE.md nothing.
+**Docs (docs-dev)** — `docs/specs/today-and-nba.md` "Start flow" section (via E05-07 (#55)); CLAUDE.md nothing.
 
 #### Acceptance criteria
 
@@ -673,40 +676,40 @@ A11y: `role="timer"` on the countdown; buttons ≥ 44px; `Escape` does nothing d
 
 ---
 
-### E05-06 `feat(web): add quick-add sheet and commitment editor`
+### E05-06 `feat(web): add quick-add sheet and commitment editor` — #52
 
-**Part of epic:** E05 · **Blocked by:** E02-04, E05-04 · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev → docs-dev
+**Part of epic:** E05 · **Blocked by:** E02-04 (#47), E05-04 (#46) · **Component:** web · **Priority:** P0 · **Agents:** frontend-dev → testing-dev → docs-dev
 
 #### Problem statement
 
-PRD §12.1 "Quick add: allow user to add commitment, workout, family intention, work action." Without it, Today can only show what onboarding (E04) or the Path screen (E02-06) created, and VISION §28's five-minute win cannot be added on the spot. Workout quick-add needs the E09 program model and is deferred.
+PRD §12.1 "Quick add: allow user to add commitment, workout, family intention, work action." Without it, Today can only show what onboarding (E04) or the Path screen (E02-06 (#56)) created, and VISION §28's five-minute win cannot be added on the spot. Workout quick-add needs the E09 program model and is deferred.
 
 #### Proposed solution
 
-A `QuickAddSheet` opened from Today's FAB — a bottom sheet (`SwipeableDrawer anchor="bottom"`) below 600px and a `Dialog` at ≥ 600px — wrapping a `CommitmentEditorForm` used for create (quick add) and edit (from the row menu), posting to E02-04's `POST /commitments` / `PATCH /commitments/:id`.
+A `QuickAddSheet` opened from Today's FAB — a bottom sheet (`SwipeableDrawer anchor="bottom"`) below 600px and a `Dialog` at ≥ 600px — wrapping a `CommitmentEditorForm` used for create (quick add) and edit (from the row menu), posting to E02-04 (#47)'s `POST /commitments` / `PATCH /commitments/:id`.
 
 **Data (database-dev)** — n/a.
 
-**API (backend-dev)** — n/a. Contract owner is E02-04: read `apps/api/src/commitments/dto/create-commitment.dto.ts` (E02-04's name may differ) before writing the form and send exactly its fields; if `commitmentType` is required there, map kind → type as documented in E02-04.
+**API (backend-dev)** — n/a. Contract owner is E02-04 (#47): read `apps/api/src/commitments/dto/create-commitment.dto.ts` (E02-04 (#47)'s name may differ) before writing the form and send exactly its fields; if `commitmentType` is required there, map kind → type as documented in E02-04 (#47).
 
 **UI (frontend-dev)**
 
 - `apps/web/src/components/today/QuickAddFab.tsx` — MUI `Fab color="primary" aria-label="Add"`, `position: fixed`, `bottom: { xs: 80, sm: 24 }`, `right: 24`.
 - `apps/web/src/components/today/QuickAddSheet.tsx` (`{open, onClose, onCreated, initialDomain?}`) — kind chooser as three large buttons: **Commitment** (any domain), **Work action** (domain WORK preset), **Family intention** (domain FAMILY preset); a fourth, **Workout**, is rendered disabled with helper text "Coming with workout programs" (E09). Container: `useMediaQuery(theme.breakpoints.down('sm'))` → `SwipeableDrawer` (bottom) else `Dialog maxWidth="sm"`. This is a local presentation choice, documented in a comment as *not* one of the five coupled gates.
-- `apps/web/src/components/today/CommitmentEditorForm.tsx` (`{mode: 'create' | 'edit', initial?, onSubmit, submitting}`) — fields: `domain` (segmented WORK/FAMILY/HEALTH), `title` (required, ≤ 120), `outcomeId` (optional `Select` from `GET /outcomes?domain=` — E02-02 — "No outcome (just today)"), `scheduledStart` (`DateTimePicker`, default next full hour today), `durationMinutes` (5/10/20/30/45/60 chips + custom), `importance` (1–5 rating, default 3), collapsible **Versions**: `shortVersion` and `minimumVersion` `{title, minutes}` (minimum minutes must be < short < full; validated client-side with Zod in `apps/web/src/utils/commitmentForm.schema.ts`). Submit maps to E02-04's body (`fullVersion = {title, minutes: durationMinutes}`).
-- Edit entry point: `CommitmentActionsMenu` (E05-04) gains **Edit** for statuses `PLANNED | READY` (`RESCHEDULED` is terminal under E02-04 and `PATCH` refuses it with 409), opening the same sheet in `edit` mode → `PATCH /commitments/:id`.
-- `services/api.ts`: `createCommitment(body)`, `updateCommitment(id, body)`, `getOutcomes(params)` (if E02-06 did not add it).
-- After create: `onCreated` → `useToday.refresh()`; snackbar "Added to today" with an **Undo** action that calls E02-04's `DELETE /commitments/:id` (or `transition → CANCELLED` if delete is not exposed) within 6 s.
+- `apps/web/src/components/today/CommitmentEditorForm.tsx` (`{mode: 'create' | 'edit', initial?, onSubmit, submitting}`) — fields: `domain` (segmented WORK/FAMILY/HEALTH), `title` (required, ≤ 120), `outcomeId` (optional `Select` from `GET /outcomes?domain=` — E02-02 (#39) — "No outcome (just today)"), `scheduledStart` (`DateTimePicker`, default next full hour today), `durationMinutes` (5/10/20/30/45/60 chips + custom), `importance` (1–5 rating, default 3), collapsible **Versions**: `shortVersion` and `minimumVersion` `{title, minutes}` (minimum minutes must be < short < full; validated client-side with Zod in `apps/web/src/utils/commitmentForm.schema.ts`). Submit maps to E02-04 (#47)'s body (`fullVersion = {title, minutes: durationMinutes}`).
+- Edit entry point: `CommitmentActionsMenu` (E05-04 (#46)) gains **Edit** for statuses `PLANNED | READY` (`RESCHEDULED` is terminal under E02-04 (#47) and `PATCH` refuses it with 409), opening the same sheet in `edit` mode → `PATCH /commitments/:id`.
+- `services/api.ts`: `createCommitment(body)`, `updateCommitment(id, body)`, `getOutcomes(params)` (if E02-06 (#56) did not add it).
+- After create: `onCreated` → `useToday.refresh()`; snackbar "Added to today" with an **Undo** action that calls E02-04 (#47)'s `DELETE /commitments/:id` (or `transition → CANCELLED` if delete is not exposed) within 6 s.
 - A11y: sheet has `aria-labelledby` title; first field autofocused; `Escape`/swipe-down closes; errors announced via `helperText` + `aria-invalid`.
 
 **Tests (testing-dev)**
 
 - `apps/web/src/__tests__/utils/commitmentForm.schema.test.ts` — title required; minimum < short < full ordering; custom duration bounds.
-- `apps/web/src/__tests__/components/today/QuickAddSheet.test.tsx` — renders `SwipeableDrawer` under 600px and `Dialog` at ≥ 600px (mock `matchMedia`); Workout disabled; Family intention preset domain; submit posts the exact E02-04 body (assert JSON); Undo calls delete/cancel.
+- `apps/web/src/__tests__/components/today/QuickAddSheet.test.tsx` — renders `SwipeableDrawer` under 600px and `Dialog` at ≥ 600px (mock `matchMedia`); Workout disabled; Family intention preset domain; submit posts the exact E02-04 (#47) body (assert JSON); Undo calls delete/cancel.
 - `apps/web/src/__tests__/components/today/CommitmentEditorForm.test.tsx` — edit mode prefills and PATCHes only changed fields.
 - `apps/web/src/__tests__/pages/TodayPage.test.tsx` — FAB opens the sheet; new commitment appears after refresh (MSW state).
 
-**Docs (docs-dev)** — `docs/specs/today-and-nba.md` "Quick add" paragraph (via E05-07).
+**Docs (docs-dev)** — `docs/specs/today-and-nba.md` "Quick add" paragraph (via E05-07 (#55)).
 
 #### Acceptance criteria
 
@@ -733,7 +736,7 @@ A `QuickAddSheet` opened from Today's FAB — a bottom sheet (`SwipeableDrawer a
 1. Epic script step 11 at phone width and at desktop width.
 2. Add a WORK action with short (10) and minimum (5) versions; check in `Low energy`; the NBA shows the 5-minute version.
 3. Row menu → Edit → change the time → save → row moves accordingly after refresh.
-4. Add, then press Undo in the snackbar → row disappears; `evopath api GET /api/commitments/<id>` → 404 or `CANCELLED` per E02-04.
+4. Add, then press Undo in the snackbar → row disappears; `evopath api GET /api/commitments/<id>` → 404 or `CANCELLED` per E02-04 (#47).
 
 #### Out of scope
 
@@ -743,19 +746,19 @@ A `QuickAddSheet` opened from Today's FAB — a bottom sheet (`SwipeableDrawer a
 
 #### Notes for the implementing agent
 
-- Model the sheet/dialog switch on `components/ai/PersonaModelTable.tsx`'s (E01-07) documented local `down('sm')` usage: it is presentation inside one page, not a shell gate.
-- MUI X `DateTimePicker` is already used by `RescheduleDialog` (E05-04); share the `LocalizationProvider` setup.
+- Model the sheet/dialog switch on `components/ai/PersonaModelTable.tsx`'s (E01-07 (#27)) documented local `down('sm')` usage: it is presentation inside one page, not a shell gate.
+- MUI X `DateTimePicker` is already used by `RescheduleDialog` (E05-04 (#46)); share the `LocalizationProvider` setup.
 - Keep the Zod form schema in `apps/web/src/utils/` so it is testable without React.
 
 ---
 
-### E05-07 `test(tests): E05 end-to-end verification`
+### E05-07 `test(tests): E05 end-to-end verification` — #55
 
-**Part of epic:** E05 · **Blocked by:** E05-01, E05-02, E05-03, E05-04, E05-05, E05-06, E01-10 · **Component:** tests, docs · **Priority:** P0 · **Agents:** testing-dev → docs-dev
+**Part of epic:** E05 · **Blocked by:** E05-01 (#38), E05-02 (#40), E05-03 (#43), E05-04 (#46), E05-05 (#48), E05-06 (#52), E01-10 (#30) · **Component:** tests, docs · **Priority:** P0 · **Agents:** testing-dev → docs-dev
 
 #### Problem statement
 
-The epic's promise (PRD §101 Day 1–3: start recorded as evidence, fallback completed, "moved this twice") is only real if a browser can drive it against the API and database. The epic needs one Playwright spec that proves the loop against the fake OpenAI server (E01-10), plus the spec document future epics (E07, E11, E12) will read for the contracts fixed here.
+The epic's promise (PRD §101 Day 1–3: start recorded as evidence, fallback completed, "moved this twice") is only real if a browser can drive it against the API and database. The epic needs one Playwright spec that proves the loop against the fake OpenAI server (E01-10 (#30)), plus the spec document future epics (E07, E11, E12) will read for the contracts fixed here.
 
 #### Proposed solution
 
@@ -763,27 +766,27 @@ A Playwright spec `tests/e2e/specs/today.spec.ts` with API-seeded data, an API h
 
 **Data (database-dev)** — n/a.
 
-**API (backend-dev)** — n/a (if seeding reveals a gap in E02-04's create DTO, file it against E02-04; do not patch here).
+**API (backend-dev)** — n/a (if seeding reveals a gap in E02-04 (#47)'s create DTO, file it against E02-04 (#47); do not patch here).
 
 **UI (frontend-dev)** — add stable `data-testid`s only where selectors by role/text are ambiguous: `today-nba`, `today-nba-start`, `today-nba-smaller`, `today-domain-WORK|FAMILY|HEALTH`, `today-checkin-LOW_ENERGY`, `start-timer`, `start-begin`, `start-done`, `quick-add-fab`.
 
 **Tests (testing-dev)**
 
 - `tests/e2e/helpers/commitments.helper.ts` (new): `apiContext(page)` (reads the access token the way `auth.helper.ts`'s login leaves it), `createOutcome(ctx, {domain, title, whyItMatters})`, `createCommitment(ctx, {...})`, `getCommitment(ctx, id)`, `todayAt(hour, tz)` (ISO for today in the test user's timezone; the test user's profile is set to `UTC` via E04's `PATCH /me/profile` or the E04 test-login extension).
-- `tests/e2e/specs/today.spec.ts` (run with `docker compose -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up`), fresh user per test via `loginAsTestUser` with a unique email and `withAiKey` (E01-10):
-  1. **Today → Start → Done → evidence**: seed WORK (full 25 / short 10 / minimum 5, importance 5, now+30 min), FAMILY, HEALTH; open `/`; expect NBA title = WORK commitment and button `Start 25 min`; click → URL `/start/<id>`; choose `5`, `Begin 05:00`; expect timer text to match `/0[45]:\d\d/`; reload; expect the timer not to have reset to `05:00` after ≥ 3 s elapsed; `Pause` → text frozen for 2 s; `Continue`; `Done for now` → `Complete`; back on `/` the row shows completed; `getCommitment` → `status COMPLETED`, `startedAt` non-null; `GET /api/evidence?commitmentId=` (E02-04) → types `['started','paused','continued','completed']`.
+- `tests/e2e/specs/today.spec.ts` (run with `docker compose -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up`), fresh user per test via `loginAsTestUser` with a unique email and `withAiKey` (E01-10 (#30)):
+  1. **Today → Start → Done → evidence**: seed WORK (full 25 / short 10 / minimum 5, importance 5, now+30 min), FAMILY, HEALTH; open `/`; expect NBA title = WORK commitment and button `Start 25 min`; click → URL `/start/<id>`; choose `5`, `Begin 05:00`; expect timer text to match `/0[45]:\d\d/`; reload; expect the timer not to have reset to `05:00` after ≥ 3 s elapsed; `Pause` → text frozen for 2 s; `Continue`; `Done for now` → `Complete`; back on `/` the row shows completed; `getCommitment` → `status COMPLETED`, `startedAt` non-null; `GET /api/evidence?commitmentId=` (E02-04 (#47)) → types `['started','paused','continued','completed']`.
   2. **Reschedule twice**: on the HEALTH row menu → Reschedule → `todayAt(20)` → save (the card re-renders a **new** row at 20:00 with a `1` badge); on that row → Reschedule → tomorrow → save; `getCommitment(healthId)` → `status === 'RESCHEDULED'`, `rescheduleCount === 0`, `rescheduledToId` set; follow `rescheduledToId` twice → the live row has `status === 'PLANNED'`, `rescheduleCount === 2` and `rescheduledFromId` set, and the middle row is `RESCHEDULED`; no HEALTH row on today's card.
   3. **Low energy sizes the NBA**: seed a WORK commitment with minimum version; click `today-checkin-LOW_ENERGY`; expect NBA duration text `5 min` and title = minimum title; `GET /api/today` → `nextBestAction.version === 'minimum'`.
   4. **Make it smaller with fake AI**: click `today-nba-smaller`; dialog lists ≥ 1 step; `Use this` → URL `/start/<newId>`; `getCommitment(newId).decomposedFromId === workId`.
   5. **AI down keeps Today working**: request context sets header `x-fake-behaviour: timeout` is not possible from the browser, so instead point the platform at an unreachable base URL for this test's admin (`PUT /api/ai-settings {baseUrl: 'http://fake-openai:1/v1'}` via the admin fixture) → reload `/` → page renders, insight shows the template caption; `Make it smaller` shows `Start 5 min`; restore `baseUrl` in `afterEach`.
-  6. **Skip with reason** → `SKIPPED` and a reflection row via `GET /api/reflections?relatedId=` (E02-04).
+  6. **Skip with reason** → `SKIPPED` and a reflection row via `GET /api/reflections?relatedId=` (E02-04 (#47)).
   7. **Quick add**: FAB → Family intention → title/time → save → appears on the FAMILY card.
   8. **Deep link**: `page.goto('/?commitment=<id>&action=start')` → `/start/<id>`.
 - Run with `npm test` in `tests/e2e` (`BASE_URL` default http://localhost:3535); update `tests/e2e/package.json` scripts if a `test:today` filter is useful.
 
 **Docs (docs-dev)**
 
-- `docs/specs/today-and-nba.md` (new): purpose; `GET /today` schema; scorer terms, weights and tie rules; sizing and fallback rules; intervention-mode table with precedence; STARTED pre-rule; candidate window and timezone; insight caching and template fallback; commitment action semantics table (status before/after, evidence `source`/`type`, audit action), the new-row reschedule model (E02-04 owns it; E05 delegates and returns the new card) and the paused-as-STARTED decision; timer derivation formula; deep-link contract for E12; check-in and reflection contracts; what E07/E10/E11/E12 read from here; rejected alternatives (same-row reschedule, PAUSED status, AI-ranked NBA).
+- `docs/specs/today-and-nba.md` (new): purpose; `GET /today` schema; scorer terms, weights and tie rules; sizing and fallback rules; intervention-mode table with precedence; STARTED pre-rule; candidate window and timezone; insight caching and template fallback; commitment action semantics table (status before/after, evidence `source`/`type`, audit action), the new-row reschedule model (E02-04 (#47) owns it; E05 delegates and returns the new card) and the paused-as-STARTED decision; timer derivation formula; deep-link contract for E12; check-in and reflection contracts; what E07/E10/E11/E12 read from here; rejected alternatives (same-row reschedule, PAUSED status, AI-ranked NBA).
 - `docs/API.md`: "Today" section (6 routes) and "Commitment actions" (10 routes) with request/response examples.
 - `CLAUDE.md`: endpoints list, `daily_check_ins` in Database Tables, a "Today & NBA" pointer paragraph to the spec (do not restate rules).
 - `docs/TESTING.md`: E2E section mentions `today.spec.ts` and the fake-openai compose file.
@@ -817,14 +820,14 @@ A Playwright spec `tests/e2e/specs/today.spec.ts` with API-seeded data, an API h
 
 #### Out of scope
 
-- Visual-regression baselines for Today (E05-04 owns them).
+- Visual-regression baselines for Today (E05-04 (#46) owns them).
 - E07/E11/E12 flows that build on these hooks.
 - CI workflow files (declined project-wide; local runs only).
 
 #### Notes for the implementing agent
 
-- Reuse `tests/e2e/helpers/auth.helper.ts` and E01-10's `withAiKey` extension; do not create a second login helper.
-- Seed through the API, never through `psql`, so the spec also exercises E02-04's create contracts.
+- Reuse `tests/e2e/helpers/auth.helper.ts` and E01-10 (#30)'s `withAiKey` extension; do not create a second login helper.
+- Seed through the API, never through `psql`, so the spec also exercises E02-04 (#47)'s create contracts.
 - Keep timing assertions tolerant (regex on `MM:SS`, `toPass` polling), never exact seconds.
 - The spec file is the last child: if a case fails because an earlier child deviated, fix the child under its own issue and reference it in the commit.
 
