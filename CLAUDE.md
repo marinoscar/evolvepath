@@ -66,6 +66,28 @@ Every feature and bug fix MUST be tracked by a GitHub issue, filed **before** im
 - **Keep it current**: Update or close the issue as the corresponding PR resolves it, so issue state reflects real progress.
 - **Scope**: This applies to feature and bug work specifically. Routine `chore`/`docs`/`refactor` commits don't each need their own tracking issue.
 
+## Product Roadmap and Epics
+
+Product work is planned as epics with child issues. The tracking document is
+[`ROADMAP.md`](ROADMAP.md) at the repo root (epic table, phases, dependency
+graph, per-epic checklists); the executable specification for every epic and
+child issue is [`docs/epics/`](docs/epics/README.md), mirrored one-to-one by
+GitHub epic issues (label `epic`) with their children attached as GitHub
+sub-issues (label `epic:<slug>`, type Feature). The product vision and
+requirements are [`VISION.md`](VISION.md) and [`PRD.md`](PRD.md).
+
+### Maintenance rule (MANDATORY)
+
+- When a child issue closes, tick it in `ROADMAP.md` **and** in the epic's
+  Scope list on GitHub in the same PR, and bump the epic's "Done / total".
+- When every child of an epic is closed, set the epic's Status to **Done** in
+  `ROADMAP.md` and close the epic issue.
+- GitHub's sub-issue progress bar is the live counter; `ROADMAP.md` is the
+  human-readable snapshot committed with the code. If they disagree, GitHub
+  wins and `ROADMAP.md` gets fixed.
+- New product work is specified in `docs/epics/` first (see its README for the
+  file format), then created on GitHub — never the other way round.
+
 ## MANDATORY: Worktree-Based Feature Development
 
 Every feature or fix MUST be developed in a Git worktree. The main checkout stays on `main` at all times.
