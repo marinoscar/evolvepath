@@ -52,12 +52,20 @@ const KEY_LENGTH = 32;
 const KEY_ENV_VAR = 'SECRETS_ENCRYPTION_KEY';
 
 /**
- * Fixed, versioned label prefix for sub-key derivation. The `v1` is the hook
+ * Fixed, versioned label prefix for sub-key derivation. The `v2` is the hook
  * for ever changing the derivation scheme: bumping it changes every derived
  * key, which makes existing ciphertexts undecryptable, so it must only move
  * together with a re-encryption migration.
+ *
+ * History: bumped from `enterpriseappbase:secret-cipher:v1:` to this value
+ * (issue #8) when the product was renamed to Evolve Path. The old label is
+ * NOT kept here — production code carries only the current label. It is
+ * hardcoded, standalone, in `apps/api/scripts/migrate-secret-cipher-label.ts`,
+ * the one-time operator script that re-encrypts any row still under it. See
+ * `docs/runbooks/rotate-secrets-encryption-key.md` for the migration
+ * procedure.
  */
-const SUBKEY_LABEL_PREFIX = 'enterpriseappbase:secret-cipher:v1:';
+const SUBKEY_LABEL_PREFIX = 'evolvepath:secret-cipher:v2:';
 
 /**
  * Strict base64 (standard alphabet, canonical padding). We validate the *text*
