@@ -439,6 +439,29 @@ const mockConfigService = {
 } as any;
 ```
 
+### Overriding the AI provider in API integration specs
+
+`createTestApp({ overrideProviders })` is how an integration spec controls one
+slice of the app while everything else stays the real class `AppModule` wires.
+For AI, override `OpenAiProvider` (so no request leaves the process) and
+`CredentialsService` (so no encryption key is needed):
+
+```typescript
+context = await createTestApp({
+  useMockDatabase: true,
+  overrideProviders: [
+    { provide: CredentialsService, useValue: mockCredentials },
+    { provide: OpenAiProvider, useValue: mockProvider },
+  ],
+});
+```
+
+Worked examples: `apps/api/test/ai/ai-settings.integration.spec.ts`,
+`user-ai-key.integration.spec.ts` and `ai-gateway.integration.spec.ts`. The last
+one also shows the pattern for asserting an exception's *rendered* HTTP shape —
+a minimal Nest app with the real `HttpExceptionFilter`, because a route
+registered straight on the Fastify instance never reaches Nest's filters.
+
 ### Frontend Mocking
 
 #### 1. API Mocking with MSW
@@ -535,6 +558,29 @@ render(
   </MemoryRouter>
 );
 ```
+
+### AI handlers and their state helpers
+
+The AI MSW handlers in `apps/web/src/__tests__/mocks/handlers.ts` hold **mutable
+state**, unlike most fixtures, because the pages under test do a real edit cycle
+— load, change, PUT, adopt the response, save again with the new version. A
+frozen fixture cannot express `If-Match`, so it cannot exercise the 409 path.
+
+They are process-wide, so a spec that changes them must reset in `beforeEach`:
+
+| Helper | Use |
+|---|---|
+| `resetAiSettingsState()` | Back to a fresh deployment: no provider, no key, version 0 |
+| `setAiSettingsState(patch)` | Seed a stored configuration, or bump `version` to drive a 409 |
+| `setAiPlatformKeyConfigured(bool)` | The masked platform-key status, without ever holding a key |
+| `resetAiKeyState()` | Back to "a user key is stored" |
+| `setAiKeyConfigured(bool)` | The caller's own key — **updates the `/auth/me` payload too** |
+| `setAiKeyLastTest(...)` | The previous test outcome the API derives from telemetry |
+
+`setAiKeyConfigured` deliberately updates both `/me/ai-key` **and** `/auth/me`:
+the gate (`RequireAiKey`) reads `user.aiKey` from `AuthContext`, and a helper
+that changed only one of the two would let a routing spec pass against a state
+the real app can never be in.
 
 ## Writing New Tests
 
@@ -849,8 +895,76 @@ tests/e2e/
 │   └── auth.fixture.ts        # Pre-authenticated page fixtures
 └── specs/
     ├── auth.spec.ts           # Authentication tests
-    └── example.spec.ts        # Example feature tests
+    ├── example.spec.ts        # Example feature tests
+    ├── ai-key-gate.spec.ts    # The BYOK gate, setup page and key removal
+    └── admin-ai-settings.spec.ts  # Provider, platform key, model filter, test
 ```
+
+### The fake OpenAI server
+
+Epic #20 put an AI-key gate in front of every screen, so the e2e suite needs a
+provider. `tools/fake-openai/server.mjs` is a zero-dependency stand-in for
+OpenAI's `/v1/models` and `/v1/responses` — see
+[`tools/fake-openai/README.md`](../tools/fake-openai/README.md) for the full
+contract. **Test infrastructure only**; it accepts any bearer token starting
+`sk-test-` and the Compose overlay publishes no port.
+
+It is brought up by the overlay, which `playwright.config.ts` now includes in
+its default `webServer` command:
+
+```bash
+cd infra/compose
+docker compose -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up --build
+```
+
+The overlay does two things: points the API at the stand-in
+(`OPENAI_BASE_URL=http://fake-openai:8089/v1`) and supplies a **test-only**
+`SECRETS_ENCRYPTION_KEY` default, without which seeding a key at test login
+fails on a fresh clone and every spec lands on `/setup/ai-key`. A real value in
+`.env` always wins.
+
+Three things about it are load-bearing for the suite:
+
+- **Its catalog is deliberately mixed** — `gpt-5.4`, `gpt-5.4-mini`, plus
+  `gpt-5.3`, `gpt-4o` and `gpt-5.5-realtime`. `admin-ai-settings.spec.ts`
+  asserts the last three never reach the model select, which a catalog of only
+  supported models could not prove.
+- **It rejects `store !== false`** with a 400, so a regression in the provider's
+  privacy invariant fails e2e as well as its unit test.
+- **It builds its answer from the requested JSON schema**, so a later epic's new
+  output contract needs no edit there.
+
+Failure modes are selected with an `x-fake-behaviour` header on
+`/v1/responses`: `rate_limit`, `timeout`, `refusal`, `invalid_json`.
+
+### Seeding a key: `withAiKey`
+
+`loginAsTestUser` takes `withAiKey`, which ticks the "Seed an OpenAI key"
+checkbox on `/testing/login` before submitting.
+
+**It defaults to `true`** — the opposite of the checkbox's own default. Every
+pre-existing spec expects to land on `/` and is about something other than the
+key gate, so making them opt in would have meant editing all of them to keep
+testing what they already test. A spec that wants the keyless path asks for it:
+
+```typescript
+// Lands on /setup/ai-key
+await loginAsTestUser(page, { email, role: 'viewer', withAiKey: false });
+```
+
+### Authenticating a `page.request` call
+
+The access token lives **in memory** (`ApiService.setAccessToken`); only the
+refresh token is in a cookie, deliberately, so an XSS cannot read it. A spec
+making its own API call therefore mints a token rather than reading one:
+
+```typescript
+const refreshed = await page.request.post('/api/auth/refresh');
+const { accessToken } = (await refreshed.json()).data ?? (await refreshed.json());
+```
+
+`page.request` shares the browser context's cookies, so this works for any
+signed-in page.
 
 ### Auth Helper
 

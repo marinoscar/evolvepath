@@ -1,0 +1,49 @@
+# =============================================================================
+# Docker Compose - Fake OpenAI overlay (issue #30, epic #20)
+# =============================================================================
+# Usage (run from infra/compose folder):
+#   docker compose -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up --build
+#
+# TEST INFRASTRUCTURE ONLY. It points the API at a stand-in that authenticates
+# nothing (see tools/fake-openai/README.md). Never apply this overlay to a
+# deployment a real user can reach.
+#
+# An OVERLAY, never an edit to base.compose.yml: the stand-in must be something
+# a developer opts into for one command, not something a production compose file
+# has to remember to switch off.
+# =============================================================================
+
+services:
+  fake-openai:
+    # Stock Node, no build: the server is dependency-free ESM run from a
+    # read-only bind mount, so `up` needs no image build and no npm install.
+    image: node:24-alpine
+    command: ["node", "/srv/server.mjs"]
+    volumes:
+      - ../../tools/fake-openai:/srv:ro
+    environment:
+      - PORT=8089
+    # NO `ports:`. It is reachable only from inside the Compose network, which
+    # is the whole containment story for a server that trusts any `sk-test-`
+    # token. Publish 8089 through a local override if you need to poke it.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8089/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - app-network
+
+  api:
+    environment:
+      - OPENAI_BASE_URL=http://fake-openai:8089/v1
+      # Test-only default so `withAiKey` can encrypt a key on a fresh clone —
+      # without it, seeding a key at test login fails with a 500 and every
+      # e2e spec lands on the setup gate. A real value in .env always wins
+      # (`env_file` is read before this block, and an explicit `environment`
+      # entry with a ${VAR:-default} takes the environment's value when set).
+      # NEVER use this value outside local testing.
+      - SECRETS_ENCRYPTION_KEY=${SECRETS_ENCRYPTION_KEY:-ZmFrZS1vcGVuYWktZTJlLWtleS0wMDAwMDAwMDAwMDA=}
+    depends_on:
+      fake-openai:
+        condition: service_healthy

@@ -17,9 +17,21 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  // Start local dev server if not running
+  // Start the local stack if it is not already running.
+  //
+  // The `fake-openai` overlay (#30, epic #20) is part of the default command
+  // because the AI-key gate now stands in front of every screen: without it,
+  // `loginAsTestUser` cannot seed a key (no SECRETS_ENCRYPTION_KEY on a fresh
+  // clone) and every spec lands on `/setup/ai-key` instead of the page it is
+  // about.
+  //
+  // ONE READINESS PROBE IS ENOUGH. `api` declares
+  // `depends_on: fake-openai: condition: service_healthy`, so the API container
+  // does not start until the stand-in answers `/healthz` — by the time
+  // `/api/health/live` responds, both are up.
   webServer: process.env.CI ? undefined : {
-    command: 'cd ../../infra/compose && docker compose -f base.compose.yml -f dev.compose.yml up',
+    command:
+      'cd ../../infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up',
     url: 'http://localhost:3535/api/health/live',
     reuseExistingServer: true,
     timeout: 120000,
