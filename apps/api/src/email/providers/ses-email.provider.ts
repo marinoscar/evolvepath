@@ -20,7 +20,7 @@ import type { EmailMessage, EmailSendResult } from '../email.types';
 // in the settings blob, nothing in the credential store, nothing to rotate
 // separately. The only email-specific knob is the region.
 //
-// THIS DELIBERATELY DIFFERS FROM THE REFERENCE IMPLEMENTATION. MemoriaHub's
+// THIS DELIBERATELY DIFFERS FROM A COMMON REFERENCE IMPLEMENTATION, where the
 // SES provider loads the S3 STORAGE PROVIDER's database credential row and
 // decrypts it. That makes email depend on storage being configured -- a
 // deployment that sends mail and keeps files on local disk cannot send mail,

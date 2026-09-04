@@ -78,7 +78,7 @@ export default () => {
   //     'pat'`. It can be far longer precisely BECAUSE a PAT is revocable
   //     server-side: a stolen laptop is handled by deleting one row in the
   //     Access Tokens page, with nothing else to rotate. 90 days matches the
-  //     epic's suggestion and MemoriaHub's reference CLI.
+  //     epic's suggestion and a comparable reference CLI's default.
   deviceAuth: {
     expiryMinutes: parseInt(process.env.DEVICE_CODE_EXPIRY_MINUTES || '15', 10),
     pollInterval: parseInt(process.env.DEVICE_CODE_POLL_INTERVAL || '5', 10),
@@ -122,9 +122,9 @@ export default () => {
   // deliberately. What email shares with storage is the ENVIRONMENT, not
   // storage's configuration: pointing email at `storage.s3` would make it
   // break the day someone gives storage its own credential source, and it is
-  // the same coupling epic #109 explicitly rejects (MemoriaHub's SES provider
-  // reads the S3 storage provider's database credentials, so email silently
-  // depends on storage being configured at all).
+  // the same coupling epic #109 explicitly rejects (a reference SES provider
+  // that reads the S3 storage provider's database credentials, so email
+  // silently depends on storage being configured at all).
   //
   // `sesRegionFallback` has NO DEFAULT, unlike `storage.s3.region`. A wrong
   // region does not fail as "wrong region": SES answers that the sending

@@ -218,10 +218,10 @@ export function AppBar() {
 
         {/* The flexible spacer. Removing it without a replacement packs the
             trailing icon cluster to the LEFT with dead space on the right,
-            because nothing else in this row grows — the regression documented
-            in MemoriaHub's `docs/audits/mobile-topbar-audit.md` for issue #95.
-            It is the only growable item here, which is also what guarantees the
-            toolbar can never push the app shell sideways. */}
+            because nothing else in this row grows — the exact regression a
+            prior mobile topbar audit caught for issue #95. It is the only
+            growable item here, which is also what guarantees the toolbar
+            can never push the app shell sideways. */}
         <Box aria-hidden sx={{ flexGrow: 1, minWidth: 0 }} />
 
         {/* The notification centre (#127, epic #109) — MOUNTED IN BOTH
