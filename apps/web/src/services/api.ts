@@ -70,6 +70,7 @@ class ApiService {
 
         if (!retryResponse.ok) {
           const error = await retryResponse.json().catch(() => ({}));
+          notifyIfAiKeyRequired(retryResponse.status, error.code);
           throw new ApiError(
             error.message || 'Request failed',
             retryResponse.status,
@@ -90,6 +91,9 @@ class ApiService {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
+      // Before throwing: a 412 AI_KEY_REQUIRED means this tab's idea of the
+      // user is stale. See `AI_KEY_REQUIRED_EVENT`.
+      notifyIfAiKeyRequired(response.status, error.code);
       throw new ApiError(
         error.message || 'Request failed',
         response.status,
@@ -185,6 +189,39 @@ class ApiService {
   delete<T>(endpoint: string, options?: RequestOptions) {
     return this.request<T>(endpoint, { ...options, method: 'DELETE' });
   }
+}
+
+/**
+ * The `window` event a 412 `AI_KEY_REQUIRED` dispatches (issue #29, epic #20).
+ *
+ * The gate (`RequireAiKey`) reads `user.aiKey.configured` from `AuthContext`,
+ * which is only as fresh as the last `/auth/me`. A key removed in another tab —
+ * or through the API directly — leaves this tab believing it still has one,
+ * until the first AI call comes back 412. This event is how the API layer tells
+ * `AuthContext` to re-read, so the gate re-evaluates and the redirect happens.
+ *
+ * AN EVENT RATHER THAN A DIRECT CALL because `services/api.ts` is a plain module
+ * with no React context: importing the auth context here would be a cycle
+ * (`AuthContext` imports `api`), and passing a callback in would mean every
+ * caller of every endpoint remembering to wire it.
+ */
+export const AI_KEY_REQUIRED_EVENT = 'evolvepath:ai-key-required';
+
+/**
+ * The `code` the API sends on a 412 for a caller with no OpenAI key.
+ *
+ * It survives the error envelope only because `AiKeyRequiredException` opts out
+ * of the envelope's `code` rewriting — see the API's
+ * `verbatim-error-body.exception.ts`.
+ */
+export const AI_KEY_REQUIRED_CODE = 'AI_KEY_REQUIRED';
+
+function notifyIfAiKeyRequired(status: number, code: unknown): void {
+  if (status !== 412 || code !== AI_KEY_REQUIRED_CODE) return;
+  // Guarded for the non-DOM contexts this module is imported into (a Node test
+  // runner without jsdom).
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(AI_KEY_REQUIRED_EVENT));
 }
 
 export class ApiError extends Error {
