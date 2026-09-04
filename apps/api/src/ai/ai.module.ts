@@ -11,6 +11,8 @@ import { AiSettingsController } from './ai-settings.controller';
 import { AiAdminTestService } from './ai-admin-test.service';
 import { AiModelCatalogService } from './model-catalog/ai-model-catalog.service';
 import { TestThrottle } from './gateway/test-throttle';
+import { UserAiKeyService } from './user-key/user-ai-key.service';
+import { UserAiKeyController } from './user-key/user-ai-key.controller';
 
 // =============================================================================
 // AiModule (issue #22, epic #20)
@@ -39,7 +41,7 @@ import { TestThrottle } from './gateway/test-throttle';
 
 @Module({
   imports: [PrismaModule, CredentialsModule, StorageModule, ConfigModule],
-  controllers: [AiSettingsController],
+  controllers: [AiSettingsController, UserAiKeyController],
   providers: [
     OpenAiProvider,
     AiProviderRegistry,
@@ -47,7 +49,8 @@ import { TestThrottle } from './gateway/test-throttle';
     AiModelCatalogService,
     AiAdminTestService,
     TestThrottle,
+    UserAiKeyService,
   ],
-  exports: [AiProviderRegistry, AiSettingsService],
+  exports: [AiProviderRegistry, AiSettingsService, UserAiKeyService],
 })
 export class AiModule {}

@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 
 import { AdminBootstrapService } from '../common/services/admin-bootstrap.service';
 import { AllowlistService } from '../allowlist/allowlist.service';
+import { UserAiKeyService } from '../ai/user-key/user-ai-key.service';
 import {
   createMockPrismaService,
   MockPrismaService,
@@ -132,6 +133,16 @@ describe('user.welcome: fires after commit, and the dispatcher reads the recipie
           useValue: {
             isEmailAllowed: jest.fn().mockResolvedValue(true),
             markEmailClaimed: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        // `getCurrentUser` reports whether the caller has an OpenAI key (#25).
+        // Not exercised by this suite; present so AuthService can be built.
+        {
+          provide: UserAiKeyService,
+          useValue: {
+            describe: jest
+              .fn()
+              .mockResolvedValue({ configured: false, hint: null, updatedAt: null }),
           },
         },
         { provide: NOTIFICATION_CHANNEL_SENDERS, useValue: [emailSender] },

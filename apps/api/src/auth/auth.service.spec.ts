@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { UserAiKeyService } from '../ai/user-key/user-ai-key.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -18,6 +19,7 @@ describe('AuthService', () => {
   let mockAdminBootstrap: jest.Mocked<AdminBootstrapService>;
   let mockAllowlistService: jest.Mocked<AllowlistService>;
   let mockNotifications: { notify: jest.Mock; notifyAddress: jest.Mock };
+  let mockUserAiKey: { describe: jest.Mock };
 
   const mockGoogleProfile: GoogleProfile = {
     id: 'google-123',
@@ -75,6 +77,17 @@ describe('AuthService', () => {
           useValue: (mockNotifications = {
             notify: jest.fn().mockResolvedValue(undefined),
             notifyAddress: jest.fn().mockResolvedValue(undefined),
+          }),
+        },
+        // `getCurrentUser` reports whether the caller has an OpenAI key (#25).
+        // The MASKED read only — `getSecretForUser` is deliberately absent from
+        // this stub, so a call to it from the auth path fails loudly here.
+        {
+          provide: UserAiKeyService,
+          useValue: (mockUserAiKey = {
+            describe: jest
+              .fn()
+              .mockResolvedValue({ configured: false, hint: null, updatedAt: null }),
           }),
         },
       ],

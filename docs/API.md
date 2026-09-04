@@ -137,7 +137,8 @@ Endpoints returning lists support pagination with the following query parameters
       "description": "Administrator with full access"
     }
   ],
-  "permissions": ["users:read", "users:write", "system_settings:read", ...]
+  "permissions": ["users:read", "users:write", "system_settings:read", ...],
+  "aiKey": { "configured": true, "hint": "••••abcd" }
 }
 ```
 
@@ -1184,6 +1185,77 @@ redacted.
 `checks.generate` is `"skipped"` — not `"failed"` — when no default model is
 configured: there is nothing to generate against, and the key is still proven
 by `listModels`.
+
+---
+
+### AI Key (current user)
+
+Every user of EvolvePath brings their own OpenAI API key: the gateway makes
+every product AI call with the caller's own key, never the platform's. These
+endpoints require authentication only — no permission — because the resource is
+the caller's own and there is no user id in any path.
+
+**The key is never returned by any endpoint.** It is stored encrypted at
+`(purpose 'ai:openai:user', name '<your user id>')`, and only its non-secret
+mask (`hint`) is ever published.
+
+#### GET /me/ai-key
+**Requires Authentication** — the status of your key.
+
+`lastTest` is derived from the `ai_invocations` telemetry table rather than
+stored on the credential, so there is one source of truth for it. `platform`
+reports just enough of the deployment's configuration to explain a skipped
+generate probe — that is the administrator's to fix, not yours.
+
+**Response:**
+```json
+{
+  "configured": true,
+  "hint": "••••0000",
+  "updatedAt": "2026-09-04T12:00:00.000Z",
+  "lastTest": {
+    "attemptedAt": "2026-09-04T12:01:00.000Z",
+    "success": true,
+    "model": "gpt-5.4",
+    "error": null
+  },
+  "platform": { "provider": "openai", "enabled": true, "hasDefaultModel": true }
+}
+```
+
+---
+
+#### PUT /me/ai-key
+**Requires Authentication** — save or replace your key. Returns the same body
+as `GET`.
+
+**Request Body:**
+```json
+{ "apiKey": "sk-..." }
+```
+
+The key must be 20–512 characters with no whitespace anywhere (a value with an
+internal space is a line-wrapped paste and is rejected rather than trimmed).
+The `sk-` prefix is deliberately **not** enforced server-side. Violations are
+**400**.
+
+---
+
+#### DELETE /me/ai-key
+**Requires Authentication** — remove your key. **204**, and idempotent:
+removing a key that is not there succeeds. Afterwards you are asked for a key
+again before you can use the application.
+
+---
+
+#### POST /me/ai-key/test
+**Requires Authentication** — run a catalog listing with your key and, when the
+administrator has chosen a default model, a 16-token structured generation
+against it. Throttled to 5 per minute (**429** with `Retry-After`).
+
+**This returns HTTP 200 even when the test failed** — read `success`, and show
+`error`, which carries OpenAI's own message with any credential redacted. The
+response shape is identical to `POST /ai-settings/test`.
 
 ---
 

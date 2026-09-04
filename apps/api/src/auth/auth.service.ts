@@ -19,6 +19,7 @@ import { AuthenticatedUser } from './interfaces/authenticated-user.interface';
 import { TokenResponseDto } from './dto/auth-user.dto';
 import { AuthProviderDto } from './dto/auth-provider.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { UserAiKeyService } from '../ai/user-key/user-ai-key.service';
 import type { UserWelcomeEmailData } from '../email';
 
 export interface FullTokenResponse {
@@ -38,6 +39,11 @@ export class AuthService {
     private readonly adminBootstrapService: AdminBootstrapService,
     private readonly allowlistService: AllowlistService,
     private readonly notifications: NotificationsService,
+    // The masked read only. `getSecretForUser` — the plaintext one — is never
+    // called from this file and must not be: nothing on the auth path needs a
+    // user's OpenAI key, and a call to it here would put plaintext one careless
+    // `return` away from the response every page load already fetches.
+    private readonly userAiKey: UserAiKeyService,
   ) {}
 
   /**
@@ -680,6 +686,17 @@ export class AuthService {
     });
     const permissions = Array.from(permissionsSet);
 
+    // Whether this user has an OpenAI key, carried on the SAME response the web
+    // app already fetches on boot (#25, epic #20).
+    //
+    // WHY HERE RATHER THAN A SECOND REQUEST: the web app gates its entire shell
+    // on this fact (#29). A separate `GET /me/ai-key` on boot would be a
+    // waterfall in front of every page load, and the visual-regression harness
+    // — which fakes `AuthContext` wholesale — would need a second fake to
+    // render anything at all. The masked read is one indexed credential lookup
+    // and returns no secret material.
+    const aiKey = await this.userAiKey.describe(user.id);
+
     return {
       id: user.id,
       email: user.email,
@@ -688,6 +705,7 @@ export class AuthService {
       isActive: user.isActive,
       roles,
       permissions,
+      aiKey: { configured: aiKey.configured, hint: aiKey.hint },
     };
   }
 
