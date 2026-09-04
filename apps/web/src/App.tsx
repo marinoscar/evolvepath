@@ -5,6 +5,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeContextProvider, useThemeContext } from './contexts/ThemeContext';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { RequireAiKey } from './components/common/RequireAiKey';
 import { RequirePermission } from './components/common/RequirePermission';
 import { Layout } from './components/common/Layout';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -29,6 +30,7 @@ const UserAppearancePage = lazy(() => import('./pages/UserAppearancePage'));
 const UserNotificationsPage = lazy(() => import('./pages/UserNotificationsPage'));
 const UserTokensPage = lazy(() => import('./pages/UserTokensPage'));
 const UserAiKeyPage = lazy(() => import('./pages/UserAiKeyPage'));
+const AiKeySetupPage = lazy(() => import('./pages/AiKeySetupPage'));
 
 // Console — the hub (#93) plus one route per card in
 // `config/adminSections.tsx` (#92, epic #90).
@@ -70,6 +72,21 @@ function AppRoutes() {
               {/* Device activation page - without layout for full-screen experience */}
               <Route path="/activate" element={<ActivateDevicePage />} />
 
+              {/* THE TWO ROUTES EXEMPT FROM THE AI-KEY GATE, and the only two
+                  (#29, epic #20).
+
+                  `/activate` because approving a device is a credential
+                  operation that has nothing to do with AI, and a user holding a
+                  device code in front of a TV should not be sent to a key form.
+
+                  `/setup/ai-key` because it is the gate's own destination — a
+                  gate that redirected its own target would loop forever.
+
+                  Both sit outside `Layout` for the same reason: neither is a
+                  place to offer navigation into a shell the user cannot yet
+                  use. */}
+              <Route path="/setup/ai-key" element={<AiKeySetupPage />} />
+
               {/* The notification centre (#127, epic #109) wraps the SHELL,
                   not the whole app, and that scoping is the point:
 
@@ -88,223 +105,239 @@ function AppRoutes() {
                   on every navigation, which the server sees as a connection
                   storm from a single user and the client experiences as a bell
                   that resets its state every time the route changes. */}
-              <Route
-                element={
-                  <NotificationProvider>
-                    <Layout />
-                  </NotificationProvider>
-                }
-              >
-                <Route path="/" element={<HomePage />} />
-                {/* The per-user settings surface (#96, epic #90) — the same
-                    hub component `/admin/settings` renders, over
-                    `USER_SETTINGS_SECTIONS`, plus one route per card.
+              {/* THE AI-KEY GATE (#29, epic #20). Wraps the whole shell —
+                  `/admin/*` and `/settings/*` included — because every feature
+                  inside it runs on the user's own OpenAI key, and an admin
+                  without one cannot use the coach either.
 
-                    NONE OF THESE IS WRAPPED IN `RequirePermission`, and that is
-                    the deliberate difference from the `/admin/settings/*` block
-                    below rather than an oversight. `ProtectedRoute` above
-                    establishes that someone is signed in, and that is the only
-                    question these routes have: they edit the caller's OWN
-                    settings, which the API grants to all three roles, and
-                    `config/userSettingsSections.tsx` correspondingly declares no
-                    `permission` on any card. A gate here would deny a Viewer
-                    their own display name.
+                  `/settings/ai-key` is deliberately INSIDE it: removing a key
+                  there sends the user back to setup, which is exactly what that
+                  page's confirm dialog says will happen and what makes the
+                  requirement real rather than decorative.
 
-                    As above, declaration order does not matter — React Router
-                    v6 ranks by specificity, so `/settings/profile` beats
-                    `/settings` wherever each is written. */}
-                <Route path="/settings" element={<UserSettingsHubPage />} />
-                <Route path="/settings/profile" element={<UserProfilePage />} />
-                <Route path="/settings/appearance" element={<UserAppearancePage />} />
-                {/* Ungated like its siblings (#126): these are the caller's own
-                    preferences, and the registry endpoint the page renders is
-                    itself `@Auth()` with no permission for the same reason. */}
-                <Route path="/settings/notifications" element={<UserNotificationsPage />} />
-                <Route path="/settings/tokens" element={<UserTokensPage />} />
-                {/* Epic #20. No `RequirePermission`: every authenticated user owns
-                    their own key, and a Viewer without one cannot use the app at
-                    all. Deliberately NOT exempt from the AI-key gate (#29) —
-                    removing a key here sends the user to /setup/ai-key, which is
-                    what the confirm dialog warns will happen. */}
-                <Route path="/settings/ai-key" element={<UserAiKeyPage />} />
-                {/* Route-level AUTHORIZATION, not just authentication.
-                    `ProtectedRoute` above only establishes that someone is
-                    logged in — before this, a Viewer typing `/admin/settings`
-                    reached the page and only then watched every API call 403.
-                    `RequirePermission` was already in the codebase but had zero
-                    usages; wrapping these routes is what turns it into the
-                    enforcement point.
-
-                    The permission on each route is the SAME string its card
-                    declares in `config/adminSections.tsx`, which is the same
-                    string the API's controller enforces — so the hub card, the
-                    rail row, the menu entry and the route can no longer
-                    disagree about who may go where.
-
-                    ORDER IS NOT SIGNIFICANT HERE. React Router v6 ranks routes
-                    by specificity rather than by declaration order, so
-                    `/admin/settings/users` beats `/admin/settings` regardless
-                    of where each sits in this list. They are grouped by surface
-                    for reading, not for matching. */}
-
-                {/* Both redirects are REAL ROUTES, not catch-all fallout.
-                    Without them a bookmarked `/admin/users` matches only `*`
-                    and lands silently on `/` — the user asked for a page that
-                    still exists and got the home screen with no explanation.
-                    `replace` keeps the dead URL out of the history stack, so
-                    Back returns to wherever the user came from rather than
-                    bouncing through the redirect again.
-
-                    They sit INSIDE `ProtectedRoute` so an unauthenticated
-                    bookmark goes to login and arrives here afterwards, rather
-                    than being redirected first and losing the destination. */}
-                <Route path="/admin" element={<Navigate to="/admin/settings" replace />} />
+                  It is a LAYOUT ROUTE between `ProtectedRoute` and the shell
+                  rather than an edit to `ProtectedRoute`, so the "is anyone
+                  signed in?" question and the "do they have a key?" question
+                  stay one component each. */}
+              <Route element={<RequireAiKey />}>
                 <Route
-                  path="/admin/users"
-                  element={<Navigate to="/admin/settings/users" replace />}
-                />
-
-                {/* The Console hub (#93, epic #90) — the searchable, grouped
-                    card grid that reads `ADMIN_SECTIONS`. It replaces the
-                    three-tab placeholder that answered this route through #92,
-                    whose tabs duplicated the four routes below. That
-                    duplication is now gone: the hub NAVIGATES to those routes
-                    instead of re-hosting them. */}
-                {/* ANY-OF, and the one route here that is not a single
-                    permission. This gate MUST STAY IN SYNC WITH `console`'s
-                    `anyPermission` in `config/destinations.ts` — the two lists
-                    answer the same question ("may this user reach the admin
-                    surface?") on two different surfaces, and #92 left them
-                    disagreeing: the Console row appeared in the rail, bottom
-                    bar, user menu and quick actions for a `users:read`-only
-                    user, whose click then bounced straight back to `/`. That
-                    split brain is exactly what `config/destinations.ts`'s
-                    header says the destination model exists to prevent, so the
-                    route follows the destination rather than the reverse.
-
-                    `requireAll` defaults to `false`, so `permissions` is an OR
-                    here — matching `anyPermission`'s semantics, not
-                    `hasAllPermissions`'.
-
-                    A `users:read`-only user consequently reaches this route
-                    and — since #93 — sees a hub containing exactly the one card
-                    that permission unlocks, instead of the placeholder page's
-                    blanket access-denied state. The hub's own gate
-                    (`visibleSettingsSections`) does that per CARD, which is why
-                    this route only answers the coarser question "may this user
-                    reach the admin surface at all?". The five child routes
-                    below keep their single-permission gates: each is one
-                    specific page with one specific permission. */}
-                <Route
-                  path="/admin/settings"
                   element={
-                    <RequirePermission
-                      permissions={['system_settings:read', 'users:read']}
-                      fallback={<Navigate to="/" replace />}
-                    >
-                      <SettingsHubPage />
-                    </RequirePermission>
+                    <NotificationProvider>
+                      <Layout />
+                    </NotificationProvider>
                   }
-                />
-                <Route
-                  path="/admin/settings/general"
-                  element={
-                    <RequirePermission
-                      permission="system_settings:read"
-                      fallback={<Navigate to="/" replace />}
-                    >
-                      <GeneralSettingsPage />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/admin/settings/appearance"
-                  element={
-                    <RequirePermission
-                      permission="system_settings:read"
-                      fallback={<Navigate to="/" replace />}
-                    >
-                      <AppearanceSettingsPage />
-                    </RequirePermission>
-                  }
-                />
-                <Route
-                  path="/admin/settings/feature-flags"
-                  element={
-                    <RequirePermission
-                      permission="system_settings:read"
-                      fallback={<Navigate to="/" replace />}
-                    >
-                      <FeatureFlagsPage />
-                    </RequirePermission>
-                  }
-                />
-                {/* Issue #124, epic #109. Same permission string the `Email`
-                    card declares in `config/adminSections.tsx`, which is the
-                    same string the API's email-settings controller enforces on
-                    its GET — the invariant `destinations.test.ts` asserts for
-                    every card. `system_settings:read` and not `:write`: saving
-                    and test-sending need write, and the page disables both
-                    without it, but the configuration is worth READING for
-                    anyone diagnosing why mail is not arriving. */}
-                <Route
-                  path="/admin/settings/email"
-                  element={
-                    <RequirePermission
-                      permission="system_settings:read"
-                      fallback={<Navigate to="/" replace />}
-                    >
-                      <EmailSettingsPage />
-                    </RequirePermission>
-                  }
-                />
-                {/* Epic #20. Same string as the `AI` card in
-                    `config/adminSections.tsx`, and the same `read`-not-`write`
-                    reasoning as Email above: saving, refreshing the catalog and
-                    testing all need write, and the page disables them without
-                    it, but the configuration is worth READING for anyone
-                    diagnosing why AI features are not responding. */}
-                <Route
-                  path="/admin/settings/ai"
-                  element={
-                    <RequirePermission
-                      permission="system_settings:read"
-                      fallback={<Navigate to="/" replace />}
-                    >
-                      <AiSettingsPage />
-                    </RequirePermission>
-                  }
-                />
-                {/* `system_settings:WRITE`, not `read`, and the one route here
-                    whose permission differs from its siblings'. A raw editor
-                    over the entire settings document has no read-only meaning —
-                    see `config/adminSections.tsx`. */}
-                <Route
-                  path="/admin/settings/advanced"
-                  element={
-                    <RequirePermission
-                      permission="system_settings:write"
-                      fallback={<Navigate to="/" replace />}
-                    >
-                      <AdvancedSettingsPage />
-                    </RequirePermission>
-                  }
-                />
-                {/* `users:read` alone, even though the page also hosts the
-                    allowlist. The route gate is about REACHABILITY and the page
-                    is worth reaching for its Users tab; the Allowlist tab gates
-                    its own content on `allowlist:read` inside the page. */}
-                <Route
-                  path="/admin/settings/users"
-                  element={
-                    <RequirePermission
-                      permission="users:read"
-                      fallback={<Navigate to="/" replace />}
-                    >
-                      <AdminUsersPage />
-                    </RequirePermission>
-                  }
-                />
+                >
+                  <Route path="/" element={<HomePage />} />
+                  {/* The per-user settings surface (#96, epic #90) — the same
+                      hub component `/admin/settings` renders, over
+                      `USER_SETTINGS_SECTIONS`, plus one route per card.
+
+                      NONE OF THESE IS WRAPPED IN `RequirePermission`, and that is
+                      the deliberate difference from the `/admin/settings/*` block
+                      below rather than an oversight. `ProtectedRoute` above
+                      establishes that someone is signed in, and that is the only
+                      question these routes have: they edit the caller's OWN
+                      settings, which the API grants to all three roles, and
+                      `config/userSettingsSections.tsx` correspondingly declares no
+                      `permission` on any card. A gate here would deny a Viewer
+                      their own display name.
+
+                      As above, declaration order does not matter — React Router
+                      v6 ranks by specificity, so `/settings/profile` beats
+                      `/settings` wherever each is written. */}
+                  <Route path="/settings" element={<UserSettingsHubPage />} />
+                  <Route path="/settings/profile" element={<UserProfilePage />} />
+                  <Route path="/settings/appearance" element={<UserAppearancePage />} />
+                  {/* Ungated like its siblings (#126): these are the caller's own
+                      preferences, and the registry endpoint the page renders is
+                      itself `@Auth()` with no permission for the same reason. */}
+                  <Route path="/settings/notifications" element={<UserNotificationsPage />} />
+                  <Route path="/settings/tokens" element={<UserTokensPage />} />
+                  {/* Epic #20. No `RequirePermission`: every authenticated user owns
+                      their own key, and a Viewer without one cannot use the app at
+                      all. Deliberately NOT exempt from the AI-key gate (#29) —
+                      removing a key here sends the user to /setup/ai-key, which is
+                      what the confirm dialog warns will happen. */}
+                  <Route path="/settings/ai-key" element={<UserAiKeyPage />} />
+                  {/* Route-level AUTHORIZATION, not just authentication.
+                      `ProtectedRoute` above only establishes that someone is
+                      logged in — before this, a Viewer typing `/admin/settings`
+                      reached the page and only then watched every API call 403.
+                      `RequirePermission` was already in the codebase but had zero
+                      usages; wrapping these routes is what turns it into the
+                      enforcement point.
+
+                      The permission on each route is the SAME string its card
+                      declares in `config/adminSections.tsx`, which is the same
+                      string the API's controller enforces — so the hub card, the
+                      rail row, the menu entry and the route can no longer
+                      disagree about who may go where.
+
+                      ORDER IS NOT SIGNIFICANT HERE. React Router v6 ranks routes
+                      by specificity rather than by declaration order, so
+                      `/admin/settings/users` beats `/admin/settings` regardless
+                      of where each sits in this list. They are grouped by surface
+                      for reading, not for matching. */}
+
+                  {/* Both redirects are REAL ROUTES, not catch-all fallout.
+                      Without them a bookmarked `/admin/users` matches only `*`
+                      and lands silently on `/` — the user asked for a page that
+                      still exists and got the home screen with no explanation.
+                      `replace` keeps the dead URL out of the history stack, so
+                      Back returns to wherever the user came from rather than
+                      bouncing through the redirect again.
+
+                      They sit INSIDE `ProtectedRoute` so an unauthenticated
+                      bookmark goes to login and arrives here afterwards, rather
+                      than being redirected first and losing the destination. */}
+                  <Route path="/admin" element={<Navigate to="/admin/settings" replace />} />
+                  <Route
+                    path="/admin/users"
+                    element={<Navigate to="/admin/settings/users" replace />}
+                  />
+
+                  {/* The Console hub (#93, epic #90) — the searchable, grouped
+                      card grid that reads `ADMIN_SECTIONS`. It replaces the
+                      three-tab placeholder that answered this route through #92,
+                      whose tabs duplicated the four routes below. That
+                      duplication is now gone: the hub NAVIGATES to those routes
+                      instead of re-hosting them. */}
+                  {/* ANY-OF, and the one route here that is not a single
+                      permission. This gate MUST STAY IN SYNC WITH `console`'s
+                      `anyPermission` in `config/destinations.ts` — the two lists
+                      answer the same question ("may this user reach the admin
+                      surface?") on two different surfaces, and #92 left them
+                      disagreeing: the Console row appeared in the rail, bottom
+                      bar, user menu and quick actions for a `users:read`-only
+                      user, whose click then bounced straight back to `/`. That
+                      split brain is exactly what `config/destinations.ts`'s
+                      header says the destination model exists to prevent, so the
+                      route follows the destination rather than the reverse.
+
+                      `requireAll` defaults to `false`, so `permissions` is an OR
+                      here — matching `anyPermission`'s semantics, not
+                      `hasAllPermissions`'.
+
+                      A `users:read`-only user consequently reaches this route
+                      and — since #93 — sees a hub containing exactly the one card
+                      that permission unlocks, instead of the placeholder page's
+                      blanket access-denied state. The hub's own gate
+                      (`visibleSettingsSections`) does that per CARD, which is why
+                      this route only answers the coarser question "may this user
+                      reach the admin surface at all?". The five child routes
+                      below keep their single-permission gates: each is one
+                      specific page with one specific permission. */}
+                  <Route
+                    path="/admin/settings"
+                    element={
+                      <RequirePermission
+                        permissions={['system_settings:read', 'users:read']}
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <SettingsHubPage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/admin/settings/general"
+                    element={
+                      <RequirePermission
+                        permission="system_settings:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <GeneralSettingsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/admin/settings/appearance"
+                    element={
+                      <RequirePermission
+                        permission="system_settings:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <AppearanceSettingsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/admin/settings/feature-flags"
+                    element={
+                      <RequirePermission
+                        permission="system_settings:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <FeatureFlagsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Issue #124, epic #109. Same permission string the `Email`
+                      card declares in `config/adminSections.tsx`, which is the
+                      same string the API's email-settings controller enforces on
+                      its GET — the invariant `destinations.test.ts` asserts for
+                      every card. `system_settings:read` and not `:write`: saving
+                      and test-sending need write, and the page disables both
+                      without it, but the configuration is worth READING for
+                      anyone diagnosing why mail is not arriving. */}
+                  <Route
+                    path="/admin/settings/email"
+                    element={
+                      <RequirePermission
+                        permission="system_settings:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <EmailSettingsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Epic #20. Same string as the `AI` card in
+                      `config/adminSections.tsx`, and the same `read`-not-`write`
+                      reasoning as Email above: saving, refreshing the catalog and
+                      testing all need write, and the page disables them without
+                      it, but the configuration is worth READING for anyone
+                      diagnosing why AI features are not responding. */}
+                  <Route
+                    path="/admin/settings/ai"
+                    element={
+                      <RequirePermission
+                        permission="system_settings:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <AiSettingsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* `system_settings:WRITE`, not `read`, and the one route here
+                      whose permission differs from its siblings'. A raw editor
+                      over the entire settings document has no read-only meaning —
+                      see `config/adminSections.tsx`. */}
+                  <Route
+                    path="/admin/settings/advanced"
+                    element={
+                      <RequirePermission
+                        permission="system_settings:write"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <AdvancedSettingsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* `users:read` alone, even though the page also hosts the
+                      allowlist. The route gate is about REACHABILITY and the page
+                      is worth reaching for its Users tab; the Allowlist tab gates
+                      its own content on `allowlist:read` inside the page. */}
+                  <Route
+                    path="/admin/settings/users"
+                    element={
+                      <RequirePermission
+                        permission="users:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <AdminUsersPage />
+                      </RequirePermission>
+                    }
+                  />
+                </Route>
               </Route>
             </Route>
 

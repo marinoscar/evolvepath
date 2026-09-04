@@ -70,6 +70,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { AuthContext } from '../src/contexts/AuthContext';
 import { ThemeContextProvider, useThemeContext } from '../src/contexts/ThemeContext';
 import { ProtectedRoute } from '../src/components/common/ProtectedRoute';
+import { RequireAiKey } from '../src/components/common/RequireAiKey';
 import { RequirePermission } from '../src/components/common/RequirePermission';
 import { Layout } from '../src/components/common/Layout';
 import { ErrorBoundary } from '../src/components/common/ErrorBoundary';
@@ -200,94 +201,100 @@ function HarnessRoutes() {
   return (
     <Routes>
       <Route element={<ProtectedRoute />}>
-        <Route element={<Layout />}>
-          <Route path="/" element={<HomePage />} />
+        {/* MIRRORS `App.tsx`'s nesting exactly (#29, epic #20). The harness
+            user has `aiKey.configured: true`, so nothing visible changes — but
+            the STRUCTURE has to match, or a captured page is rendering through
+            a different route tree than the app does. */}
+        <Route element={<RequireAiKey />}>
+          <Route element={<Layout />}>
+            <Route path="/" element={<HomePage />} />
 
-          <Route path="/settings" element={<UserSettingsHubPage />} />
-          <Route path="/settings/profile" element={<UserProfilePage />} />
-          <Route path="/settings/appearance" element={<UserAppearancePage />} />
-          <Route path="/settings/tokens" element={<UserTokensPage />} />
-          <Route path="/settings/ai-key" element={<UserAiKeyPage />} />
+            <Route path="/settings" element={<UserSettingsHubPage />} />
+            <Route path="/settings/profile" element={<UserProfilePage />} />
+            <Route path="/settings/appearance" element={<UserAppearancePage />} />
+            <Route path="/settings/tokens" element={<UserTokensPage />} />
+            <Route path="/settings/ai-key" element={<UserAiKeyPage />} />
 
-          <Route path="/admin" element={<Navigate to="/admin/settings" replace />} />
-          <Route
-            path="/admin/settings"
-            element={
-              <RequirePermission
-                permissions={['system_settings:read', 'users:read']}
-                fallback={<Navigate to="/" replace />}
-              >
-                <SettingsHubPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/admin/settings/general"
-            element={
-              <RequirePermission
-                permission="system_settings:read"
-                fallback={<Navigate to="/" replace />}
-              >
-                <GeneralSettingsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/admin/settings/appearance"
-            element={
-              <RequirePermission
-                permission="system_settings:read"
-                fallback={<Navigate to="/" replace />}
-              >
-                <AppearanceSettingsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/admin/settings/feature-flags"
-            element={
-              <RequirePermission
-                permission="system_settings:read"
-                fallback={<Navigate to="/" replace />}
-              >
-                <FeatureFlagsPage />
-              </RequirePermission>
-            }
-          />
-          {/* Epic #20. Present so the AI hub card NAVIGATES in the harness
-              rather than falling through to the catch-all redirect. The
-              harness has no MSW, so the page itself renders its load-failure
-              state — the capture that matters is the hub card, not this. */}
-          <Route
-            path="/admin/settings/ai"
-            element={
-              <RequirePermission
-                permission="system_settings:read"
-                fallback={<Navigate to="/" replace />}
-              >
-                <AiSettingsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/admin/settings/advanced"
-            element={
-              <RequirePermission
-                permission="system_settings:write"
-                fallback={<Navigate to="/" replace />}
-              >
-                <AdvancedSettingsPage />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/admin/settings/users"
-            element={
-              <RequirePermission permission="users:read" fallback={<Navigate to="/" replace />}>
-                <AdminUsersPage />
-              </RequirePermission>
-            }
-          />
+            <Route path="/admin" element={<Navigate to="/admin/settings" replace />} />
+            <Route
+              path="/admin/settings"
+              element={
+                <RequirePermission
+                  permissions={['system_settings:read', 'users:read']}
+                  fallback={<Navigate to="/" replace />}
+                >
+                  <SettingsHubPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/admin/settings/general"
+              element={
+                <RequirePermission
+                  permission="system_settings:read"
+                  fallback={<Navigate to="/" replace />}
+                >
+                  <GeneralSettingsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/admin/settings/appearance"
+              element={
+                <RequirePermission
+                  permission="system_settings:read"
+                  fallback={<Navigate to="/" replace />}
+                >
+                  <AppearanceSettingsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/admin/settings/feature-flags"
+              element={
+                <RequirePermission
+                  permission="system_settings:read"
+                  fallback={<Navigate to="/" replace />}
+                >
+                  <FeatureFlagsPage />
+                </RequirePermission>
+              }
+            />
+            {/* Epic #20. Present so the AI hub card NAVIGATES in the harness
+                rather than falling through to the catch-all redirect. The
+                harness has no MSW, so the page itself renders its load-failure
+                state — the capture that matters is the hub card, not this. */}
+            <Route
+              path="/admin/settings/ai"
+              element={
+                <RequirePermission
+                  permission="system_settings:read"
+                  fallback={<Navigate to="/" replace />}
+                >
+                  <AiSettingsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/admin/settings/advanced"
+              element={
+                <RequirePermission
+                  permission="system_settings:write"
+                  fallback={<Navigate to="/" replace />}
+                >
+                  <AdvancedSettingsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/admin/settings/users"
+              element={
+                <RequirePermission permission="users:read" fallback={<Navigate to="/" replace />}>
+                  <AdminUsersPage />
+                </RequirePermission>
+              }
+            />
+          </Route>
         </Route>
       </Route>
 

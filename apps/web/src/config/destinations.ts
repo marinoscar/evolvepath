@@ -87,6 +87,10 @@ export const UNOWNED_ROUTES: readonly string[] = [
   '/auth/callback',
   '/activate',
   '/testing/login',
+  // The AI-key gate's own destination (#29, epic #20). Like `/activate`, it
+  // renders OUTSIDE `Layout` — there is no rail and no bottom bar on it to
+  // highlight, and a user who is on it cannot reach any destination anyway.
+  '/setup/ai-key',
 ];
 
 /**

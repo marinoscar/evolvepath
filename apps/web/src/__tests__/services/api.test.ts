@@ -1,7 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
-import { api, ApiError } from '../../services/api';
+import {
+  api,
+  ApiError,
+  AI_KEY_REQUIRED_CODE,
+  AI_KEY_REQUIRED_EVENT,
+} from '../../services/api';
 
 describe('ApiService', () => {
   beforeEach(() => {
@@ -657,6 +662,76 @@ describe('ApiService', () => {
       const result = await api.get('/legacy');
 
       expect(result).toEqual({ users: [], count: 0 });
+    });
+  });
+
+  /**
+   * The 412 `AI_KEY_REQUIRED` path (issue #29, epic #20).
+   *
+   * The API's `AiKeyRequiredException` opts out of the shared error envelope
+   * precisely so `code` survives to here; if this stops working, the web app's
+   * only signal that a user's key vanished is gone with it.
+   */
+  describe('AI_KEY_REQUIRED (412)', () => {
+    it('throws an ApiError carrying the code', async () => {
+      server.use(
+        http.get('*/api/probe', () =>
+          HttpResponse.json(
+            {
+              statusCode: 412,
+              code: AI_KEY_REQUIRED_CODE,
+              message: 'An OpenAI API key is required.',
+            },
+            { status: 412 },
+          ),
+        ),
+      );
+
+      const error = await api.get('/probe').catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(412);
+      expect((error as ApiError).code).toBe(AI_KEY_REQUIRED_CODE);
+    });
+
+    it('dispatches the window event so AuthContext can re-read the user', async () => {
+      server.use(
+        http.get('*/api/probe', () =>
+          HttpResponse.json(
+            { statusCode: 412, code: AI_KEY_REQUIRED_CODE, message: 'nope' },
+            { status: 412 },
+          ),
+        ),
+      );
+
+      const listener = vi.fn();
+      window.addEventListener(AI_KEY_REQUIRED_EVENT, listener);
+
+      await api.get('/probe').catch(() => undefined);
+
+      expect(listener).toHaveBeenCalled();
+      window.removeEventListener(AI_KEY_REQUIRED_EVENT, listener);
+    });
+
+    it('does not dispatch for a 412 that is not about a key', async () => {
+      // The event triggers a `/auth/me` re-read; firing it for every 412 would
+      // make an unrelated precondition failure cost an extra request.
+      server.use(
+        http.get('*/api/probe', () =>
+          HttpResponse.json(
+            { statusCode: 412, code: 'PRECONDITION_FAILED', message: 'nope' },
+            { status: 412 },
+          ),
+        ),
+      );
+
+      const listener = vi.fn();
+      window.addEventListener(AI_KEY_REQUIRED_EVENT, listener);
+
+      await api.get('/probe').catch(() => undefined);
+
+      expect(listener).not.toHaveBeenCalled();
+      window.removeEventListener(AI_KEY_REQUIRED_EVENT, listener);
     });
   });
 });

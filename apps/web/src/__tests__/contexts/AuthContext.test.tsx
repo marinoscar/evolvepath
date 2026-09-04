@@ -4,6 +4,7 @@ import { renderHook, act } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { AuthProvider, useAuth } from '../../contexts/AuthContext';
+import { AI_KEY_REQUIRED_EVENT } from '../../services/api';
 import { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -335,6 +336,87 @@ describe('AuthContext', () => {
       }).toThrow('useAuth must be used within an AuthProvider');
 
       consoleSpy.mockRestore();
+    });
+  });
+
+  /**
+   * The AI-key-required listener (issue #29, epic #20).
+   *
+   * `user.aiKey.configured` is only as fresh as the last `/auth/me`, so a key
+   * removed in another tab leaves THIS tab inside a shell it can no longer use.
+   * The API layer dispatches on a 412; this is the half that reacts.
+   */
+  describe('AI_KEY_REQUIRED event', () => {
+    it('re-reads the user when the event fires', async () => {
+      server.use(
+        http.post('*/api/auth/refresh', () =>
+          HttpResponse.json({ accessToken: 'test-token', expiresIn: 900 }),
+        ),
+      );
+
+      let meCalls = 0;
+      server.use(
+        http.get('*/api/auth/me', () => {
+          meCalls += 1;
+          return HttpResponse.json({
+            data: {
+              id: 'test-user-id',
+              email: 'test@example.com',
+              displayName: 'Test User',
+              profileImageUrl: null,
+              roles: [{ name: 'viewer' }],
+              permissions: [],
+              isActive: true,
+              createdAt: new Date().toISOString(),
+              // The state the event exists to reveal.
+              aiKey: { configured: meCalls > 1 ? false : true, hint: null },
+            },
+          });
+        }),
+      );
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: createAuthWrapper(),
+      });
+
+      await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+      expect(result.current.user?.aiKey.configured).toBe(true);
+
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent(AI_KEY_REQUIRED_EVENT));
+      });
+
+      await waitFor(() => expect(result.current.user?.aiKey.configured).toBe(false));
+    });
+
+    it('ignores the event while signed out', async () => {
+      // A 412 on a signed-out tab is not something a re-read can fix, and
+      // fetching would produce a 401 and a spurious sign-out.
+      server.use(
+        http.post('*/api/auth/refresh', () => new HttpResponse(null, { status: 401 })),
+        http.get('*/api/auth/me', () => new HttpResponse(null, { status: 401 })),
+      );
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: createAuthWrapper(),
+      });
+
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.isAuthenticated).toBe(false);
+
+      let meCalls = 0;
+      server.use(
+        http.get('*/api/auth/me', () => {
+          meCalls += 1;
+          return new HttpResponse(null, { status: 401 });
+        }),
+      );
+
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent(AI_KEY_REQUIRED_EVENT));
+      });
+
+      expect(meCalls).toBe(0);
     });
   });
 });

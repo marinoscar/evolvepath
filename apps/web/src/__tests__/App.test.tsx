@@ -81,8 +81,26 @@ vi.mock('../pages/UserNotificationsPage', () => ({
 
 const API_BASE = '*/api';
 
-/** Overrides `GET /auth/me` for one test, so the route tree sees this user. */
-function signInAs(permissions: string[], roles: string[] = ['viewer']) {
+// Epic #20. The AI-key SETUP page is deliberately NOT mocked: the routing
+// assertions below are about landing on it, and a stand-in would make "the gate
+// redirected" indistinguishable from "the page rendered".
+vi.mock('../pages/UserAiKeyPage', () => ({
+  default: () => <h1>User AI Key Page</h1>,
+}));
+
+/**
+ * Overrides `GET /auth/me` for one test, so the route tree sees this user.
+ *
+ * `aiKey` defaults to configured: every assertion below is about
+ * `RequirePermission` wiring, and a keyless user would be redirected by
+ * `RequireAiKey` before reaching any of it. The gate's own tests pass
+ * `aiKey: false` explicitly.
+ */
+function signInAs(
+  permissions: string[],
+  roles: string[] = ['viewer'],
+  aiKeyConfigured = true,
+) {
   server.use(
     http.get(`${API_BASE}/auth/me`, () =>
       HttpResponse.json({
@@ -95,6 +113,10 @@ function signInAs(permissions: string[], roles: string[] = ['viewer']) {
           permissions,
           isActive: true,
           createdAt: new Date().toISOString(),
+          aiKey: {
+            configured: aiKeyConfigured,
+            hint: aiKeyConfigured ? '\u2022\u2022\u2022\u2022e2e1' : null,
+          },
         },
       }),
     ),
@@ -478,6 +500,69 @@ describe('App', () => {
         timeout: 5000,
       });
       expect(screen.queryByRole('heading', { name: 'Admin Users' })).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * The AI-key gate (issue #29, epic #20).
+   *
+   * Route-level, not page-level: the real `AiKeySetupPage` is left unmocked so
+   * "the gate redirected here" is what is being observed, and every shell page
+   * is a stand-in so anything that renders proves the gate let it through.
+   */
+  describe('the AI-key gate', () => {
+    function renderAt(pathname: string) {
+      return render(
+        <MemoryRouter initialEntries={[pathname]}>
+          <App />
+        </MemoryRouter>,
+      );
+    }
+
+    it.each(['/', '/settings', '/settings/ai-key'])(
+      'sends a keyless user from %s to the setup page',
+      async (pathname) => {
+        signInAs(['user_settings:read'], ['viewer'], false);
+        renderAt(pathname);
+
+        expect(
+          await screen.findByRole('heading', { name: 'Connect your OpenAI API key' }, { timeout: 5000 }),
+        ).toBeInTheDocument();
+      },
+    );
+
+    it('gates an admin too — an admin without a key cannot use the coach either', async () => {
+      signInAs(['system_settings:read', 'users:read'], ['admin'], false);
+      renderAt('/admin/settings');
+
+      expect(
+        await screen.findByRole('heading', { name: 'Connect your OpenAI API key' }, { timeout: 5000 }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Admin Settings Hub')).not.toBeInTheDocument();
+    });
+
+    it('leaves /activate reachable without a key', async () => {
+      // Approving a device is a credential operation with nothing to do with
+      // AI; a user holding a code in front of a TV must not be diverted.
+      signInAs(['user_settings:read'], ['viewer'], false);
+      renderAt('/activate');
+
+      await waitFor(
+        () =>
+          expect(
+            screen.queryByRole('heading', { name: 'Connect your OpenAI API key' }),
+          ).not.toBeInTheDocument(),
+        { timeout: 5000 },
+      );
+    });
+
+    it('lets a user with a key through to the shell', async () => {
+      signInAs(['user_settings:read'], ['viewer'], true);
+      renderAt('/settings');
+
+      expect(
+        await screen.findByRole('heading', { name: 'User Settings Hub' }, { timeout: 5000 }),
+      ).toBeInTheDocument();
     });
   });
 });

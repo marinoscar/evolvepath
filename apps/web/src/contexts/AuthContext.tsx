@@ -8,7 +8,7 @@ import {
   ReactNode,
 } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { api, ApiError } from '../services/api';
+import { api, ApiError, AI_KEY_REQUIRED_EVENT } from '../services/api';
 import { User, AuthProvider as AuthProviderType } from '../types';
 
 interface AuthContextValue {
@@ -116,6 +116,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const refreshUser = useCallback(async () => {
     await fetchUser();
   }, [fetchUser]);
+
+  /**
+   * Re-read the user when an API call reports that a key is required
+   * (issue #29, epic #20).
+   *
+   * `user.aiKey.configured` is only as fresh as the last `/auth/me`, so a key
+   * removed in another tab leaves THIS tab inside a shell it can no longer use.
+   * The API layer dispatches `AI_KEY_REQUIRED_EVENT` on a 412; re-reading here
+   * flips the flag, and `RequireAiKey` redirects on the next render.
+   *
+   * Only when there IS a user: a 412 on a signed-out tab is not a thing this
+   * can fix, and re-fetching would produce a 401 and a spurious sign-out.
+   */
+  useEffect(() => {
+    if (!user) return;
+
+    const handler = () => {
+      void fetchUser();
+    };
+
+    window.addEventListener(AI_KEY_REQUIRED_EVENT, handler);
+    return () => window.removeEventListener(AI_KEY_REQUIRED_EVENT, handler);
+  }, [user, fetchUser]);
 
   const value: AuthContextValue = {
     user,
