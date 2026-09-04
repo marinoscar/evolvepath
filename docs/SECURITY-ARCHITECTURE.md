@@ -1759,10 +1759,19 @@ Implemented in `apps/api/src/common/crypto/secret-cipher.ts`.
 The master key (`SECRETS_ENCRYPTION_KEY`) is never used directly to encrypt or decrypt. Every encrypt/decrypt call goes through a purpose-bound sub-key:
 
 ```
-derivedKey = HMAC-SHA256(masterKey, "enterpriseappbase:secret-cipher:v1:" + purpose)
+derivedKey = HMAC-SHA256(masterKey, "evolvepath:secret-cipher:v2:" + purpose)
 ```
 
 `purpose` is a required, non-empty string (e.g. `'smtp'`, `'oauth'`) — never optional, never defaulted.
+
+The label prefix is fixed and versioned. It was `enterpriseappbase:secret-cipher:v1:`
+until the product's rename to Evolve Path (issue #8), which bumped it to `v2`
+rather than merely renaming it in place — changing this string changes every
+derived key, so it can only move together with a re-encryption migration. The
+old label is not kept anywhere in application code; it exists only as a
+standalone, hardcoded copy inside the one-time operator script
+`apps/api/scripts/migrate-secret-cipher-label.ts`, documented in
+[`docs/runbooks/rotate-secrets-encryption-key.md`](runbooks/rotate-secrets-encryption-key.md#0-one-time-migration-secret-cipher-label-v1--v2-issue-8).
 
 **Why this matters — the specific attack it stops**: without domain separation, a ciphertext lifted out of one purpose's row — by a SQL write with access to the table but not the key, or by a bug that copies a row across tables or purposes — would decrypt successfully wherever it landed, meaning nothing more than "some bytes that happen to authenticate." With purpose-bound derivation, that same ciphertext, pasted into a different purpose's context, fails GCM authentication instead of decrypting into a context where it means something else. This is domain separation used as a lateral-movement control: a stolen or misrouted ciphertext cannot cross purposes.
 

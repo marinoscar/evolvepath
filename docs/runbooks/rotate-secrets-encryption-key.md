@@ -18,6 +18,72 @@ this size — manual rotation, run by an operator as a one-off script, is
 considered acceptable. This runbook describes how to write and run that
 script safely, not a command you can copy-paste as-is.
 
+The one exception is section 0 below: a **shipped, one-time** migration
+script, for a label change rather than a key rotation.
+
+---
+
+## 0. One-time migration: secret-cipher label v1 -> v2 (issue #8)
+
+This is a **different operation from key rotation** (sections 1-4 below,
+which are about the operator rotating `SECRETS_ENCRYPTION_KEY` itself). This
+section is about a **one-time, already-happened** change to the fixed label
+string every sub-key is derived from (`SUBKEY_LABEL_PREFIX` in
+`secret-cipher.ts`), bumped from `enterpriseappbase:secret-cipher:v1:` to
+`evolvepath:secret-cipher:v2:` when the product renamed to Evolve Path. The
+`SECRETS_ENCRYPTION_KEY` itself does **not** change for this migration — only
+the label mixed into the HMAC does, which is enough on its own to make every
+existing row's derived sub-key different and its ciphertext undecryptable.
+
+Unlike key rotation, this repository **does** ship a script for it:
+`apps/api/scripts/migrate-secret-cipher-label.ts`, run via:
+
+```bash
+npm run migrate:secret-cipher --workspace=api           # --dry-run first, see below
+npm run migrate:secret-cipher --workspace=api -- --dry-run
+```
+
+It re-encrypts every `credentials` row: decrypt under a hardcoded, standalone
+copy of the OLD (v1) label, re-encrypt under the current (v2) label via the
+live `encryptSecret`, write the new ciphertext back — one row per
+`$transaction`, so one row's failure never blocks or corrupts another. It
+never logs plaintext, key material, or raw ciphertext, only row id, `purpose`,
+`name`, and a pass/fail outcome, and it exits non-zero if any row failed.
+
+**Operational order:**
+
+1. Deploy the code containing both the new `SUBKEY_LABEL_PREFIX` and this
+   migration script. (Deploying alone does not touch existing rows — nothing
+   breaks yet, because nothing has tried to decrypt an old-label row under the
+   new label.)
+2. Before (or immediately after, in a short maintenance window) any process
+   attempts to decrypt an existing credential under the new label, run the
+   migration script once:
+   ```bash
+   npm run migrate:secret-cipher --workspace=api
+   ```
+   Check its summary: `Failed: 0` is required before moving on. Any failure
+   is reported per-row (id / purpose / name / reason, never the secret
+   itself) and must be resolved — typically by re-entering that one
+   credential via `CredentialsService.setSecret` (section 5 below covers the
+   same "affected credentials" lookup for the harder case of real key loss)
+   — before this deployment is considered safe.
+3. Confirm the migration actually converged by running `--dry-run` again:
+   ```bash
+   npm run migrate:secret-cipher --workspace=api -- --dry-run
+   ```
+   Its summary must report **zero** rows still on the old label (`Would
+   migrate: 0`) — everything should now show as `Already on new label`. If
+   this does not hold, do not consider the migration complete; re-run the
+   real migration or investigate the remaining rows before moving on.
+
+If this environment has never had an administrator save a runtime credential
+(no SMTP password etc. configured through `CredentialsService`), the script
+finds zero rows and step 2 is a safe no-op — but it should still be run, not
+assumed, since the same code ships to every fork of this repository and "the
+table happened to be empty this time" is not something to rely on going
+forward.
+
 ---
 
 ## 1. Before you start

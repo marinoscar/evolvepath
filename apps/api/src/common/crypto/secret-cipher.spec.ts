@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 
 // =============================================================================
 // AES-256-GCM Secret Cipher — tests (issue #114)
@@ -258,6 +258,92 @@ describe('secret-cipher', () => {
       const payload = cipher.encryptSecret('value', 'smtp');
       expect(() => cipher.decryptSecret(payload, undefined as any)).toThrow(/non-empty purpose/);
       expect(() => cipher.decryptSecret(payload, 42 as any)).toThrow(/non-empty purpose/);
+    });
+  });
+
+  describe('sub-key derivation label (issue #8)', () => {
+    // SUBKEY_LABEL_PREFIX itself is not exported (by design — the module's
+    // public surface is only encrypt/decrypt/assert). This proves the module
+    // is deriving keys under the NEW ('evolvepath:secret-cipher:v2:') label
+    // rather than the old ('enterpriseappbase:secret-cipher:v1:') one by
+    // independently reproducing the HMAC and checking it produces the same
+    // ciphertext-decryptability the real module does — i.e. a payload
+    // encrypted with the key this test derives under the new label round-trips
+    // through the module's own decryptSecret, while one derived under the old
+    // label does not.
+    const NEW_LABEL_PREFIX = 'evolvepath:secret-cipher:v2:';
+    const OLD_LABEL_PREFIX = 'enterpriseappbase:secret-cipher:v1:';
+
+    function deriveKeyWithLabel(
+      masterKeyB64: string,
+      labelPrefix: string,
+      purpose: string,
+    ): Buffer {
+      const masterKey = Buffer.from(masterKeyB64, 'base64');
+      return createHmac('sha256', masterKey).update(`${labelPrefix}${purpose}`).digest();
+    }
+
+    it('derives sub-keys under the new v2 label, not the old v1 one', () => {
+      const cipher = loadCipher(VALID_KEY);
+      const payload = cipher.encryptSecret('value-under-test', 'smtp');
+
+      const newLabelKey = deriveKeyWithLabel(VALID_KEY, NEW_LABEL_PREFIX, 'smtp');
+      const oldLabelKey = deriveKeyWithLabel(VALID_KEY, OLD_LABEL_PREFIX, 'smtp');
+
+      // Same 32-byte length for both (sanity: this isn't a byte-length
+      // artifact), but only the NEW-label key can equal whatever key the
+      // module actually used, since only one of the two labels is correct.
+      expect(newLabelKey.length).toBe(32);
+      expect(oldLabelKey.length).toBe(32);
+      expect(newLabelKey.equals(oldLabelKey)).toBe(false);
+
+      // Decrypt the payload manually with the independently-derived new-label
+      // key using the exact same AES-256-GCM layout the module documents
+      // ([iv:12][authTag:16][ciphertext]). If this succeeds, the module's
+      // internal key equals `newLabelKey` — i.e. it is using the v2 label.
+      const { createDecipheriv } = require('node:crypto') as typeof import('node:crypto');
+      const buf = Buffer.from(payload, 'base64');
+      const iv = buf.subarray(0, 12);
+      const authTag = buf.subarray(12, 28);
+      const ciphertext = buf.subarray(28);
+
+      const decipher = createDecipheriv('aes-256-gcm', newLabelKey, iv, {
+        authTagLength: 16,
+      });
+      decipher.setAuthTag(authTag);
+      const plaintext = Buffer.concat([
+        decipher.update(ciphertext),
+        decipher.final(),
+      ]).toString('utf8');
+      expect(plaintext).toBe('value-under-test');
+
+      // And the old-label key must NOT work (proves the label actually
+      // changed, rather than both formulas coincidentally deriving the
+      // same key).
+      const decipherOld = createDecipheriv('aes-256-gcm', oldLabelKey, iv, {
+        authTagLength: 16,
+      });
+      decipherOld.setAuthTag(authTag);
+      expect(() =>
+        Buffer.concat([decipherOld.update(ciphertext), decipherOld.final()]),
+      ).toThrow();
+    });
+
+    it('cannot decrypt a payload that was encrypted under the old v1 label', () => {
+      const cipher = loadCipher(VALID_KEY);
+
+      // Simulate a payload written before the v1 -> v2 migration by encrypting
+      // it by hand with the old-label-derived key.
+      const oldKey = deriveKeyWithLabel(VALID_KEY, OLD_LABEL_PREFIX, 'smtp');
+      const { createCipheriv, randomBytes: rb } = require('node:crypto') as typeof import('node:crypto');
+      const iv = rb(12);
+      const c = createCipheriv('aes-256-gcm', oldKey, iv, { authTagLength: 16 });
+      const ciphertext = Buffer.concat([c.update('legacy-secret', 'utf8'), c.final()]);
+      const authTag = c.getAuthTag();
+      const legacyPayload = Buffer.concat([iv, authTag, ciphertext]).toString('base64');
+
+      // The live module, deriving under the new v2 label, must reject it.
+      expect(() => cipher.decryptSecret(legacyPayload, 'smtp')).toThrow();
     });
   });
 
