@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { UserAiKeyService } from '../../src/ai/user-key/user-ai-key.service';
 import { NotificationsService } from '../../src/notifications/notifications.service';
 import { AuthService } from '../../src/auth/auth.service';
 import { AllowlistService } from '../../src/allowlist/allowlist.service';
@@ -61,6 +62,15 @@ describe('Auth Service - Allowlist Enforcement', () => {
           useValue: {
             notify: jest.fn().mockResolvedValue(undefined),
             notifyAddress: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        // `getCurrentUser` reports whether the caller has an OpenAI key (#25).
+        {
+          provide: UserAiKeyService,
+          useValue: {
+            describe: jest
+              .fn()
+              .mockResolvedValue({ configured: false, hint: null, updatedAt: null }),
           },
         },
       ],

@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TestLoginDto } from './dto/test-login.dto';
 import { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { DEFAULT_USER_SETTINGS } from '../common/types/settings.types';
+import { UserAiKeyService } from '../ai/user-key/user-ai-key.service';
 
 export interface TestAuthTokenResponse {
   accessToken: string;
@@ -27,6 +28,7 @@ export class TestAuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly userAiKey: UserAiKeyService,
   ) {}
 
   /**
@@ -133,6 +135,21 @@ export class TestAuthService {
 
     // Create refresh token
     const refreshToken = await this.createRefreshToken(user.id);
+
+    // Seed an OpenAI key so the login lands on the app rather than the setup
+    // gate (#25/#29). Test-only by construction: this whole module is not
+    // registered when NODE_ENV is production. The value is recognisable as
+    // synthetic so a key found in a database can be told apart from a real one.
+    //
+    // NOTE: this requires SECRETS_ENCRYPTION_KEY to be set — `setSecret`
+    // cannot encrypt without it. The Compose overlay for e2e (#30) supplies a
+    // test-only default for exactly this reason.
+    if (dto.withAiKey) {
+      await this.userAiKey.set(
+        user.id,
+        `sk-test-e2e-${randomBytes(12).toString('hex')}`,
+      );
+    }
 
     this.logger.log(`Test login successful for user: ${user.email} with roles: ${roles.join(', ')}`);
 

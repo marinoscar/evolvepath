@@ -118,6 +118,15 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'own error so a misconfiguration can be diagnosed.',
       },
       {
+        name: 'AI Key',
+        description:
+          "The caller's own OpenAI API key — write-only, testable and removable. Every user " +
+          'brings their own key; the gateway uses only the caller\'s. The key is never returned ' +
+          'by any endpoint, and the test answers 200 with the provider\'s own error so a bad key ' +
+          'can be diagnosed. Requires authentication only: it is an own-resource surface with no ' +
+          'user id in the path.',
+      },
+      {
         name: 'Notifications',
         description:
           'The registry of events this application can raise, and which channels each supports. ' +

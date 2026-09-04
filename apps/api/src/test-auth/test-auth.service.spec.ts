@@ -2,12 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { TestAuthService } from './test-auth.service';
+import { UserAiKeyService } from '../ai/user-key/user-ai-key.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { createMockPrismaService, MockPrismaService, mockPrismaTransaction } from '../../test/mocks/prisma.mock';
 import { TestLoginDto } from './dto/test-login.dto';
 
 describe('TestAuthService', () => {
   let service: TestAuthService;
+  let mockUserAiKey: { set: jest.Mock };
   let mockPrisma: MockPrismaService;
   let mockJwtService: jest.Mocked<JwtService>;
   let mockConfigService: jest.Mocked<ConfigService>;
@@ -74,6 +76,9 @@ describe('TestAuthService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
+        // `withAiKey` seeds an OpenAI key on the test user (#25). Absent from
+        // every existing case's DTO, so it must not be called by default.
+        { provide: UserAiKeyService, useValue: (mockUserAiKey = { set: jest.fn() }) },
       ],
     }).compile();
 

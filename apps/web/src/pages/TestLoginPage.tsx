@@ -10,6 +10,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Checkbox,
+  FormControlLabel,
   useTheme,
 } from '@mui/material';
 
@@ -81,6 +83,26 @@ export default function TestLoginPage() {
               label="Display Name (optional)"
               fullWidth
               margin="normal"
+            />
+
+            {/*
+              Seeds an OpenAI key on the test user so the login lands on the
+              app instead of `/setup/ai-key` (#25, epic #20).
+
+              UNCHECKED BY DEFAULT, deliberately: the keyless path is the one
+              worth being able to reach by hand, because it is the first thing
+              a real user sees. The e2e helper defaults the flag to `true` in
+              the opposite direction, so existing specs keep landing on `/`.
+
+              A NATIVE FORM POST, so this arrives as the string 'on' rather
+              than a boolean — see the `preprocess` on TestLoginDto.
+            */}
+            <FormControlLabel
+              control={
+                <Checkbox name="withAiKey" data-testid="test-with-ai-key" />
+              }
+              label="Seed an OpenAI key (skip the setup gate)"
+              sx={{ mt: 1 }}
             />
 
             <Button
