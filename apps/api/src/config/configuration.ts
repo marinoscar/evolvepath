@@ -137,6 +137,30 @@ export default () => {
     sesRegionFallback: process.env.S3_REGION || '',
   },
 
+  // AI provider (issue #23, epic #20)
+  //
+  // `baseUrl` exists for two real cases and no others: a corporate egress
+  // proxy, and the fake OpenAI server the e2e suite runs against (#30, which
+  // sets it to http://fake-openai:8089/v1 through a Compose overlay). It is
+  // normally unset. An administrator can also override it per-installation
+  // through `AiSettings.baseUrl`, which wins over this value; the HTTPS rule
+  // for production is enforced on that write path (#24), not here, because a
+  // deployment that reaches OpenAI through a sidecar on localhost is a
+  // legitimate operator decision and the environment is the operator's.
+  //
+  // `requestTimeoutMs` bounds ONE generate call. 60 s is chosen against a
+  // reasoning-tier model on a long planning prompt, which is the slowest thing
+  // this product asks for; it is not a nudge-generation latency budget.
+  ai: {
+    openai: {
+      baseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+    },
+    requestTimeoutMs: parseInt(
+      process.env.AI_REQUEST_TIMEOUT_MS || '60000',
+      10,
+    ),
+  },
+
   logLevel: process.env.LOG_LEVEL || 'info',
   };
 };

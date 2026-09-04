@@ -4,6 +4,8 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CredentialsModule } from '../credentials/credentials.module';
 import { StorageModule } from '../storage/storage.module';
+import { OpenAiProvider } from './providers/openai/openai.provider';
+import { AiProviderRegistry } from './providers/ai-provider.registry';
 
 // =============================================================================
 // AiModule (issue #22, epic #20)
@@ -32,7 +34,7 @@ import { StorageModule } from '../storage/storage.module';
 
 @Module({
   imports: [PrismaModule, CredentialsModule, StorageModule, ConfigModule],
-  providers: [],
-  exports: [],
+  providers: [OpenAiProvider, AiProviderRegistry],
+  exports: [AiProviderRegistry],
 })
 export class AiModule {}
