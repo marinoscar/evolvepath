@@ -176,3 +176,15 @@ Conventions every child must respect (they mirror `CLAUDE.md`):
 - Spec files are never rewritten to match drift in code; if the code has to differ from the spec, the issue gets a comment and the spec file a short "Deviation" note under the affected child.
 
 See [`ROADMAP.md`](../../ROADMAP.md) for status, and [`E01-ai-configuration-byok.md`](E01-ai-configuration-byok.md) for the fully worked example of the format.
+
+## Tooling (`docs/epics/tools/`)
+
+Three zero-dependency Node scripts keep the spec files, GitHub issues and `ROADMAP.md` in sync. Run them from the repo root with a scratch directory of your choice:
+
+```bash
+node docs/epics/tools/parse-epics.mjs docs/epics /tmp/epics        # validate the strict format; emits /tmp/epics/E0N.json
+node docs/epics/tools/backfill.mjs /tmp/epics docs/epics .          # needs /tmp/epics/E0N.map.json ({"E0N": <epic#>, "E0N-01": <child#>, …}); rewrites specs, this README and ROADMAP.md
+node docs/epics/tools/gen-updates.mjs /tmp/epics                    # emits /tmp/epics/updates/<issue#>.md bodies with real #N references for GitHub issue updates
+```
+
+Workflow for a new epic: write `docs/epics/E<NN>-<slug>.md` in the format above → `parse-epics.mjs` until it reports no problems → create the epic issue and its children as GitHub sub-issues → record the numbers in `E<NN>.map.json` → `backfill.mjs` + `gen-updates.mjs` → update the GitHub bodies → commit.
