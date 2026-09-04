@@ -66,17 +66,29 @@ export const MAX_AI_ERROR_MESSAGE_LENGTH = 2000;
  */
 export class AiKeyRedactor extends SecretRedactor {
   /**
-   * Scrub every registered secret and every key-shaped substring out of `text`,
-   * then cap it.
+   * Both redaction passes, WITHOUT the length cap.
+   *
+   * This is what the invocation logger applies to the strings inside its JSON
+   * blobs (#26). Those are bounded as a WHOLE, at 32 KiB, and capping each
+   * string individually at 2000 characters would silently truncate a long
+   * system prompt — exactly the "structured input" PRD §88 asks to be able to
+   * read back. Redaction is the property that must hold on every string; the
+   * length bound belongs to whoever owns the column.
+   */
+  scrub(text: string): string {
+    return super.apply(text).replace(OPENAI_KEY_PATTERN, KEY_PLACEHOLDER);
+  }
+
+  /**
+   * Scrub, then cap — for a single error message headed for
+   * `ai_invocations.error_message`, an admin alert or a log line.
    *
    * ORDER MATTERS AND IS NOT INTERCHANGEABLE. Capping first could cut a key in
    * half and leave the first half standing, which is a leak the pattern pass
    * would then be unable to match. Scrub, then cap.
    */
   override apply(text: string): string {
-    const scrubbed = super
-      .apply(text)
-      .replace(OPENAI_KEY_PATTERN, KEY_PLACEHOLDER);
+    const scrubbed = this.scrub(text);
 
     if (scrubbed.length <= MAX_AI_ERROR_MESSAGE_LENGTH) return scrubbed;
 
