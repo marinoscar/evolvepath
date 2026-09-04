@@ -220,6 +220,7 @@ import type {
   AiPersona,
   AiModelsResult,
   AiTestResult,
+  MyAiKeyStatus,
   NotificationEventDef,
   AppNotification,
   NotificationListResponse,
@@ -478,6 +479,46 @@ export async function getAiModels(refresh = false): Promise<AiModelsResult> {
  */
 export async function testAiConnection(): Promise<AiTestResult> {
   return api.post<AiTestResult>('/ai-settings/test');
+}
+
+// -----------------------------------------------------------------------------
+// The caller's own OpenAI key (epic #20, issue #25)
+// -----------------------------------------------------------------------------
+//
+// No user id in any path: these address the CALLER'S key by construction, which
+// is why they need authentication and no permission at all.
+
+/** `GET /api/me/ai-key` — status, last test, and what the platform is missing. */
+export async function getMyAiKey(): Promise<MyAiKeyStatus> {
+  return api.get<MyAiKeyStatus>('/me/ai-key');
+}
+
+/**
+ * `PUT /api/me/ai-key` — save or replace the caller's key.
+ *
+ * UNLIKE THE PLATFORM KEY, THERE IS NO BLANK-PRESERVES HERE. This endpoint's
+ * only job is to set a key; there is no surrounding form whose other fields a
+ * user might be editing, so an empty submission is a mistake and the API says
+ * so with a 400 rather than silently succeeding.
+ */
+export async function setMyAiKey(apiKey: string): Promise<MyAiKeyStatus> {
+  return api.put<MyAiKeyStatus>('/me/ai-key', { apiKey });
+}
+
+/** `DELETE /api/me/ai-key` — idempotent; removing a key that is not there succeeds. */
+export async function deleteMyAiKey(): Promise<void> {
+  await api.delete<void>('/me/ai-key');
+}
+
+/**
+ * `POST /api/me/ai-key/test` — probe the caller's own key.
+ *
+ * RESOLVES ON FAILURE, like every other test endpoint in this app: a refused
+ * connection is a 200 with `{ success: false, error }` and IS the diagnosis.
+ * Branch on `result.success`, never on the promise settling.
+ */
+export async function testMyAiKey(): Promise<AiTestResult> {
+  return api.post<AiTestResult>('/me/ai-key/test');
 }
 
 /**

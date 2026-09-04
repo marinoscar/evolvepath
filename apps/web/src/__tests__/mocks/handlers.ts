@@ -13,6 +13,12 @@ const mockUser = {
   permissions: ['user_settings:read', 'user_settings:write'],
   isActive: true,
   createdAt: new Date().toISOString(),
+  // Epic #20. MUTABLE through `setAiKeyConfigured` below, because
+  // `RequireAiKey` (#29) gates the whole shell on it and a routing spec needs
+  // to be able to drive it from the server's answer rather than by faking the
+  // context. Configured by default so existing specs keep landing on the page
+  // they are testing.
+  aiKey: { configured: true, hint: '\u2022\u2022\u2022\u2022e2e1' },
 };
 
 const mockUserSettings = {
@@ -140,6 +146,68 @@ const mockAiPersonas = [
     capabilities: ['text', 'vision'],
   },
 ];
+
+
+// -----------------------------------------------------------------------------
+// The caller's own OpenAI key (epic #20)
+// -----------------------------------------------------------------------------
+
+interface AiKeyState {
+  configured: boolean;
+  hint: string | null;
+  lastTest: {
+    attemptedAt: string;
+    success: boolean;
+    model: string | null;
+    error: string | null;
+  } | null;
+}
+
+const initialAiKeyState = (): AiKeyState => ({
+  configured: true,
+  hint: '\u2022\u2022\u2022\u2022e2e1',
+  lastTest: null,
+});
+
+let aiKeyState: AiKeyState = initialAiKeyState();
+
+/** Restore the default "a key is stored" state. Call from `beforeEach`. */
+export function resetAiKeyState(): void {
+  aiKeyState = initialAiKeyState();
+  mockUser.aiKey = { configured: true, hint: '\u2022\u2022\u2022\u2022e2e1' };
+}
+
+/**
+ * Drive the keyless state from the SERVER'S answer.
+ *
+ * Updates the `/auth/me` payload as well as `/me/ai-key`, because the gate
+ * (#29) reads `user.aiKey` from `AuthContext` — a helper that changed only one
+ * of the two would let a routing spec pass against a state the real app can
+ * never be in.
+ */
+export function setAiKeyConfigured(configured: boolean): void {
+  aiKeyState = {
+    ...aiKeyState,
+    configured,
+    hint: configured ? '\u2022\u2022\u2022\u2022e2e1' : null,
+  };
+  mockUser.aiKey = { configured, hint: aiKeyState.hint };
+}
+
+/** Seed the outcome of a previous test, which the API derives from telemetry. */
+export function setAiKeyLastTest(lastTest: AiKeyState['lastTest']): void {
+  aiKeyState = { ...aiKeyState, lastTest };
+}
+
+function myAiKeyResponse() {
+  return {
+    configured: aiKeyState.configured,
+    hint: aiKeyState.hint,
+    updatedAt: aiKeyState.configured ? new Date().toISOString() : null,
+    lastTest: aiKeyState.lastTest,
+    platform: { provider: 'openai', enabled: true, hasDefaultModel: true },
+  };
+}
 
 export const handlers = [
   // Auth endpoints
@@ -445,6 +513,51 @@ export const handlers = [
           listModels: 'passed',
           generate: aiSettingsState.defaultModel ? 'passed' : 'skipped',
         },
+      },
+    });
+  }),
+  // --- the caller's own OpenAI key (epic #20) --------------------------------
+
+  http.get(`${API_BASE}/me/ai-key`, () => {
+    return HttpResponse.json({ data: myAiKeyResponse() });
+  }),
+
+  http.put(`${API_BASE}/me/ai-key`, async ({ request }) => {
+    const body = (await request.json()) as { apiKey?: string };
+    const apiKey = body.apiKey ?? '';
+
+    // The API's own rules, reproduced so a spec can drive the 400: 20-512
+    // characters, no whitespace anywhere. There is deliberately no `sk-` rule.
+    if (apiKey.length < 20 || apiKey.length > 512 || /\s/.test(apiKey)) {
+      return HttpResponse.json(
+        {
+          message: 'That key looks too short. Copy the whole value from OpenAI.',
+          code: 'BAD_REQUEST',
+        },
+        { status: 400 },
+      );
+    }
+
+    setAiKeyConfigured(true);
+    return HttpResponse.json({ data: myAiKeyResponse() });
+  }),
+
+  http.delete(`${API_BASE}/me/ai-key`, () => {
+    setAiKeyConfigured(false);
+    // Idempotent 204: removing a key that is not there succeeds.
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.post(`${API_BASE}/me/ai-key/test`, () => {
+    return HttpResponse.json({
+      data: {
+        success: true,
+        providerKind: 'openai',
+        model: 'gpt-5.4',
+        latencyMs: 210,
+        error: null,
+        attemptedAt: new Date().toISOString(),
+        checks: { listModels: 'passed', generate: 'passed' },
       },
     });
   }),

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { USER_SETTINGS_SECTIONS } from '../../config/userSettingsSections';
+import {
+  USER_SETTINGS_SECTIONS,
+  USER_HUB_PATH,
+  USER_HUB_TITLE,
+} from '../../config/userSettingsSections';
+import { settingsPageTitle } from '../../config/adminSections';
 
 /**
  * Issue #126, epic #109. The Notifications card follows the same
@@ -59,5 +64,41 @@ describe('USER_SETTINGS_SECTIONS - Notifications card (issue #126)', () => {
     for (const card of allCards) {
       expect(card.permission).toBeUndefined();
     }
+  });
+});
+
+/**
+ * The OpenAI API Key card (issue #28, epic #20).
+ *
+ * The same registry rules as every other card here, plus one that is specific
+ * to it: it must NOT gate on a permission, because a Viewer without a key
+ * cannot use the application at all — gating the one card that unlocks the app
+ * would be the most consequential possible instance of the invented gate
+ * CLAUDE.md rule 3 warns against.
+ */
+describe('USER_SETTINGS_SECTIONS - OpenAI API Key card (issue #28)', () => {
+  const aiSection = () => USER_SETTINGS_SECTIONS.find((section) => section.label === 'AI');
+
+  it('declares exactly one card, in its own AI group', () => {
+    expect(aiSection()).toBeDefined();
+    expect(aiSection()!.cards).toHaveLength(1);
+    expect(aiSection()!.cards[0]!.title).toBe('OpenAI API Key');
+  });
+
+  it('points at /settings/ai-key with no permission', () => {
+    const card = aiSection()!.cards[0]!;
+    expect(card.path).toBe('/settings/ai-key');
+    expect(card.permission).toBeUndefined();
+  });
+
+  it('resolves the AppBar title for its route from the registry', () => {
+    expect(
+      settingsPageTitle(USER_SETTINGS_SECTIONS, USER_HUB_PATH, USER_HUB_TITLE, '/settings/ai-key'),
+    ).toBe('OpenAI API Key');
+  });
+
+  it('sits above Security, because supplying a key is mandatory and a PAT is not', () => {
+    const labels = USER_SETTINGS_SECTIONS.map((section) => section.label);
+    expect(labels.indexOf('AI')).toBeLessThan(labels.indexOf('Security'));
   });
 });

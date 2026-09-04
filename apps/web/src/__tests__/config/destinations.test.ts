@@ -48,6 +48,7 @@ describe('destinations — route ownership', () => {
       expect.arrayContaining([
         '/',
         '/settings',
+        '/settings/ai-key',
         '/admin',
         '/admin/users',
         '/admin/settings',

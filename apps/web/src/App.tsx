@@ -28,6 +28,7 @@ const UserAppearancePage = lazy(() => import('./pages/UserAppearancePage'));
 // Issue #126, epic #109 — the per-user event x channel notification matrix.
 const UserNotificationsPage = lazy(() => import('./pages/UserNotificationsPage'));
 const UserTokensPage = lazy(() => import('./pages/UserTokensPage'));
+const UserAiKeyPage = lazy(() => import('./pages/UserAiKeyPage'));
 
 // Console — the hub (#93) plus one route per card in
 // `config/adminSections.tsx` (#92, epic #90).
@@ -120,6 +121,12 @@ function AppRoutes() {
                     itself `@Auth()` with no permission for the same reason. */}
                 <Route path="/settings/notifications" element={<UserNotificationsPage />} />
                 <Route path="/settings/tokens" element={<UserTokensPage />} />
+                {/* Epic #20. No `RequirePermission`: every authenticated user owns
+                    their own key, and a Viewer without one cannot use the app at
+                    all. Deliberately NOT exempt from the AI-key gate (#29) —
+                    removing a key here sends the user to /setup/ai-key, which is
+                    what the confirm dialog warns will happen. */}
+                <Route path="/settings/ai-key" element={<UserAiKeyPage />} />
                 {/* Route-level AUTHORIZATION, not just authentication.
                     `ProtectedRoute` above only establishes that someone is
                     logged in — before this, a Viewer typing `/admin/settings`

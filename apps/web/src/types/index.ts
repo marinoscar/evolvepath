@@ -11,6 +11,33 @@ export interface User {
   permissions: string[];
   isActive: boolean;
   createdAt: string;
+  /**
+   * Whether this user has stored an OpenAI API key (epic #20).
+   *
+   * REQUIRED, not optional, and that is deliberate. `RequireAiKey` (#29) gates
+   * the entire app shell on `user.aiKey.configured`, so an optional field would
+   * make "the server did not send it" indistinguishable from "no key", and every
+   * consumer would need an `?.` whose fallback silently decided a security-shaped
+   * question. Making it required lets the compiler enumerate every fixture that
+   * has to declare it.
+   *
+   * It rides on `GET /auth/me`, which the app already fetches on boot, rather
+   * than on a second request — otherwise the gate is a waterfall in front of
+   * every page load, and the visual harness (which fakes `AuthContext`
+   * wholesale) would need a second fake to render anything.
+   */
+  aiKey: AiKeySummary;
+}
+
+/**
+ * The masked view of a user's stored OpenAI key.
+ *
+ * `hint` is the credential store's own mask (`••••` plus at most the last four
+ * characters). The key itself is never returned by any endpoint.
+ */
+export interface AiKeySummary {
+  configured: boolean;
+  hint: string | null;
 }
 
 export type DataTableDensity = 'compact' | 'standard' | 'comfortable';
@@ -809,4 +836,32 @@ export interface AiTestResult {
   error: string | null;
   attemptedAt?: string;
   checks?: { listModels: AiTestCheck; generate: AiTestCheck };
+}
+
+/**
+ * `GET /api/me/ai-key` — everything the key page and the setup page render.
+ *
+ * `lastTest` is derived by the API from the `ai_invocations` telemetry table
+ * rather than stored on the credential, so there is one source of truth for it.
+ *
+ * `platform` reports just enough of the deployment's configuration to explain a
+ * skipped generate probe. Without it a user whose test says
+ * `generate: 'skipped'` cannot tell whether their key is half-working or whether
+ * nobody has chosen a model yet — and the second is not theirs to fix.
+ */
+export interface MyAiKeyStatus {
+  configured: boolean;
+  hint: string | null;
+  updatedAt: string | null;
+  lastTest: {
+    attemptedAt: string;
+    success: boolean;
+    model: string | null;
+    error: string | null;
+  } | null;
+  platform: {
+    provider: AiProviderKind | null;
+    enabled: boolean;
+    hasDefaultModel: boolean;
+  };
 }
