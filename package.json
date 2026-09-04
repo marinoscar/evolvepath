@@ -1,5 +1,5 @@
 {
-  "name": "enterprise-app",
+  "name": "evolvepath",
   "private": true,
   "workspaces": [
     "apps/*",
