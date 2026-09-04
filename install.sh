@@ -2,14 +2,14 @@
 # install.sh — evopath CLI installer / updater  (issue #166, epic #110)
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/marinoscar/EnterpriseAppBase/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/marinoscar/evolvepath/main/install.sh | bash
 #   # or, locally:
 #   bash install.sh
 #   bash install.sh --uninstall
 #   bash install.sh --help
 #
 # Configuration (set via environment variables before running):
-#   EVOPATH_REPO     Git repo URL (default: https://github.com/marinoscar/EnterpriseAppBase.git)
+#   EVOPATH_REPO     Git repo URL (default: https://github.com/marinoscar/evolvepath.git)
 #   EVOPATH_REF      Branch/tag/commit to install (default: main)
 #   EVOPATH_HOME     App install root (default: $HOME/.evopath — the same directory
 #                    the CLI itself already stores config.json in, see branding.ts)
@@ -113,7 +113,7 @@ detect_shell_rc() {
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
-EVOPATH_REPO="${EVOPATH_REPO:-https://github.com/marinoscar/EnterpriseAppBase.git}"
+EVOPATH_REPO="${EVOPATH_REPO:-https://github.com/marinoscar/evolvepath.git}"
 EVOPATH_REF="${EVOPATH_REF:-main}"
 EVOPATH_HOME="${EVOPATH_HOME:-$HOME/.evopath}"
 EVOPATH_BIN_DIR="${EVOPATH_BIN_DIR:-$HOME/.local/bin}"

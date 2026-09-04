@@ -28,7 +28,7 @@ and deploys a standalone copy — you don't need a local clone to end up with
 a working `evopath` on your PATH.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/marinoscar/EnterpriseAppBase/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/marinoscar/evolvepath/main/install.sh | bash
 ```
 
 It's safe to re-run: the installer detects an existing install at
@@ -54,7 +54,7 @@ the existing install and updates it in place.
 ### Uninstall
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/marinoscar/EnterpriseAppBase/main/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/marinoscar/evolvepath/main/install.sh | bash -s -- --uninstall
 ```
 
 or, from a local clone:
@@ -120,7 +120,7 @@ Set these before running the installer to override its defaults:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `EVOPATH_REPO` | `https://github.com/marinoscar/EnterpriseAppBase.git` | Git clone URL |
+| `EVOPATH_REPO` | `https://github.com/marinoscar/evolvepath.git` | Git clone URL |
 | `EVOPATH_REF` | `main` | Branch/tag/commit to install |
 | `EVOPATH_HOME` | `$HOME/.evopath` | App install root (same directory the CLI stores `config.json` in) |
 | `EVOPATH_BIN_DIR` | `$HOME/.local/bin` | Directory for the `evopath` shim |
