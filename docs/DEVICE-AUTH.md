@@ -1,6 +1,6 @@
 # Device Authorization Flow (RFC 8628)
 
-This guide covers the Device Authorization Flow implementation in the Enterprise Application Foundation.
+This guide covers the Device Authorization Flow implementation in Evolve Path.
 
 > **This flow has two documents.** This one is the narrative guide — concepts,
 > a walkthrough, and copy-pasteable integration examples (Node.js, Python,
