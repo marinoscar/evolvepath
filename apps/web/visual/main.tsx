@@ -86,6 +86,7 @@ const GeneralSettingsPage = lazy(() => import('../src/pages/Admin/GeneralSetting
 const AppearanceSettingsPage = lazy(() => import('../src/pages/Admin/AppearanceSettingsPage'));
 const FeatureFlagsPage = lazy(() => import('../src/pages/Admin/FeatureFlagsPage'));
 const AdvancedSettingsPage = lazy(() => import('../src/pages/Admin/AdvancedSettingsPage'));
+const AiSettingsPage = lazy(() => import('../src/pages/Admin/AiSettingsPage'));
 const AdminUsersPage = lazy(() => import('../src/pages/Admin/UsersPage'));
 
 /** Byte-identical to `contexts/ThemeContext.tsx`'s private constant. */
@@ -245,6 +246,21 @@ function HarnessRoutes() {
                 fallback={<Navigate to="/" replace />}
               >
                 <FeatureFlagsPage />
+              </RequirePermission>
+            }
+          />
+          {/* Epic #20. Present so the AI hub card NAVIGATES in the harness
+              rather than falling through to the catch-all redirect. The
+              harness has no MSW, so the page itself renders its load-failure
+              state — the capture that matters is the hub card, not this. */}
+          <Route
+            path="/admin/settings/ai"
+            element={
+              <RequirePermission
+                permission="system_settings:read"
+                fallback={<Navigate to="/" replace />}
+              >
+                <AiSettingsPage />
               </RequirePermission>
             }
           />

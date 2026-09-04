@@ -37,6 +37,7 @@ const AppearanceSettingsPage = lazy(() => import('./pages/Admin/AppearanceSettin
 const FeatureFlagsPage = lazy(() => import('./pages/Admin/FeatureFlagsPage'));
 // Issue #124, epic #109 — the admin email configuration and its test send.
 const EmailSettingsPage = lazy(() => import('./pages/Admin/EmailSettingsPage'));
+const AiSettingsPage = lazy(() => import('./pages/Admin/AiSettingsPage'));
 const AdvancedSettingsPage = lazy(() => import('./pages/Admin/AdvancedSettingsPage'));
 const AdminUsersPage = lazy(() => import('./pages/Admin/UsersPage'));
 
@@ -247,6 +248,23 @@ function AppRoutes() {
                       fallback={<Navigate to="/" replace />}
                     >
                       <EmailSettingsPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* Epic #20. Same string as the `AI` card in
+                    `config/adminSections.tsx`, and the same `read`-not-`write`
+                    reasoning as Email above: saving, refreshing the catalog and
+                    testing all need write, and the page disables them without
+                    it, but the configuration is worth READING for anyone
+                    diagnosing why AI features are not responding. */}
+                <Route
+                  path="/admin/settings/ai"
+                  element={
+                    <RequirePermission
+                      permission="system_settings:read"
+                      fallback={<Navigate to="/" replace />}
+                    >
+                      <AiSettingsPage />
                     </RequirePermission>
                   }
                 />
