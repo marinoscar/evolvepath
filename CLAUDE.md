@@ -449,6 +449,7 @@ above. Don't restate any of that here; extend those three instead.
 - `storage_objects` - File metadata, status, storage references
 - `storage_object_chunks` - Multipart upload chunk tracking
 - `personal_access_tokens` - User-created long-lived API tokens (hashed)
+- `ai_invocations` - AI call telemetry (model, tokens, latency, validation result, redacted I/O); no chain of thought
 
 ## Access Control: Email Allowlist
 
