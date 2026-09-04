@@ -1046,6 +1046,147 @@ If-Match: 1
 
 ---
 
+### AI Settings (Admin)
+
+Which AI provider this deployment uses, the platform API key, and which model
+each coaching persona runs on. Gated on `system_settings:read` for the reads and
+`system_settings:write` for the save and the test.
+
+**The platform API key is write-only.** It lives in the encrypted credential
+store at `(purpose 'ai:openai', name 'platform')`, is never returned by any
+endpoint, and submitting the field empty on `PUT` preserves the stored value.
+Erasing it is not expressible through this API.
+
+#### GET /ai-settings
+**Requires `system_settings:read`** — the AI configuration plus the masked
+status of the stored platform key.
+
+A stored row that no longer validates does **not** fail this request: the
+defaults come back with `settingsError` set, so the page that repairs the row
+can still render.
+
+**Response:**
+```json
+{
+  "provider": "openai",
+  "enabled": true,
+  "defaultModel": "gpt-5.4",
+  "personaModels": { "coach": "gpt-5.4-mini" },
+  "platformKeyStatus": {
+    "configured": true,
+    "hint": "••••0000",
+    "updatedAt": "2026-09-04T12:00:00.000Z",
+    "updatedByUserId": "3f1c…"
+  },
+  "settingsError": null,
+  "version": 2,
+  "updatedAt": "2026-09-04T12:00:00.000Z",
+  "updatedBy": { "id": "3f1c…", "email": "admin@example.com" }
+}
+```
+
+---
+
+#### PUT /ai-settings
+**Requires `system_settings:write`** — replace the AI configuration.
+
+Send `If-Match: <version>` for optimistic concurrency; `0` asserts that nothing
+is stored yet, and a mismatch is **409 Conflict**.
+
+**Request Body:**
+```json
+{
+  "provider": "openai",
+  "enabled": true,
+  "baseUrl": null,
+  "defaultModel": "gpt-5.4",
+  "personaModels": { "coach": "gpt-5.4-mini", "planner": null },
+  "platformApiKey": "sk-..."
+}
+```
+
+| Field | Notes |
+|-------|-------|
+| `platformApiKey` | **Write-only.** Omit, `null` or `""` keeps the stored key. |
+| `defaultModel`, `personaModels.*` | Must be GPT 5.4 or newer, else **400**. `null` on a persona means "use the default". |
+| `personaModels` keys | Must be known persona keys, else **400**. |
+| `baseUrl` | Optional override. Must use `https://` in production, else **400**. |
+
+---
+
+#### GET /ai-settings/personas
+**Requires `system_settings:read`** — the personas a model can be assigned to,
+in registry order. The web app reads this rather than keeping its own copy.
+
+**Response:**
+```json
+[
+  {
+    "key": "coach",
+    "label": "Coach",
+    "description": "Day-to-day coaching replies, help starting, and decomposition.",
+    "tier": "fast",
+    "capabilities": ["text"]
+  }
+]
+```
+
+---
+
+#### GET /ai-settings/models
+**Requires `system_settings:read`** — the models the stored platform key can
+reach, filtered to GPT 5.4 or newer and sorted newest first.
+
+`?refresh=true` bypasses the 5-minute cache and is throttled to 10 per minute
+per user (**429** with `Retry-After`).
+
+**This returns HTTP 200 even when the provider could not be reached.** Read
+`success`; on failure `error` carries the provider's message and `models` may
+still hold the last known catalog with `source: "cache"`.
+
+**Response:**
+```json
+{
+  "success": true,
+  "models": [{ "id": "gpt-5.4", "created": 1772000000 }],
+  "fetchedAt": "2026-09-04T12:00:00.000Z",
+  "source": "live",
+  "error": null
+}
+```
+
+---
+
+#### POST /ai-settings/test
+**Requires `system_settings:write`** — run two probes with the stored platform
+key: a catalog listing (validates the key) and, when a default model is
+configured, a 16-token structured generation (validates the key against that
+model). Throttled to 5 per minute per user (**429** with `Retry-After`).
+
+**This returns HTTP 200 even when the connection failed.** A refused connection
+is a successful diagnosis and is why the endpoint exists — read `success`, and
+show `error`, which carries the provider's own message with any credential
+redacted.
+
+**Response:**
+```json
+{
+  "success": true,
+  "providerKind": "openai",
+  "model": "gpt-5.4",
+  "latencyMs": 412,
+  "error": null,
+  "attemptedAt": "2026-09-04T12:00:00.000Z",
+  "checks": { "listModels": "passed", "generate": "passed" }
+}
+```
+
+`checks.generate` is `"skipped"` — not `"failed"` — when no default model is
+configured: there is nothing to generate against, and the key is still proven
+by `listModels`.
+
+---
+
 ### Storage Objects
 
 The storage system provides file upload and management capabilities with support for large files (GB scale) through resumable multipart uploads.
