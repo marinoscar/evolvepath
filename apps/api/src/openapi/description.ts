@@ -167,6 +167,6 @@ Deactivated users are rejected at authentication time regardless of their roles.
 ## Further reading
 
 Architecture, security and operations documentation lives in the repository under
-[\`docs/\`](https://github.com/marinoscar/EnterpriseAppBase/tree/main/docs).
+[\`docs/\`](https://github.com/marinoscar/evolvepath/tree/main/docs).
 `.trim();
 }
