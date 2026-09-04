@@ -108,6 +108,16 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'encrypted credential store, is never returned, and submitting it empty preserves it.',
       },
       {
+        name: 'AI Settings',
+        description:
+          'Which AI provider this deployment uses, the platform API key, and which model each ' +
+          'coaching persona runs on. Gated on `system_settings:read`/`:write`. The platform key ' +
+          'is write-only: it is held in the encrypted credential store, is never returned, and ' +
+          'submitting it empty preserves it. The model catalog is fetched live from the provider ' +
+          'and filtered to GPT 5.4 or newer; the test endpoint answers 200 with the provider\'s ' +
+          'own error so a misconfiguration can be diagnosed.',
+      },
+      {
         name: 'Notifications',
         description:
           'The registry of events this application can raise, and which channels each supports. ' +

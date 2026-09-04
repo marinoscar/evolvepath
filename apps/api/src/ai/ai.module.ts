@@ -6,6 +6,11 @@ import { CredentialsModule } from '../credentials/credentials.module';
 import { StorageModule } from '../storage/storage.module';
 import { OpenAiProvider } from './providers/openai/openai.provider';
 import { AiProviderRegistry } from './providers/ai-provider.registry';
+import { AiSettingsService } from './ai-settings.service';
+import { AiSettingsController } from './ai-settings.controller';
+import { AiAdminTestService } from './ai-admin-test.service';
+import { AiModelCatalogService } from './model-catalog/ai-model-catalog.service';
+import { TestThrottle } from './gateway/test-throttle';
 
 // =============================================================================
 // AiModule (issue #22, epic #20)
@@ -34,7 +39,15 @@ import { AiProviderRegistry } from './providers/ai-provider.registry';
 
 @Module({
   imports: [PrismaModule, CredentialsModule, StorageModule, ConfigModule],
-  providers: [OpenAiProvider, AiProviderRegistry],
-  exports: [AiProviderRegistry],
+  controllers: [AiSettingsController],
+  providers: [
+    OpenAiProvider,
+    AiProviderRegistry,
+    AiSettingsService,
+    AiModelCatalogService,
+    AiAdminTestService,
+    TestThrottle,
+  ],
+  exports: [AiProviderRegistry, AiSettingsService],
 })
 export class AiModule {}
