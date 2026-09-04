@@ -1602,14 +1602,48 @@ Readiness check - includes database connectivity test.
 | `CONFLICT` | 409 | Resource already exists or version mismatch |
 | `NOT_AUTHORIZED` | 403 | Email not in allowlist |
 | `VERSION_MISMATCH` | 409 | Optimistic concurrency conflict (If-Match header) |
+| `AI_KEY_REQUIRED` | 412 | The caller has no OpenAI key. Complete `/setup/ai-key`. |
+
+`AI_KEY_REQUIRED` is the one error body in this API that is sent **verbatim**
+rather than rebuilt by the shared envelope — the filter's status-derived
+rewriting would turn its `code` into `ERROR`, destroying the only discriminator
+the web app has for "this user's key is gone". 412 rather than 401 or 403: the
+caller *is* authenticated and *is* authorised, and a precondition of their own
+resource is unmet. A 401 would send the client off to refresh a perfectly good
+token; a 403 would tell them they lack a permission they hold.
 
 ---
 
 ## Rate Limits
 
-> **Note:** Rate limiting is recommended for production deployments but is not currently implemented in the application. Consider adding `@nestjs/throttler` or Nginx rate limiting before production deployment.
+> **Note:** General rate limiting is recommended for production deployments but
+> is not implemented. Consider `@nestjs/throttler` or Nginx rate limiting before
+> production deployment.
 
-**Recommended limits:**
+### Implemented throttles
+
+Three endpoints are throttled today, because each one puts a request on
+OpenAI's network under somebody's key on a click. A refused attempt is a real
+**429** with `Retry-After` — the request was refused rather than attempted, so
+there is no diagnosis to return and nothing is audited.
+
+| Endpoint | Limit | Bucket |
+|---|---|---|
+| `POST /ai-settings/test` | 5 / minute / user | `admin_test` |
+| `GET /ai-settings/models?refresh=true` | 10 / minute / user | `models_refresh` |
+| `POST /me/ai-key/test` | 5 / minute / user | `user_test` |
+
+`GET /ai-settings/models` **without** `refresh` is deliberately not throttled: a
+cached read costs nothing, and a throttled administrator must still be able to
+render the page.
+
+**These windows are per API process.** Two replicas therefore allow twice the
+rate, and a restart forgets everything. That is acceptable for what they defend
+against — an accidental loop and a bored click — and it is not a defence against
+a determined caller. `@nestjs/throttler` with a Redis store is the upgrade path;
+see `docs/specs/ai-configuration.md`.
+
+**Recommended limits (not implemented):**
 
 | Endpoint Pattern | Recommended Limit | Window |
 |------------------|-------------------|--------|

@@ -468,6 +468,51 @@ apps/api/src/storage/
 
 ---
 
+### 5.5 AI Subsystem
+
+`AiModule` (`apps/api/src/ai/`) owns every conversation this product has with a
+model. Nothing outside it knows an API key, a provider or a wire format.
+
+```
+apps/api/src/ai/
+├── ai.module.ts                     # Not @Global; consumers import it explicitly
+├── ai-personas.ts                   # THE persona registry — one entry per persona
+├── ai-settings.schema.ts            # The 'ai' system_settings row, with a
+│                                    # compile-time "carries no secret" proof
+├── ai-credential.constants.ts       # The two credential addresses
+├── connection-probe.ts              # The two-check "does this key work?" probe
+├── ai-settings.service.ts           # Read/write the settings row + the platform key
+├── ai-settings.controller.ts        # /api/ai-settings*  (system_settings:*)
+├── ai-admin-test.service.ts         # POST /ai-settings/test
+├── model-catalog/                   # Live catalog + the GPT >= 5.4 filter
+├── providers/                       # The ONLY code that knows a wire format
+│   └── openai/                      # Responses API over Node's global fetch
+├── user-key/                        # /api/me/ai-key* — the caller's own key
+├── attachments/                     # Storage objects -> image content parts
+└── gateway/                         # AiGatewayService, telemetry, redaction,
+                                     # strict-schema conversion, throttle
+```
+
+**One call, `AiGatewayService.invoke()`.** Every AI-using feature in E02–E12
+goes through it, so no caller touches a key, a provider, a JSON schema or a
+telemetry row. It **never throws** for a provider, key, model, attachment or
+schema problem — every one is `{ ok: false, error: { code } }`, because PRD §120
+requires the deterministic path to keep working. It writes exactly one
+`ai_invocations` row and emits one `ai.invoke` span on every exit path, with no
+prompt or completion content in the span and no chain of thought anywhere.
+
+**Every call uses the caller's own OpenAI key.** The platform key serves only
+the admin model catalog and the admin connection test; there is deliberately no
+fallback for a keyless user.
+
+Full detail: [`docs/specs/ai-gateway.md`](specs/ai-gateway.md) for the call
+contract, telemetry and attachments;
+[`docs/specs/ai-configuration.md`](specs/ai-configuration.md) for the settings
+row, the two key addresses, the model filter, the test semantics, the web gate
+and the rejected alternatives.
+
+---
+
 ## 6. Data Architecture
 
 ### 6.1 Entity Relationship Diagram
@@ -938,18 +983,30 @@ for genuinely parallel content only.
 | — Profile | `/settings/profile` | Required | Any (authenticated) | Display name, avatar, email |
 | — Appearance | `/settings/appearance` | Required | Any (authenticated) | Personal theme preference |
 | — Access Tokens | `/settings/tokens` | Required | Any (authenticated) | Personal access token management |
+| — OpenAI API Key | `/settings/ai-key` | Required | Any (authenticated) | The user's own key: add, test, remove |
 | Console / Settings hub | `/admin/settings` | Required | `system_settings:read` OR `users:read` | Searchable hub over admin settings |
 | — System | `/admin/settings/general` | Required | `system_settings:read` | Core system settings |
 | — Appearance | `/admin/settings/appearance` | Required | `system_settings:read` | Default theme for new users |
 | — Feature Flags | `/admin/settings/feature-flags` | Required | `system_settings:read` | Toggle optional features |
+| — AI | `/admin/settings/ai` | Required | `system_settings:read` | Provider, platform key, per-persona models, test |
 | — Advanced (JSON) | `/admin/settings/advanced` | Required | `system_settings:write` | Raw settings document editor |
 | — Users & Allowlist | `/admin/settings/users` | Required | `users:read` | User accounts, roles, and allowlist |
 | `/admin` (redirect) | `/admin` | Required | — | `<Navigate replace>` to `/admin/settings` |
 | `/admin/users` (redirect) | `/admin/users` | Required | — | `<Navigate replace>` to `/admin/settings/users` |
-| Device Activation | `/activate` | Required | Any | Device auth approval |
+| Device Activation | `/activate` | Required | Any | Device auth approval — **exempt from the AI-key gate** |
+| AI key setup | `/setup/ai-key` | Required | Any | The AI-key gate's destination; outside `Layout`, **exempt from the gate** |
 | Test Login | `/testing/login` | Public | - | Test auth bypass (dev only) |
 
 **Note:** The `/testing/login` route is excluded from production builds via `import.meta.env.PROD` check.
+
+**Note:** Every route in the app shell sits behind `RequireAiKey` (epic #20), a
+layout route between `ProtectedRoute` and `Layout`. A signed-in user with no
+OpenAI key is redirected to `/setup/ai-key`, including from `/admin/*` — an
+admin without a key cannot use the coach either — and including from
+`/settings/ai-key`, which is what makes removing a key there return the user to
+setup. Only `/activate` and `/setup/ai-key` are exempt. The gate is **UX, not
+authorization**: the server's `no_user_key` and its 412 are the real gate. See
+[`docs/specs/ai-configuration.md`](specs/ai-configuration.md) §5.
 
 **Note:** The two redirect routes are real `<Route>` entries in `App.tsx`, not
 catch-all fallout — a bookmarked `/admin/users` resolves via `<Navigate
