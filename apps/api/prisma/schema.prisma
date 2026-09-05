@@ -59,6 +59,10 @@ model User {
   // The Today screen (epic E05)
   dailyCheckIns DailyCheckIn[] @relation("UserDailyCheckIns")
 
+  // The Family domain (epic E08)
+  familyMembers FamilyMember[] @relation("UserFamilyMembers")
+  rituals       Ritual[]       @relation("UserRituals")
+
   @@map("users")
 }
 
@@ -1158,6 +1162,10 @@ model Routine {
   user        User         @relation("UserRoutines", fields: [userId], references: [id], onDelete: Cascade)
   planVersion PlanVersion  @relation(fields: [planVersionId], references: [id], onDelete: Cascade)
   commitments Commitment[]
+  /// A ritual (epic E08) surfaces itself on the Path by pointing at a routine it
+  /// keeps in sync. SetNull on the ritual side, so deleting the routine never
+  /// deletes the ritual.
+  rituals     Ritual[]
 
   @@index([planVersionId])
   @@index([userId])
@@ -1246,28 +1254,51 @@ model Commitment {
 
   decomposedFromId String? @map("decomposed_from_id") @db.Uuid
 
+  // ---------------------------------------------------------------------------
+  // The Family domain (issue #37, epic E08)
+  // ---------------------------------------------------------------------------
+  //
+  // Both nullable and both SetNull, like every other link upward: a materialized
+  // ritual occurrence is a commitment first. Deleting the ritual or the family
+  // member must leave the record of what the user actually did untouched.
+
+  /// The ritual that materialized this occurrence, when it came from one.
+  ritualId       String? @map("ritual_id") @db.Uuid
+  /// Who the commitment is with. Context, never an axis of measurement.
+  familyMemberId String? @map("family_member_id") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  user            User         @relation("UserCommitments", fields: [userId], references: [id], onDelete: Cascade)
-  outcome         Outcome?     @relation(fields: [outcomeId], references: [id], onDelete: SetNull)
-  planVersion     PlanVersion? @relation(fields: [planVersionId], references: [id], onDelete: SetNull)
-  routine         Routine?     @relation(fields: [routineId], references: [id], onDelete: SetNull)
-  rescheduledFrom Commitment?  @relation("CommitmentReschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
-  rescheduledTo   Commitment[] @relation("CommitmentReschedule")
+  user            User          @relation("UserCommitments", fields: [userId], references: [id], onDelete: Cascade)
+  outcome         Outcome?      @relation(fields: [outcomeId], references: [id], onDelete: SetNull)
+  planVersion     PlanVersion?  @relation(fields: [planVersionId], references: [id], onDelete: SetNull)
+  routine         Routine?      @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  rescheduledFrom Commitment?   @relation("CommitmentReschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
+  rescheduledTo   Commitment[]  @relation("CommitmentReschedule")
   /// SetNull, like every other history pointer here: deleting the big
   /// commitment must not delete the small one the user actually did.
-  decomposedFrom  Commitment?  @relation("CommitmentDecomposition", fields: [decomposedFromId], references: [id], onDelete: SetNull)
-  decomposedTo    Commitment[] @relation("CommitmentDecomposition")
+  decomposedFrom  Commitment?   @relation("CommitmentDecomposition", fields: [decomposedFromId], references: [id], onDelete: SetNull)
+  decomposedTo    Commitment[]  @relation("CommitmentDecomposition")
   evidence        Evidence[]
   reflections     Reflection[]
+  ritual          Ritual?       @relation(fields: [ritualId], references: [id], onDelete: SetNull)
+  familyMember    FamilyMember? @relation(fields: [familyMemberId], references: [id], onDelete: SetNull)
 
+  /// MATERIALIZATION IDEMPOTENCY (issue #37, epic E08). Re-running the
+  /// materializer over the same horizon must not double-book an occurrence, and
+  /// the guarantee is this index rather than a transaction: Postgres treats
+  /// NULLs as distinct, so the commitments with no ritual are never in conflict
+  /// with each other, while two rows for the same ritual at the same instant
+  /// raise P2002 — which the materializer counts as `skipped`.
+  @@unique([ritualId, scheduledStart])
   @@index([userId, scheduledStart])
   @@index([userId, status])
   @@index([planVersionId])
   /// "Does this user have a timer running?" — asked on every Today request and
   /// before every start, which auto-pauses whatever else is running.
   @@index([userId, status, activeSince])
+  @@index([userId, ritualId])
   @@map("commitments")
 }
 
@@ -1357,4 +1388,98 @@ model DomainMode {
 
   @@unique([userId, domain])
   @@map("domain_modes")
+}
+
+// =============================================================================
+// The Family domain — members and rituals (issue #37, epic E08)
+// =============================================================================
+//
+// TWO DECISIONS THAT ARE THE WHOLE POINT OF THIS SECTION.
+//
+// 1. THE MEMBER RECORD IS DELIBERATELY POOR. PRD §33 fixes it at nickname,
+//    relationship and an optional birthday; VISION §50 says why — the people
+//    in it never consented to being modeled. There is no notes column, no
+//    tags, no mood, no sentiment, no score, and none may be added: a free-text
+//    field on a person the user did not ask permission from becomes a hidden
+//    assessment the moment the coach reads it back. The privacy boundary is
+//    enforced here, by the absence of columns, rather than by convention in a
+//    service somewhere.
+//
+// 2. A RITUAL IS A RULE, NOT A SCHEDULE. It stores the recurrence and the two
+//    durations and nothing about any particular evening; the materializer
+//    (issue #41) turns it into real `Commitment` rows a week at a time, which
+//    is what Today ranks and what the user completes, moves or skips through
+//    the ordinary lifecycle. Nothing in this epic re-implements that lifecycle.
+// =============================================================================
+
+/// How the user describes the person. Rendered in this order by the UI select.
+enum FamilyRelationship {
+  PARTNER
+  CHILD
+  PARENT
+  SIBLING
+  FRIEND
+  OTHER
+}
+
+/// Someone the user shares a ritual with. See decision 1 above before adding a
+/// column here: the short list IS the feature.
+model FamilyMember {
+  id           String             @id @default(uuid()) @db.Uuid
+  userId       String             @map("user_id") @db.Uuid
+  nickname     String             @db.VarChar(40)
+  relationship FamilyRelationship
+
+  /// Date-only, and read date-only. The year may be a placeholder — the UI
+  /// sends 1900 when the user does not know it — so every consumer ignores the
+  /// year and no code path may resolve this through a timezone.
+  birthday DateTime? @db.Date
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user        User         @relation("UserFamilyMembers", fields: [userId], references: [id], onDelete: Cascade)
+  rituals     Ritual[]
+  commitments Commitment[]
+
+  @@index([userId])
+  @@map("family_members")
+}
+
+/// A recurring family behaviour the user is trying to protect (PRD §34).
+model Ritual {
+  id             String  @id @default(uuid()) @db.Uuid
+  userId         String  @map("user_id") @db.Uuid
+  title          String  @db.VarChar(120)
+  purpose        String? @db.VarChar(300)
+  familyMemberId String? @map("family_member_id") @db.Uuid
+
+  /// `{ weekdays: number[], time: 'HH:mm', everyNWeeks: 1 | 2 | 4 }`, validated
+  /// by `ritualRecurrenceSchema` at the boundary. JSON rather than columns
+  /// because the three fields are only ever read together, by one engine.
+  recurrence Json
+
+  idealMinutes     Int     @map("ideal_minutes")
+  minimumMinutes   Int     @map("minimum_minutes")
+  fallbackBehavior String? @map("fallback_behavior") @db.VarChar(200)
+
+  active Boolean @default(true)
+
+  /// The last local date the materializer has covered. Date-only: it is a
+  /// horizon in the user's calendar, not an instant.
+  lastMaterializedThrough DateTime? @map("last_materialized_through") @db.Date
+
+  /// The routine that shows this ritual on the Path, when the user linked the
+  /// ritual to an outcome. SetNull: the ritual outlives the plan version.
+  routineId String? @map("routine_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user         User          @relation("UserRituals", fields: [userId], references: [id], onDelete: Cascade)
+  familyMember FamilyMember? @relation(fields: [familyMemberId], references: [id], onDelete: SetNull)
+  routine      Routine?      @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  commitments  Commitment[]
+
+  @@index([userId, active])
+  @@map("rituals")
 }
