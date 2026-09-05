@@ -28,6 +28,10 @@ const OutcomeDetailPage = lazy(() => import('./pages/OutcomeDetailPage'));
 // A Path surface, not a sixth destination: `DESTINATION_ROUTES.path` already
 // owns `/path/family` by prefix, so no registry entry is needed (epic E08).
 const FamilyPage = lazy(() => import('./pages/FamilyPage'));
+// The Health surface (epic E09). `DESTINATION_ROUTES.path` lists `/health`
+// explicitly — the URL does not start with `/path`, but the destination it
+// belongs to is Path.
+const HealthPage = lazy(() => import('./pages/HealthPage'));
 const CoachPage = lazy(() => import('./pages/CoachPage'));
 const ProgressPage = lazy(() => import('./pages/ProgressPage'));
 // Progress surfaces, not sixth destinations: `DESTINATION_ROUTES.progress`
@@ -169,6 +173,7 @@ function AppRoutes() {
                   <Route path="/path" element={<PathPage />} />
                   <Route path="/path/outcomes/:id" element={<OutcomeDetailPage />} />
                   <Route path="/path/family" element={<FamilyPage />} />
+                  <Route path="/health" element={<HealthPage />} />
                   <Route path="/coach" element={<CoachPage />} />
                 {/* One thread, its own URL. `/coach/:id` is what the narrow
                     layout navigates to and what a link to a conversation is;

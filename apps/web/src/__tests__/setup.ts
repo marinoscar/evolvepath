@@ -4,6 +4,7 @@ import { afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { server } from './mocks/server';
 import { resetCoachState } from './mocks/coachHandlers';
 import { resetFamilyState } from './mocks/familyHandlers';
+import { resetHealthState } from './mocks/healthHandlers';
 import { resetMemoryState } from './mocks/memoryHandlers';
 import { resetPathState } from './mocks/pathHandlers';
 import { resetTodayState } from './mocks/todayHandlers';
@@ -231,6 +232,7 @@ afterEach(() => {
   // test would inherit the previous one's outcomes and plans.
   resetPathState();
   resetFamilyState();
+  resetHealthState();
   resetCoachState();
   resetMemoryState();
   resetTodayState();

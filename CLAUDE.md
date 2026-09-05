@@ -783,6 +783,14 @@ Structured training. **Nothing writes a plan until the user approves** — `gene
 - `POST /api/workouts/programs/{id}/archive` - Retire it; future `PLANNED` days cancelled, history untouched
 - `DELETE /api/workouts/programs/{id}` - Drafts only (204). A live program is archived, never deleted
 
+### Health Domain (epic E09)
+Behaviours, not calories: no macro, no food database, no BMI, no goal weight.
+- `GET /api/nutrition/behaviors` - The eleven-behaviour registry (PRD §46), each with a full and a **minimum** version
+- `POST /api/nutrition/behaviors/{key}/commit` - Creates `repeatDays` ordinary HEALTH commitments through the same service quick add uses. A behaviour is not a second kind of intention
+- `PUT /api/health/weight` - One row per local date, upserted. 400 `WEIGHT_DATE_IN_FUTURE` / `WEIGHT_DATE_TOO_OLD`. The audit row carries the **date and nothing else**
+- `GET /api/health/weight?from=&to=` - Points, a rolling 7-day mean (`null` under two readings) and a delta. **No per-day judgment field exists** — PRD §47's promise is kept by the field's absence, not by client discipline
+- `DELETE /api/health/weight/{dateLocal}` - Idempotent (204)
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)

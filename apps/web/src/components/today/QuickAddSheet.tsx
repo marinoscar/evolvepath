@@ -17,10 +17,13 @@ import WorkOutlineIcon from '@mui/icons-material/WorkOutlined';
 import FamilyRestroomIcon from '@mui/icons-material/FamilyRestroom';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
+import RestaurantIcon from '@mui/icons-material/Restaurant';
 
 import type { CommitmentCard, Domain, Outcome } from '../../types';
 import type { CommitmentFormValues } from '../../utils/commitmentForm.schema';
 import { CommitmentEditorForm } from './CommitmentEditorForm';
+import { NutritionBehaviourList } from '../health/NutritionBehaviourList';
+import { useNutritionBehaviours } from '../../hooks/useNutritionBehaviours';
 
 interface QuickAddSheetProps {
   open: boolean;
@@ -42,9 +45,15 @@ interface KindOption {
 }
 
 /**
- * The four things PRD §12.1 lists. Workout is rendered and DISABLED rather than
- * omitted: it is a real part of the product (E09), and a user who looks for it
- * should learn that it is coming rather than conclude it does not exist.
+ * The things PRD §12.1 lists, plus E09's eating habits. Workout is rendered and
+ * DISABLED rather than omitted: it is a real part of the product, and a user who
+ * looks for it should learn that it is coming rather than conclude it does not
+ * exist.
+ *
+ * "Nutrition behaviour" is the one kind that does not open the commitment form.
+ * PRD §46's whole point is that the user picks a behaviour rather than writing
+ * one, so the sheet shows the registry instead — and the commitment it produces
+ * is an ordinary one, created by the same service.
  */
 const KINDS: KindOption[] = [
   {
@@ -67,6 +76,13 @@ const KINDS: KindOption[] = [
     helper: 'Time with the people you care about',
     domain: 'FAMILY',
     Icon: FamilyRestroomIcon,
+  },
+  {
+    key: 'nutrition',
+    label: 'Eating habit',
+    helper: 'Pick a behaviour, not a number',
+    domain: 'HEALTH',
+    Icon: RestaurantIcon,
   },
   {
     key: 'workout',
@@ -92,6 +108,30 @@ const KINDS: KindOption[] = [
  * domain. It is skipped entirely in edit mode — the domain is already decided,
  * and the API refuses to change it.
  */
+/**
+ * The registry, fetched only once the user has asked for it.
+ *
+ * Inside the sheet rather than in `TodayPage`: the list is worth one request on
+ * the tap that needs it, and hoisting it would put a request for eleven static
+ * rows on every Today load.
+ */
+function NutritionBehaviourPicker({ onDone }: { onDone: () => void }) {
+  const { behaviours, isLoading, error, commit } = useNutritionBehaviours();
+
+  if (isLoading) return <Typography variant="body2">Loading…</Typography>;
+  if (error) return <Typography variant="body2">{error}</Typography>;
+
+  return (
+    <NutritionBehaviourList
+      behaviours={behaviours}
+      onCommit={async (key, repeatDays) => {
+        await commit(key, repeatDays);
+        onDone();
+      }}
+    />
+  );
+}
+
 export function QuickAddSheet({
   open,
   editing,
@@ -114,7 +154,9 @@ export function QuickAddSheet({
   const title = isEdit ? 'Edit commitment' : (kind?.label ?? 'Add to today');
 
   const body =
-    isEdit || kind ? (
+    !isEdit && kind?.key === 'nutrition' ? (
+      <NutritionBehaviourPicker onDone={onClose} />
+    ) : isEdit || kind ? (
       <CommitmentEditorForm
         mode={isEdit ? 'edit' : 'create'}
         initial={editing ?? undefined}
