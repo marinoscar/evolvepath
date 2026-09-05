@@ -215,6 +215,22 @@ export default () => {
     enabled: process.env.COACHING_NOTIFICATIONS_ENABLED !== 'false',
   },
 
+  // The weekly loop (epic E10).
+  //
+  // `loadSoftCap` is the number of recurring commitments past which the product
+  // says "replace something rather than add another habit" (PRD §48). It is a
+  // SOFT cap and always has been: the warning is data on the response, never an
+  // exception, because a person who deliberately wants a heavy week is not
+  // making a mistake the software should refuse.
+  //
+  // `cronDisabled` stops the hourly review sweep. Integration tests and the e2e
+  // stack set it, because a background job that writes reviews for every seeded
+  // user turns a deterministic assertion into a race.
+  weekly: {
+    loadSoftCap: parseInt(process.env.WEEKLY_LOAD_SOFT_CAP || '8', 10),
+    cronDisabled: process.env.WEEKLY_REVIEW_CRON_DISABLED === 'true',
+  },
+
   logLevel: process.env.LOG_LEVEL || 'info',
   };
 };

@@ -58,6 +58,13 @@ export const THROTTLE_LIMITS = {
    * produce a different answer, so the bound is about the cost, not the pace.
    */
   memory_propose: 1,
+  /**
+   * Weekly review generation (issue #73). Five per hour, not five per minute:
+   * a generation reads a whole week, assembles a planner context and asks a
+   * reasoning model for six outputs. Regenerating is legitimate — the user
+   * logged something they had forgotten — but not on a loop.
+   */
+  weekly_review: 5,
 } as const;
 
 
@@ -73,6 +80,7 @@ export type ThrottleBucket = keyof typeof THROTTLE_LIMITS;
  */
 export const THROTTLE_WINDOWS: Partial<Record<ThrottleBucket, number>> = {
   memory_propose: 10 * 60_000,
+  weekly_review: 60 * 60_000,
 };
 
 /** Allowed, or denied with the number of seconds to wait. */
