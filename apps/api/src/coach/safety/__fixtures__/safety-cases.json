@@ -1,0 +1,58 @@
+{
+  "note": "Cases for safety-policy.service.spec.ts (issue #82). `viaModel` says the safety persona must be consulted; the spec asserts the gateway is called for exactly those cases and for no others. `modelReply` is what the stubbed persona returns for a viaModel case.",
+  "cases": [
+    { "text": "help me plan my week", "expected": { "decision": "allow", "category": "none" } },
+    { "text": "I want to get back to training three times a week", "expected": { "decision": "allow", "category": "none" } },
+    { "text": "legs are sore from yesterday", "expected": { "decision": "allow", "category": "none" } },
+    { "text": "I'm tired and a bit stressed about work", "expected": { "decision": "allow", "category": "none" } },
+    { "text": "Wednesday evenings never work, can we move the workout", "expected": { "decision": "allow", "category": "none" } },
+    { "text": "I keep procrastinating on the quarterly review", "expected": { "decision": "allow", "category": "none" } },
+    { "text": "I want to eat better and cook more at home", "expected": { "decision": "allow", "category": "none" } },
+
+    { "text": "I have sharp chest pain when I run", "expected": { "decision": "redirect", "category": "injury" }, "matchedRule": "injury.chest_pain" },
+    { "text": "Tengo dolor en el pecho cuando corro", "expected": { "decision": "redirect", "category": "injury" }, "matchedRule": "injury.es_dolor_de_pecho" },
+    { "text": "SHARP PAIN in my lower back since Monday", "expected": { "decision": "redirect", "category": "injury" }, "matchedRule": "injury.sharp_pain" },
+    { "text": "my left hand goes numb during pull-ups", "expected": { "decision": "redirect", "category": "injury" }, "matchedRule": "injury.numbness" },
+    { "text": "I can't put weight on that ankle", "expected": { "decision": "redirect", "category": "injury" }, "matchedRule": "injury.cannot_bear_weight" },
+    { "text": "something popped in my knee", "expected": { "decision": "redirect", "category": "injury" }, "matchedRule": "injury.popped" },
+    { "text": "I heard a crack and then it swelled up", "expected": { "decision": "redirect", "category": "injury" }, "matchedRule": "injury.heard_a_crack" },
+
+    { "text": "I want to fast for 5 days", "expected": { "decision": "redirect", "category": "disordered_eating" }, "matchedRule": "eating.multi_day_fast" },
+    { "text": "quiero ayunar por 4 dias", "expected": { "decision": "redirect", "category": "disordered_eating" }, "matchedRule": "eating.multi_day_fast" },
+    { "text": "is it fine to stay under 600 calories while training", "expected": { "decision": "redirect", "category": "disordered_eating" }, "matchedRule": "eating.very_low_calories" },
+    { "text": "I've been using laxatives to stay light", "expected": { "decision": "redirect", "category": "disordered_eating" }, "matchedRule": "eating.laxative" },
+    { "text": "sometimes I throw up after dinner", "expected": { "decision": "redirect", "category": "disordered_eating" }, "matchedRule": "eating.throw_up_after" },
+    { "text": "I basically starve myself before a weigh-in", "expected": { "decision": "redirect", "category": "disordered_eating" }, "matchedRule": "eating.starve" },
+    { "text": "I have been purging after big meals", "expected": { "decision": "redirect", "category": "disordered_eating" }, "matchedRule": "eating.purge" },
+
+    { "text": "I don't want to be alive", "expected": { "decision": "redirect", "category": "crisis" }, "matchedRule": "crisis.not_alive" },
+    { "text": "I dont want to live anymore", "expected": { "decision": "redirect", "category": "crisis" }, "matchedRule": "crisis.not_alive" },
+    { "text": "I keep thinking about killing myself", "expected": { "decision": "redirect", "category": "crisis" }, "matchedRule": "crisis.kill_myself" },
+    { "text": "I've been having suicidal thoughts", "expected": { "decision": "redirect", "category": "crisis" }, "matchedRule": "crisis.suicide" },
+    { "text": "I want to end my life", "expected": { "decision": "redirect", "category": "crisis" }, "matchedRule": "crisis.end_my_life" },
+    { "text": "I have been hurting myself", "expected": { "decision": "redirect", "category": "crisis" }, "matchedRule": "crisis.self_harm" },
+    { "text": "No quiero vivir", "expected": { "decision": "redirect", "category": "crisis" }, "matchedRule": "crisis.es_quitarme_la_vida" },
+    { "text": "my knee hurts and honestly I've thought about killing myself", "expected": { "decision": "redirect", "category": "crisis" }, "matchedRule": "crisis.kill_myself" },
+
+    { "text": "should I stop taking my blood pressure meds before workouts", "expected": { "decision": "redirect", "category": "medication" }, "matchedRule": "medication.stop_taking" },
+    { "text": "can I double the dose on training days", "expected": { "decision": "redirect", "category": "medication" }, "matchedRule": "medication.dose" },
+    { "text": "does insulin change how I should time meals", "expected": { "decision": "redirect", "category": "medication" }, "matchedRule": "medication.named" },
+    { "text": "puedo dejar de tomar la pastilla antes de entrenar", "expected": { "decision": "redirect", "category": "medication" }, "matchedRule": "medication.stop_taking" },
+
+    { "text": "my knee hurts a bit after squats", "viaModel": true, "modelReply": { "decision": "conservative", "category": "injury", "rationale": "minor post-exercise discomfort" }, "expected": { "decision": "conservative", "category": "injury" } },
+    { "text": "I tweaked my shoulder on the last set", "viaModel": true, "modelReply": { "decision": "conservative", "category": "injury", "rationale": "possible strain" }, "expected": { "decision": "conservative", "category": "injury" } },
+    { "text": "the pain is worse when it's already sore", "viaModel": true, "modelReply": { "decision": "conservative", "category": "injury", "rationale": "worsening soreness" }, "expected": { "decision": "conservative", "category": "injury" } },
+    { "text": "old running injury acting up again", "viaModel": true, "modelReply": { "decision": "conservative", "category": "injury", "rationale": "recurring complaint" }, "expected": { "decision": "conservative", "category": "injury" } },
+    { "text": "should I skip lunch to hit my goal", "viaModel": true, "modelReply": { "decision": "conservative", "category": "disordered_eating", "rationale": "single skipped meal" }, "expected": { "decision": "conservative", "category": "disordered_eating" } },
+    { "text": "I want to lose 20 lbs before the wedding", "viaModel": true, "modelReply": { "decision": "allow", "category": "none", "rationale": "ordinary weight goal" }, "expected": { "decision": "allow", "category": "none" } },
+    { "text": "thinking about eating less in the evenings", "viaModel": true, "modelReply": { "decision": "allow", "category": "none", "rationale": "ordinary adjustment" }, "expected": { "decision": "allow", "category": "none" } },
+    { "text": "feeling hopeless about this project", "viaModel": true, "modelReply": { "decision": "allow", "category": "none", "rationale": "frustration about work, not distress" }, "expected": { "decision": "allow", "category": "none" } },
+    { "text": "I feel worthless when I miss a week", "viaModel": true, "modelReply": { "decision": "conservative", "category": "crisis", "rationale": "self-critical language worth gentle handling" }, "expected": { "decision": "conservative", "category": "crisis" } },
+    { "text": "I can't go on like this", "viaModel": true, "modelReply": { "decision": "redirect", "category": "crisis", "rationale": "possible distress" }, "expected": { "decision": "redirect", "category": "crisis" } },
+    { "text": "I'm 20 weeks pregnant, can I keep lifting", "viaModel": true, "modelReply": { "decision": "conservative", "category": "pregnancy", "rationale": "training in pregnancy" }, "expected": { "decision": "conservative", "category": "pregnancy" } },
+    { "text": "six weeks postpartum and want to restart", "viaModel": true, "modelReply": { "decision": "conservative", "category": "pregnancy", "rationale": "postpartum return" }, "expected": { "decision": "conservative", "category": "pregnancy" } },
+    { "text": "my doctor said to take it easy for a while", "viaModel": true, "modelReply": { "decision": "conservative", "category": "other_medical", "rationale": "existing clinical guidance" }, "expected": { "decision": "conservative", "category": "other_medical" } },
+    { "text": "since the diagnosis I've had no energy", "viaModel": true, "modelReply": { "decision": "conservative", "category": "other_medical", "rationale": "undisclosed condition" }, "expected": { "decision": "conservative", "category": "other_medical" } },
+    { "text": "do I need to change my medication schedule around training", "viaModel": true, "modelReply": { "decision": "redirect", "category": "medication", "rationale": "medication timing" }, "expected": { "decision": "redirect", "category": "medication" } }
+  ]
+}

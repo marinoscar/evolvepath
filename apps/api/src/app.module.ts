@@ -24,6 +24,7 @@ import { PathModule } from './path/path.module';
 import { CommitmentsModule } from './commitments/commitments.module';
 import { TodayModule } from './today/today.module';
 import { CoachModule } from './coach/coach.module';
+import { SafetyModule } from './coach/safety/safety.module';
 import { FamilyModule } from './family/family.module';
 import { LoggerModule } from './common/logger/logger.module';
 import { TestAuthModule } from './test-auth/test-auth.module';
@@ -110,6 +111,11 @@ import configuration from './config/configuration';
     // the context assembler it currently holds calls no model and costs
     // nothing until something asks it for a context.
     CoachModule,
+    // The AI safety layer (E06-06, #82). Registered separately from
+    // CoachModule because onboarding's planner, the workout programmer and the
+    // media flow all evaluate free text and none of them should have to import
+    // the coach to do it.
+    SafetyModule,
 
     // Test modules (non-production only)
     ...(process.env.NODE_ENV !== 'production' ? [TestAuthModule] : []),

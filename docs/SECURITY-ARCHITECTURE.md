@@ -1959,6 +1959,57 @@ worker validates it **again** before `clients.openWindow`. A push payload reache
 the worker over a channel this application does not control end to end, and
 `openWindow` with an attacker-chosen URL is a redirect out of the application.
 
+## 16. The AI Safety Layer
+
+*(Epic E06, issue #82 — `apps/api/src/coach/safety/`)*
+
+Any user free text that is about to become an AI prompt runs through
+`SafetyPolicyService.evaluate({ userId, text, surface })` first. The decision it
+returns is written to `ai_invocations.safety_decision` (jsonb) for the call it
+governed, and to `coach_messages.safety_decision` for what the user was shown.
+
+### Deterministic first, model second
+
+A rule table (`safety-patterns.ts`) classifies the text before any model is
+called. A `definite` match — chest pain, numbness, a multi-day fast, laxatives,
+"stop taking", self-harm language — is decided **here**, and the user gets the
+professional-care copy immediately.
+
+This ordering is a security property rather than a performance one. It means
+the safety path still works when the provider is down, when the user has no API
+key, and when their key has run out of credit; a model-first design has nothing
+to say in exactly those cases. It also means the words a user in trouble reads
+are constants that were reviewed once (`safety-copy.ts`), not whatever a model
+produced this time.
+
+Only `ambiguous` matches — "pain", "hurts", "skip lunch", "pregnant",
+"diagnosis" — reach the `safety` persona, whose output schema has three keys
+and **no field it could put advice in**. The prompt says "classify only"; the
+schema is what makes it true.
+
+### Failure leans one way
+
+An unreachable safety persona turns an ambiguous message into `conservative` —
+never `allow`, and never an exception. `evaluate` has no failure mode that
+reaches its caller: a safety layer that can take the product down is one
+somebody is eventually tempted to remove.
+
+### What is never logged
+
+The evaluated text. The Pino line carries the decision, the category, the
+source, the surface and the stable rule id, and a spec asserts the text is
+absent from it. Rule ids are stable for the same reason: they are the audit
+trail.
+
+### Copy constraints, enforced by test
+
+PRD §81 forbids diagnosis and medication advice; §82 forbids claiming to be a
+therapist. `safety-copy.spec.ts` asserts that no string in the copy table
+contains "diagnos", "prescrib" or "therapist", that every redirect says
+"behaviour coach, not a clinician", and that the crisis copy names emergency
+services **without inventing a phone number** — a wrong hotline number is worse
+than none, and the product does not know what country the user is in.
+
 ## Conclusion
 
 This security architecture provides defense-in-depth through multiple layers:
