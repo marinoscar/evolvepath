@@ -12,6 +12,7 @@ import { ExerciseResolverService } from './exercises/exercise-resolver.service';
 import { WorkoutProgramGeneratorService } from './programs/workout-program-generator.service';
 import { WorkoutProgramsController } from './programs/workout-programs.controller';
 import { WorkoutProgramsService } from './programs/workout-programs.service';
+import { ProgressionExplainerService } from './progression/progression-explainer.service';
 import { WorkoutSessionsController } from './sessions/workout-sessions.controller';
 import { WorkoutSessionsService } from './sessions/workout-sessions.service';
 
@@ -48,6 +49,7 @@ import { WorkoutSessionsService } from './sessions/workout-sessions.service';
     WorkoutProgramGeneratorService,
     WorkoutProgramsService,
     WorkoutSessionsService,
+    ProgressionExplainerService,
   ],
   exports: [WorkoutProgramsService, WorkoutSessionsService, ExerciseResolverService],
 })

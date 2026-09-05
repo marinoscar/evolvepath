@@ -11,6 +11,11 @@ import { findOwnedOrThrow } from '../../path/owned-resource';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Trace } from '../../common/decorators/trace.decorator';
 import { PAIN_SAFETY_ACTION, PAIN_SAFETY_COPY } from '../safety/workout-safety-copy';
+import {
+  suggestProgression,
+  type ProgressionSuggestion,
+} from '../progression/double-progression';
+import { ProgressionExplainerService } from '../progression/progression-explainer.service';
 import { weeklyStructureSchema } from '../programs/workout-program.schema';
 import type {
   FinishSessionDto,
@@ -60,6 +65,9 @@ import {
 /** How far in the future a client-supplied `loggedAt` may sit. */
 const CLOCK_SKEW_MS = 5 * 60_000;
 
+/** How many past sessions per movement the runner reads. Two: see E09-04. */
+const HISTORY_SESSIONS = 2;
+
 const SESSION_INCLUDE = {
   template: {
     include: {
@@ -82,6 +90,7 @@ export class WorkoutSessionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly actions: CommitmentActionsService,
+    private readonly explainer: ProgressionExplainerService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -407,6 +416,61 @@ export class WorkoutSessionsService {
   // Internals
   // ---------------------------------------------------------------------------
 
+  /**
+   * One sentence about the suggestion for one movement (PRD §42).
+   *
+   * Separate from `GET /sessions/:id` on purpose. The runner has to render with
+   * the provider down and without spending the user's key on every movement on
+   * the screen; the explanation is fetched when a chip is tapped, and a failure
+   * there costs a sentence rather than the workout.
+   */
+  async explain(
+    userId: string,
+    sessionId: string,
+    exerciseId: string,
+  ): Promise<{ sentence: string; source: string }> {
+    const session = await this.findOwned(userId, sessionId);
+
+    const prescription = session.template.exercises.find(
+      (row) => row.exerciseId === exerciseId,
+    );
+
+    if (!prescription) {
+      throw new BadRequestException({
+        code: 'EXERCISE_NOT_IN_SESSION',
+        message: 'That movement is not part of this workout.',
+      });
+    }
+
+    const recent = await this.recentSessionsFor(userId, session.id, [exerciseId]);
+
+    const suggestion = suggestProgression(
+      (recent.get(exerciseId) ?? []).map((entry) => ({
+        sessionId: entry.sessionId,
+        date: entry.startedAt.toISOString(),
+        sets: entry.sets.map((log) => ({
+          weightKg: log.weightKg === null ? null : Number(log.weightKg),
+          reps: log.reps,
+          rpe: log.rpe,
+          discomfort: log.discomfort as 'NONE' | 'MILD' | 'SHARP_PAIN',
+        })),
+      })),
+      {
+        sets: prescription.sets,
+        repMin: prescription.repMin,
+        repMax: prescription.repMax,
+        equipment: prescription.exercise.equipment,
+      },
+    );
+
+    return this.explainer.explain(
+      userId,
+      { sessionId: session.id, exerciseId },
+      prescription.exercise.name,
+      suggestion,
+    );
+  }
+
   private async findOwned(userId: string, id: string): Promise<SessionRow> {
     return findOwnedOrThrow(
       () =>
@@ -650,10 +714,42 @@ export class WorkoutSessionsService {
       },
     });
 
-    const history = await this.historyFor(
+    const recent = await this.recentSessionsFor(
       session.userId,
       session.id,
       session.template.exercises.map((row) => row.exerciseId),
+    );
+
+    const history = new Map(
+      [...recent].flatMap(([exerciseId, sessions]) =>
+        sessions.length > 0
+          ? [[exerciseId, { sessionDate: sessions[0].startedAt, sets: sessions[0].sets }] as const]
+          : [],
+      ),
+    );
+
+    const progression = new Map(
+      session.template.exercises.map((row) => [
+        row.exerciseId,
+        suggestProgression(
+          (recent.get(row.exerciseId) ?? []).map((entry) => ({
+            sessionId: entry.sessionId,
+            date: entry.startedAt.toISOString(),
+            sets: entry.sets.map((log) => ({
+              weightKg: log.weightKg === null ? null : Number(log.weightKg),
+              reps: log.reps,
+              rpe: log.rpe,
+              discomfort: log.discomfort as 'NONE' | 'MILD' | 'SHARP_PAIN',
+            })),
+          })),
+          {
+            sets: row.sets,
+            repMin: row.repMin,
+            repMax: row.repMax,
+            equipment: row.exercise.equipment,
+          },
+        ) as unknown,
+      ]),
     );
 
     return buildSessionView({
@@ -674,25 +770,34 @@ export class WorkoutSessionsService {
       exercises: session.template.exercises as unknown as TemplateExerciseRow[],
       logs: session.setLogs,
       history,
+      progression,
       sessionIndex,
     });
   }
 
   /**
-   * "Last time" per movement.
+   * The last two COMPLETED sessions per movement, newest first.
    *
-   * COMPLETED sessions only, and any template. A user's bench press history is
-   * their bench press history — scoping it to one workout would reset it every
-   * time the program changed, which is precisely when the number matters most.
+   * COMPLETED only, and ANY template. A user's bench press history is their
+   * bench press history — scoping it to one workout would reset it every time
+   * the program changed, which is precisely when the number matters most. And
+   * two rather than one because double progression (E09-04) needs a trend: one
+   * good day is a good day.
+   *
+   * One query for every movement on the screen. Per-exercise queries would be
+   * an N+1 on the request that renders while somebody is standing at a rack.
    */
-  private async historyFor(
+  private async recentSessionsFor(
     userId: string,
     excludeSessionId: string,
     exerciseIds: string[],
-  ): Promise<Map<string, { sessionDate: Date; sets: SetLogRow[] }>> {
-    const history = new Map<string, { sessionDate: Date; sets: SetLogRow[] }>();
+  ): Promise<Map<string, Array<{ sessionId: string; startedAt: Date; sets: SetLogRow[] }>>> {
+    const recent = new Map<
+      string,
+      Array<{ sessionId: string; startedAt: Date; sets: SetLogRow[] }>
+    >();
 
-    if (exerciseIds.length === 0) return history;
+    if (exerciseIds.length === 0) return recent;
 
     const rows = await this.prisma.setLog.findMany({
       where: {
@@ -705,19 +810,23 @@ export class WorkoutSessionsService {
     });
 
     for (const row of rows) {
-      const existing = history.get(row.exerciseId);
+      const sessions = recent.get(row.exerciseId) ?? [];
+      const current = sessions[sessions.length - 1];
 
-      // The rows arrive newest session first, so the first session id seen for
-      // a movement is the one to keep — and every later row from that same
-      // session joins it.
-      if (!existing) {
-        history.set(row.exerciseId, { sessionDate: row.session.startedAt, sets: [row] });
-      } else if (existing.sessionDate.getTime() === row.session.startedAt.getTime()) {
-        existing.sets.push(row);
+      if (current?.sessionId === row.session.id) {
+        current.sets.push(row);
+        continue;
       }
+
+      // Rows arrive newest session first, so a new session id starts the next
+      // entry — and anything past the second is history we do not read.
+      if (sessions.length >= HISTORY_SESSIONS) continue;
+
+      sessions.push({ sessionId: row.session.id, startedAt: row.session.startedAt, sets: [row] });
+      recent.set(row.exerciseId, sessions);
     }
 
-    return history;
+    return recent;
   }
 
   private async audit(

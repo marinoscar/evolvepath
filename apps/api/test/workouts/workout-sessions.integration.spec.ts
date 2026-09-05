@@ -18,6 +18,7 @@ import { ExerciseResolverService } from '../../src/workouts/exercises/exercise-r
 import { WorkoutProgramGeneratorService } from '../../src/workouts/programs/workout-program-generator.service';
 import { WorkoutProgramsService } from '../../src/workouts/programs/workout-programs.service';
 import { WorkoutSessionsService } from '../../src/workouts/sessions/workout-sessions.service';
+import { ProgressionExplainerService } from '../../src/workouts/progression/progression-explainer.service';
 import { PAIN_SAFETY_COPY } from '../../src/workouts/safety/workout-safety-copy';
 import { validProposal } from '../../src/workouts/programs/__fixtures__/proposal.fixture';
 import { seedExercises } from '../../prisma/exercise-catalog';
@@ -158,7 +159,11 @@ describeWithDb('Workout sessions (integration, real DB)', () => {
       new UserProfileService(service),
       { notify: async () => undefined } as never,
     );
-    sessions = new WorkoutSessionsService(service, actions);
+    sessions = new WorkoutSessionsService(
+      service,
+      actions,
+      new ProgressionExplainerService(ai as unknown as AiGatewayService),
+    );
   });
 
   afterAll(async () => {
@@ -471,6 +476,76 @@ describeWithDb('Workout sessions (integration, real DB)', () => {
     const bench = third.exercises.find((e) => e.exerciseId === exerciseId)!;
 
     expect(bench.lastTime?.sets[0].weightKg).toBe(20);
+  });
+
+  it('suggests an increase after two comfortable sessions at the top of the range', async () => {
+    const userId = await createUser();
+    const { commitmentId, upper } = await approvedProgram(userId);
+
+    // Two COMPLETED sessions, every prescribed set at the top of the range.
+    for (let round = 0; round < 2; round += 1) {
+      const view = await sessions.start(
+        userId,
+        round === 0 ? { commitmentId, variant: 'FULL' } : { templateId: upper.id, variant: 'FULL' },
+      );
+
+      for (const exercise of view.exercises) {
+        for (let setNumber = 1; setNumber <= exercise.sets; setNumber += 1) {
+          await sessions.logSet(userId, view.id, {
+            clientId: randomUUID(),
+            exerciseId: exercise.exerciseId,
+            setNumber,
+            weightKg: 20,
+            reps: exercise.repMax,
+            rpe: 7,
+            discomfort: 'NONE',
+          });
+        }
+      }
+
+      await sessions.finish(userId, view.id, { status: 'COMPLETED' });
+    }
+
+    const third = await sessions.start(userId, { templateId: upper.id, variant: 'FULL' });
+
+    expect(third.exercises[0].progression).toMatchObject({
+      action: 'increase',
+      reason: 'top_of_range_twice',
+      currentWeightKg: 20,
+      suggestedWeightKg: 22.5,
+    });
+  });
+
+  it('says first_session for a movement that has never been logged', async () => {
+    const userId = await createUser();
+    const { commitmentId } = await approvedProgram(userId);
+
+    const view = await sessions.start(userId, { commitmentId, variant: 'FULL' });
+
+    expect(view.exercises[0].progression).toMatchObject({
+      action: 'hold',
+      reason: 'first_session',
+      suggestedWeightKg: null,
+    });
+  });
+
+  it('explains the suggestion, falling back to the template when the model is unavailable', async () => {
+    const userId = await createUser();
+    const { commitmentId } = await approvedProgram(userId);
+    const view = await sessions.start(userId, { commitmentId, variant: 'FULL' });
+
+    ai.invoke.mockResolvedValue({
+      ok: false,
+      invocationId: 'inv-down',
+      error: { code: 'timeout', message: 'no answer' },
+      model: null,
+      latencyMs: 1,
+    });
+
+    const explanation = await sessions.explain(userId, view.id, view.exercises[0].exerciseId);
+
+    expect(explanation.source).toBe('template');
+    expect(explanation.sentence.length).toBeGreaterThan(10);
   });
 
   it('answers 404 for another user\'s session, never 403', async () => {
