@@ -709,7 +709,50 @@ database. It is never written to `system_settings.value`: the write schemas
 so a client that sends it has the key silently stripped by the global
 `ZodValidationPipe` before the request reaches the settings service.
 
-### 6.3 Database Design Principles
+### 6.3 Product Domain
+
+The foundation tables above (users, roles, settings, storage, notifications) are
+generic. The **product domain** sits on top of them as one explicit hierarchy —
+PRD §9 requires it to be a set of real objects rather than something implied by
+a conversation:
+
+```
+Best Self  →  Domains (Work / Family / Health)  →  Outcomes  →  Plans
+           →  Plan Versions  →  Routines  →  Commitments  →  Evidence  →  Reflection
+```
+
+| Table | Role in the hierarchy |
+|---|---|
+| `best_self_profiles` | Who the user is trying to become. One row per user, replaced whole. |
+| `outcomes` | A meaningful result in one domain. |
+| `plans` | The identity of an outcome's plan — one per outcome, nothing mutable on it. |
+| `plan_versions` | Everything a user would call "the plan": rationale, expected weekly load, lineage. At most one `ACTIVE` per plan. |
+| `routines` | A repeatable behaviour a version prescribes. |
+| `commitments` | One intended action at one time, with its lifecycle status. |
+| `evidence_items` | What actually happened. Survives its commitment. |
+| `reflections` | What the user made of it. |
+| `domain_modes` | Per-domain posture (GROW / MAINTAIN / RECOVER / PAUSE). |
+
+Three properties are structural rather than conventional, and each is written
+out in the schema header (`apps/api/prisma/schema.prisma`, "EvolvePath core
+domain"):
+
+- **Plans are versioned, always.** PRD §80/§103 require that a plan can change,
+  that the user can inspect *why*, and that the previous shape stays readable.
+  A mutable plan row satisfies none of those. Exactly one version per plan may
+  be `ACTIVE`, enforced by a partial unique index hand-written in the migration
+  because Prisma's schema language cannot express `WHERE status = 'ACTIVE'`.
+- **Evidence outlives its commitment.** `evidence_items.commitment_id` and
+  `reflections.commitment_id` are `SET NULL`, never `CASCADE` — PRD §103, and
+  momentum (E11) is computed from evidence.
+- **Every table carries `user_id`.** Ownership is a single indexed predicate
+  (`findFirst({ where: { id, userId } })`), not a multi-table join.
+
+The full model — field-by-field rationale, the commitment transition matrix and
+the rejected alternatives — will live in `docs/specs/domain-model.md`
+(forthcoming, epic E02 child #62).
+
+### 6.4 Database Design Principles
 
 | Principle | Implementation |
 |-----------|---------------|

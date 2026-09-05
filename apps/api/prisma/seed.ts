@@ -218,6 +218,11 @@ async function main() {
   await seedSystemSettings();
   await seedInitialAdminAllowlist();
 
+  // The EvolvePath product tables (outcomes, plans, plan_versions, routines,
+  // commitments, evidence_items, reflections, best_self_profiles,
+  // domain_modes) are deliberately left empty. Everything in them belongs to
+  // one specific person; a seeded outcome would be a plan nobody chose.
+
   console.log('\n✓ Database seeding completed successfully');
 }
 
