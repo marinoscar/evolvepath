@@ -263,12 +263,38 @@ describe('CommitmentActionsService (#40)', () => {
       expect(data.timerMinutes).toBe(25);
     });
 
-    it('refuses to continue a timer that is already running', async () => {
+    // "Continue another 15?" fires while the session is still running past its
+    // target. Refusing would leave the user's only way forward a pause followed
+    // by a continue, writing a `paused` evidence row for a pause that never
+    // happened.
+    it('extends the target of a still-running session without touching the clock', async () => {
       prisma.commitment.findFirst.mockResolvedValue(
-        row({ status: 'STARTED', startedAt: start, activeSince: start }),
+        row({ status: 'STARTED', startedAt: start, activeSince: start, timerMinutes: 5 }),
+      );
+      prisma.commitment.update.mockResolvedValue(
+        row({ status: 'STARTED', startedAt: start, activeSince: start, timerMinutes: 20 }),
       );
 
+      await service.continue(userId, id, { extraMinutes: 15 } as never);
+
+      const data = prisma.commitment.update.mock.calls[0][0].data as Record<string, unknown>;
+      expect(data.timerMinutes).toBe(20);
+      // Re-anchoring would silently discard the seconds already accumulated.
+      expect(data).not.toHaveProperty('activeSince');
+    });
+
+    it('refuses to continue a commitment that is not started at all', async () => {
+      prisma.commitment.findFirst.mockResolvedValue(row({ status: 'PLANNED' }));
+
       await expect(service.continue(userId, id, {} as never)).rejects.toThrow(ConflictException);
+    });
+
+    it('refuses to continue a terminal commitment', async () => {
+      prisma.commitment.findFirst.mockResolvedValue(row({ status: 'COMPLETED' }));
+
+      await expect(service.continue(userId, id, {} as never)).rejects.toMatchObject({
+        response: { details: { reason: 'INVALID_TRANSITION' } },
+      });
     });
   });
 

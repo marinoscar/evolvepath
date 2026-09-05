@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -25,7 +26,12 @@ import {
   SkipActionDto,
   StartActionDto,
 } from '../dto/commitment-action.dtos';
-import { CommitmentCardDto, DecompositionProposalDto } from '../dto/commitment-card.dto';
+import {
+  CommitmentCardDto,
+  DecompositionProposalDto,
+  StartContextDto,
+} from '../dto/commitment-card.dto';
+import type { StartContext } from '../commitment-card.schema';
 import { CommitmentActionsService } from './commitment-actions.service';
 
 /**
@@ -43,6 +49,24 @@ import { CommitmentActionsService } from './commitment-actions.service';
 @ApiResponse({ status: 404, description: 'No such commitment for this user' })
 export class CommitmentActionsController {
   constructor(private readonly actions: CommitmentActionsService) {}
+
+  @Get()
+  @Auth()
+  @ApiOperation({
+    summary: 'The card, plus why this matters',
+    description:
+      'What an execution screen needs and nothing else: the same `CommitmentCard` every action ' +
+      'below returns, plus the outcome’s motivation. Separate from `GET /commitments/{id}`, ' +
+      'which is the RECORD — every column, its evidence and its reflections. Two shapes on one ' +
+      'screen is how a UI drifts from an API, so the Start flow reads exactly one.',
+  })
+  @ApiResponse({ status: 200, type: StartContextDto })
+  async getCard(
+    @CurrentUser('id') userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<StartContext> {
+    return this.actions.getCard(userId, id);
+  }
 
   @Post('start')
   @Auth()
