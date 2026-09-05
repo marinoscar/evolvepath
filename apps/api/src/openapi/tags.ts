@@ -222,6 +222,13 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
     name: 'Coaching',
     tags: [
       {
+        name: 'Memory Insights',
+        description:
+          'What the coach remembers about the user, and the three controls PRD §85 gives ' +
+          'them over it: Edit, Forget, and Don\u2019t use for coaching. Forget is a hard ' +
+          'delete, and its audit row records the category only.',
+      },
+      {
         name: 'Coach',
         description:
           'Conversations and one coaching turn. POST /coach/messages is ALWAYS a 201: a ' +

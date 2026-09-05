@@ -105,6 +105,14 @@ describe('channelsFor', () => {
     expect(channelsFor('security.role_changed')).toEqual(['email', 'browser']);
   });
 
+  it('gives the memory proposal a browser channel and nothing else', () => {
+    // Deliberately not push (issue #78). An invitation to sit down with a
+    // settings page and read several sentences about yourself is the opposite
+    // of a moment-bound cue; a phone buzz would ask for attention it cannot
+    // use.
+    expect(channelsFor('memory.insight_proposed')).toEqual(['browser']);
+  });
+
   it('returns an empty array for an unknown key, rather than throwing', () => {
     expect(() => channelsFor('does.not_exist')).not.toThrow();
     expect(channelsFor('does.not_exist')).toEqual([]);

@@ -29,7 +29,7 @@ import { Injectable } from '@nestjs/common';
 // ever used) and nothing keeps the event loop alive.
 // =============================================================================
 
-/** Sliding window, in milliseconds. */
+/** The default sliding window, in milliseconds. */
 const WINDOW_MS = 60_000;
 
 /**
@@ -51,10 +51,29 @@ export const THROTTLE_LIMITS = {
    * at all — only the optional rephrase does.
    */
   family_lint: 10,
+  /**
+   * The memory proposer (issue #78). One per ten minutes, not five per minute:
+   * a proposer run reads 28 days of history and asks a reasoning model for
+   * durable statements about the user. Clicking it twice in a row cannot
+   * produce a different answer, so the bound is about the cost, not the pace.
+   */
+  memory_propose: 1,
 } as const;
+
 
 /** One rate-limited surface. */
 export type ThrottleBucket = keyof typeof THROTTLE_LIMITS;
+
+/**
+ * Per-bucket window overrides. Anything absent uses {@link WINDOW_MS}.
+ *
+ * A map rather than a field on `THROTTLE_LIMITS`, so the four buckets that
+ * were happy with a one-minute window did not have to be rewritten to add a
+ * fifth that is not.
+ */
+export const THROTTLE_WINDOWS: Partial<Record<ThrottleBucket, number>> = {
+  memory_propose: 10 * 60_000,
+};
 
 /** Allowed, or denied with the number of seconds to wait. */
 export type ThrottleDecision =
@@ -73,8 +92,9 @@ export class TestThrottle {
    */
   check(bucket: ThrottleBucket, userId: string): ThrottleDecision {
     const key = `${bucket}:${userId}`;
+    const windowMs = THROTTLE_WINDOWS[bucket] ?? WINDOW_MS;
     const now = Date.now();
-    const cutoff = now - WINDOW_MS;
+    const cutoff = now - windowMs;
 
     const recent = (this.hits.get(key) ?? []).filter(
       (timestamp) => timestamp > cutoff,
@@ -89,7 +109,7 @@ export class TestThrottle {
       const oldest = recent[0]!;
       const retryAfterSeconds = Math.max(
         1,
-        Math.ceil((oldest + WINDOW_MS - now) / 1000),
+        Math.ceil((oldest + windowMs - now) / 1000),
       );
 
       return { allowed: false, retryAfterSeconds };

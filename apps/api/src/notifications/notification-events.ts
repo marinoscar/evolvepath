@@ -311,6 +311,22 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     channels: ['browser', 'push'],
     defaultEnabled: true,
   },
+
+  // ---------------------------------------------------------------------------
+  // Memory (epic E06, issue #78)
+  // ---------------------------------------------------------------------------
+  {
+    key: 'memory.insight_proposed',
+    label: 'New coaching insight to review',
+    description:
+      'The coach noticed a pattern in how you work and wants you to confirm or dismiss it.',
+    // Browser only, and not push. This is an invitation to sit down with a
+    // settings page and read several sentences about yourself — the opposite
+    // of a moment-bound cue, and a phone buzz for it would be an interruption
+    // asking for attention it cannot use.
+    channels: ['browser'],
+    defaultEnabled: true,
+  },
 ];
 
 /**

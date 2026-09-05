@@ -434,3 +434,108 @@ intervention type.
 - **Synthesising a `structured` object for fallbacks.** See "Always 201".
 - **A guard that reads the message text.** See "The guard".
 - **403 for a foreign conversation.** The repo answers 404 everywhere.
+
+---
+
+## 5. Memory tiers and user control
+
+*(E06-05, issue #78 — `apps/api/src/coach/memory/`)*
+
+### Two booleans, two questions
+
+`userConfirmed` is **"the user says this is true"**. `doNotUse` is **"the user
+says never bring this up"**. Neither is the other's negation, and an insight can
+be both true and forbidden — the obvious case being an accurate observation
+about something the user does not want coached on. One flag would force the
+product to guess which the user meant.
+
+The assembler's query (§1) reads both: `userConfirmed: true, doNotUse: false`.
+That is what makes "the coach uses only what I approved" and "never bring this
+up" real rather than aspirational.
+
+### Forget is a hard delete
+
+PRD §85 and §127. Soft-hiding would leave a row saying something about a person
+who asked for it to be gone. The audit row records **the category and nothing
+else** (PRD §86): the user asked us to forget the sentence, and copying it into
+an audit table is not forgetting it.
+
+A *forgotten* insight may legitimately be proposed again later — it is gone, and
+the evidence for it may still be there. A *do-not-use* insight is never
+re-proposed: that one is an answer, and re-asking would be the product ignoring
+it. That asymmetry is why the proposer's dedupe query reads **every** insight,
+including excluded ones, while the assembler's reads only permitted ones.
+
+### Editing is confirming
+
+"This, but in my words" is agreement. An edit that left the insight unconfirmed
+would mean the coach still ignored the sentence the user had just written.
+
+### The proposer sends counts
+
+`aggregateStats` (`pattern-stats.ts`) produces completion rates by domain,
+weekday and time-of-day bucket, a reschedule histogram, fallback-size usage, the
+mean planned-versus-logged gap, and a skip-reason histogram. **No titles, no
+reflection text, no skip notes, no names.**
+
+That is a privacy decision and a quality one. The `pattern_analyst` persona is
+the one that writes durable sentences about a person, so it is the one that must
+be given the least to work from; and free text would let it produce a statement
+quoting something the user wrote once, which is both more intrusive and less
+durable than "morning commitments are kept more often than evening ones".
+
+Time-of-day buckets use the **user's** wall clock. A 23:30 UTC completion by
+someone in `America/Costa_Rica` happened at 17:30, and filing it under "evening"
+would produce a durable statement about that person which is simply false.
+
+`pattern-stats.ts` has no Nest and no Prisma in it, because E11's momentum
+engine replaces its implementation and keeps its shape.
+
+### Observation and inference are two fields
+
+`insightProposalSchema` requires both (PRD §14.4). The *observation* is the fact
+— "12 of 15 kept commitments were before noon"; the *statement* is the durable
+inference the coach would act on. Collapsing them would let an inference be
+stored with nothing to check it against, and PRD §10.12 requires the user to be
+able to approve or reject it knowing which is which.
+
+At most five. A screen of twenty "insights" is not something anybody reviews; it
+is something everybody dismisses.
+
+### Nothing here is an error
+
+Fewer than `MIN_SAMPLE` (10) decided commitments → `skipped: 'insufficient_data'`
+with **no model call**: a week of history cannot support a statement about how
+somebody works, and asking anyway would produce a confident one. A provider
+outage → `skipped: 'ai_unavailable'`. A proposer that cannot run is not a broken
+screen.
+
+AI insights are created `userConfirmed: false` with a 90-day `expiresAt`
+(`INSIGHT_TTL_DAYS`), so an unconfirmed guess about someone stops applying on
+its own without being deleted behind their back.
+
+### The notification
+
+`memory.insight_proposed` is **browser only, deliberately not push**. It is an
+invitation to sit down with a settings page and read several sentences about
+yourself — the opposite of a moment-bound cue, and a phone buzz would ask for
+attention it cannot use. Its body carries the **count and nothing else**:
+putting the statement in the notification would show the user a durable claim
+about themselves before they had any way to disagree with it.
+
+### Throttling
+
+One run per ten minutes per user, through `TestThrottle`'s `memory_propose`
+bucket. Clicking it twice cannot produce a different answer, so the bound is
+about the cost of the run, not the pace of the UI. `TestThrottle` gained
+per-bucket windows for this rather than the four existing buckets being
+rewritten around a fifth that wanted a different one.
+
+### Rejected alternatives
+
+- **A single "approved" flag.** See "Two booleans".
+- **Soft-deleting on Forget.** See "Forget is a hard delete".
+- **Sending the assembler's context to the pattern analyst.** It carries free
+  text; this persona must not have any.
+- **A cron proposer.** E10's weekly review calls `proposeInsights`; a schedule
+  that generates claims about people unprompted is a larger thing to own.
