@@ -1,19 +1,22 @@
 import { Module } from '@nestjs/common';
 
+import { PathModule } from '../path/path.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ContextAssemblerService } from './context/context-assembler.service';
+import { ProposalsController } from './proposals/proposals.controller';
+import { ProposalsService } from './proposals/proposals.service';
 
 /**
  * The AI coach (epic E06).
  *
- * E06-02 (#63) lands only the context assembler; the chat endpoints, the
- * mutation protocol and memory each add to this module. It imports
- * `PrismaModule` and nothing else on purpose — the assembler reads product
- * state and calls no model, so it must not depend on `AiModule`.
+ * `PathModule` is imported for `PlanVersionsService`, which is the one place
+ * allowed to write a `PlanVersion`. `ProposalsService` never touches
+ * `plan_versions` directly — see PRD §89.
  */
 @Module({
-  imports: [PrismaModule],
-  providers: [ContextAssemblerService],
-  exports: [ContextAssemblerService],
+  imports: [PrismaModule, PathModule],
+  controllers: [ProposalsController],
+  providers: [ContextAssemblerService, ProposalsService],
+  exports: [ContextAssemblerService, ProposalsService],
 })
 export class CoachModule {}

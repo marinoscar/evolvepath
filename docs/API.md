@@ -3324,6 +3324,141 @@ Readiness check - includes database connectivity test.
 
 ---
 
+### Plan Proposals
+
+A proposed change to a plan, waiting on a human (PRD §15). **Accepting one is
+the only path in the product that turns AI output into a `PlanVersion`** — the
+coach, the weekly review and workout adaptation all create proposals and none
+of them writes a plan.
+
+There is deliberately **no `POST /proposals`**: a route that accepted a change
+set from a browser would let a client author a plan version and label it `AI`.
+
+A proposal that is not yours answers **404, never 403** — the repo-wide rule in
+`apps/api/src/path/owned-resource.ts`.
+
+#### List proposals
+
+```http
+GET /api/proposals?status=PROPOSED&planId=<uuid>
+Authorization: Bearer <token>
+```
+
+Newest first. Both query parameters are optional.
+
+#### Read one, with the diff accepting it would produce
+
+```http
+GET /api/proposals/{id}
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "id": "6f0d…",
+  "planId": "0a44…",
+  "sourceKind": "COACH",
+  "status": "PROPOSED",
+  "summary": "Move the Wednesday workout to Saturday morning.",
+  "changeCount": 1,
+  "edited": false,
+  "expiresAt": "2026-09-12T16:00:00.000Z",
+  "changes": [
+    {
+      "op": "move",
+      "target": { "type": "routine", "id": "1111…" },
+      "before": null,
+      "after": { "preferredTime": "09:00", "triggerValue": "SAT", "daysOfWeek": [6] },
+      "reason": "Wednesday evenings stopped working"
+    }
+  ],
+  "originalChanges": null,
+  "preview": {
+    "diff": [
+      {
+        "op": "move",
+        "target": { "type": "routine", "id": "1111…", "title": "Strength workout" },
+        "reason": "Wednesday evenings stopped working",
+        "fields": [
+          { "field": "triggerValue", "before": "WED", "after": "SAT" },
+          { "field": "daysOfWeek", "before": [3], "after": [6] },
+          { "field": "preferredTime", "before": "18:30", "after": "09:00" }
+        ]
+      }
+    ],
+    "errors": []
+  },
+  "activeVersion": { "id": "9c1e…", "version": 1 }
+}
+```
+
+`preview.diff` is produced by the same pure function `accept` applies, so what
+the user reads and what happens cannot drift apart. A non-empty
+`preview.errors` means `accept` would answer 422.
+
+Reading a proposal past its 7-day life marks it `EXPIRED`. Expiry is **lazy**:
+there is no sweeper rewriting user data on a schedule.
+
+#### Accept
+
+```http
+POST /api/proposals/{id}/accept
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "proposal": { "status": "ACCEPTED", "appliedPlanVersionId": "77aa…" },
+  "planVersion": { "id": "77aa…", "version": 2, "status": "ACTIVE" }
+}
+```
+
+Atomic. The new version, its routines, the effects on future commitments and
+the proposal's own status all commit together or not at all. The previous
+version becomes `SUPERSEDED` and **keeps its routines**, so the history stays
+readable (PRD §103).
+
+Future `PLANNED` commitments of a moved routine are rescheduled;
+`rescheduleCount` is **not** incremented — that column counts how often the
+*user* pushed something. Commitments of a removed or paused routine are
+`CANCELLED` with `skipReason: "plan_change"`. Past commitments and evidence are
+never touched.
+
+**Error Cases:**
+- 409 Conflict - `proposal_not_actionable` (already decided) or `proposal_expired`
+- 422 Unprocessable Entity - `invalid_changes`, with a per-index error list
+- 404 Not Found - no such proposal of yours
+
+#### Edit
+
+```http
+POST /api/proposals/{id}/edit
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{ "changes": [ … ] }
+```
+
+The **whole** change set, not a patch: the user is deciding what they are
+agreeing to. What the coach originally proposed is kept in `originalChanges`
+from the first edit onward, and an accept after an edit is attributed
+`createdBy: "USER"` — attribution follows who wrote the content.
+
+#### Reject
+
+```http
+POST /api/proposals/{id}/reject
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{ "reason": "Wednesday is fine, it was one bad week" }
+```
+
+Touches no plan and no version. The reason (≤300 chars, optional) is kept for
+the coach to read back.
+
+---
+
 ## HTTP Status Codes
 
 | Code | Description |

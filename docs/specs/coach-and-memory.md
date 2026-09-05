@@ -228,3 +228,111 @@ a spec asserts the evaluated text is absent from it.
 - **Admin-editable rules or copy.** Code-only in V1: these strings are the
   product's most consequential and belong in review, not in a settings form.
 - **Model-first classification.** See "Two steps, in this order".
+
+---
+
+## 3. The mutation protocol
+
+*(E06-04, issue #76 — `apps/api/src/coach/proposals/`)*
+
+### The rule
+
+**No code path except `POST /proposals/:id/accept` turns AI output into a
+`PlanVersion`.**
+
+VISION §19 — "EvolvePath owns the plan. AI owns the coaching." PRD §15 spells
+the steps out; §89 and §107 add the constraint that makes them worth having.
+Creating a proposal writes one row in `plan_change_proposals` and nothing else.
+Reading one runs `applyChanges` in memory and writes nothing at all.
+
+The integration spec asserts the `plan_versions` count after create, after read
+and after edit — one, every time — because "we did not write anything" is
+exactly the kind of claim that rots silently, and a mocked transaction cannot
+see it rot.
+
+### The preview *is* the application
+
+`GET /proposals/:id` and `accept` call the **same pure `applyChanges`**. Two
+implementations would mean the user approves one thing and gets another, which
+is the specific failure the whole protocol exists to prevent. That is also why
+`applyChanges` has no Prisma, no clock and no I/O, and why an added routine
+gets a `tmp:<index>` placeholder instead of a generated uuid: a preview whose
+ids change on refresh is a diff the reader cannot trust.
+
+### Six ops, not a patch document
+
+`move`, `reduce`, `replace`, `add`, `remove`, `pause`. A small closed
+vocabulary rather than arbitrary JSON, because the user has to be shown what is
+about to happen in a sentence they can refuse. "Move Wednesday 18:30 to
+Saturday 09:00" is reviewable; a JSON Patch against a routine row is not — and
+a proposal nobody can read is a proposal everybody accepts.
+
+Each op's `superRefine` rule exists to reject a change set that would *look*
+right in a diff and do the wrong thing. The sharpest is `reduce`: an `after`
+duration greater than or equal to `before` is refused, because a "reduce" that
+increases the load is the one wrong answer a user is most likely to accept
+without reading — it is the op they asked for, so only the number contradicts
+it.
+
+`reason` is required on every change and bounded at 200 characters. PRD §80
+wants version history to carry why the plan changed, and the only moment that
+reason exists is when the change is proposed.
+
+### What accept does, atomically
+
+1. Conditionally claims the proposal (`status IN (PROPOSED, EDITED)`), so two
+   tabs racing produce exactly one winner.
+2. `PlanVersionsService.createAndActivateInTx` — supersede the current version,
+   insert the next one already `ACTIVE` and `userApproved`, write its routines.
+   It lives in `PlanVersionsService` so version numbering, lineage and
+   supersede-before-activate stay in the one service that owns them; a second
+   implementation of "what is the next version number" is how histories develop
+   gaps. **It never passes through `DRAFT`**: this version was never a proposal
+   the user might still edit — the accept call *is* the approval.
+3. Applies the commitment effects.
+4. Points the proposal at the version it produced.
+5. Writes a `SYSTEM` coach message ("Plan updated to v2.") when the proposal
+   came from a conversation, so re-reading the thread shows what it caused. The
+   coach did not say this, and the role records that.
+
+The audit row (`plan:change_accepted`) is written **after** the commit, per the
+repo's side-effects-outside-transactions rule.
+
+### `rescheduleCount` is not incremented
+
+A future commitment whose routine moved is rescheduled in place — same id, so
+any evidence or reflection already attached to it survives (PRD §103) — and
+`rescheduleCount` stays where it was. That column counts how often the **user**
+pushed something, and E07 reads it as a friction signal. A change the user
+deliberately chose is not the same fact.
+
+A commitment whose routine was removed or paused is `CANCELLED` with
+`skipReason: 'plan_change'`. Past commitments and evidence are never touched:
+evidence is a fact about what happened, and a plan change cannot unhappen it.
+
+### Attribution follows who wrote the content
+
+`createdBy: AI` for an accepted proposal, `createdBy: USER` for one the user
+edited first — whatever suggested it originally. `originalChanges` is stored
+once, on the first edit, so the record of the AI's suggestion never becomes a
+record of the user's first draft.
+
+### Expiry is lazy
+
+`PROPOSAL_TTL_DAYS = 7`, a constant rather than an env var: how stale advice may
+get is a product decision, not a deployment knob. A stale proposal becomes
+`EXPIRED` the first time anyone reads it. There is no sweeper — a row nobody
+reads costs nothing, and a cron that rewrites user data on a schedule is a much
+larger thing to own than a `WHERE` clause.
+
+### Rejected alternatives
+
+- **`POST /proposals`.** A route that accepts a change set from a browser lets
+  a client author a plan version and label it `AI`.
+- **A JSON Patch / arbitrary diff format.** See "Six ops".
+- **Threading `tx` through `createDraft` + `activate`.** Two status writes and a
+  "one draft at a time" check that has nothing to say on this path, in exchange
+  for reusing methods whose shape does not fit. One purpose-built method inside
+  the same service keeps the invariants together without the ceremony.
+- **403 for a foreign proposal.** The repo answers 404 everywhere
+  (`path/owned-resource.ts`): a 403 confirms the id exists.
