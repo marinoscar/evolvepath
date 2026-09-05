@@ -1,6 +1,10 @@
 import { createZodDto } from 'nestjs-zod';
 
-import { commitmentFieldsSchema, refineSchedule } from './create-commitment.dto';
+import {
+  commitmentFieldsSchema,
+  refineSchedule,
+  refineVersionMinutes,
+} from './create-commitment.dto';
 
 /**
  * `domain` and the three foreign ids are immutable, and `status` is not a
@@ -13,6 +17,7 @@ export const updateCommitmentSchema = commitmentFieldsSchema.partial().superRefi
     return;
   }
   refineSchedule(value, ctx);
+  refineVersionMinutes(value, ctx);
 });
 
 export class UpdateCommitmentDto extends createZodDto(updateCommitmentSchema) {}

@@ -66,6 +66,9 @@ export class CommitmentsService {
         fullVersion: dto.fullVersion ?? null,
         shortVersion: dto.shortVersion ?? null,
         minimumVersion: dto.minimumVersion ?? null,
+        fullMinutes: dto.fullMinutes ?? null,
+        shortMinutes: dto.shortMinutes ?? null,
+        minimumMinutes: dto.minimumMinutes ?? null,
         userConfirmed: dto.userConfirmed,
       },
       include: LIST_INCLUDE,
@@ -128,6 +131,9 @@ export class CommitmentsService {
     if (dto.fullVersion !== undefined) data.fullVersion = dto.fullVersion ?? null;
     if (dto.shortVersion !== undefined) data.shortVersion = dto.shortVersion ?? null;
     if (dto.minimumVersion !== undefined) data.minimumVersion = dto.minimumVersion ?? null;
+    if (dto.fullMinutes !== undefined) data.fullMinutes = dto.fullMinutes ?? null;
+    if (dto.shortMinutes !== undefined) data.shortMinutes = dto.shortMinutes ?? null;
+    if (dto.minimumMinutes !== undefined) data.minimumMinutes = dto.minimumMinutes ?? null;
     if (dto.userConfirmed !== undefined) data.userConfirmed = dto.userConfirmed;
 
     // The merged schedule, not just the patch: moving only the start past an
@@ -221,6 +227,9 @@ export class CommitmentsService {
             fullVersion: existing.fullVersion,
             shortVersion: existing.shortVersion,
             minimumVersion: existing.minimumVersion,
+            fullMinutes: existing.fullMinutes,
+            shortMinutes: existing.shortMinutes,
+            minimumMinutes: existing.minimumMinutes,
             status: 'PLANNED',
             rescheduledFromId: existing.id,
             // THE COUNT TRAVELS WITH THE INTENTION, not the row. "Moved twice"

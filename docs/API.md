@@ -2078,9 +2078,25 @@ a move the API refuses.
   "fullVersion": "Full upper-body session, 5 exercises",
   "shortVersion": "Bench and rows only",
   "minimumVersion": "10-minute circuit",
+  "fullMinutes": 38,
+  "shortMinutes": 20,
+  "minimumMinutes": 10,
   "userConfirmed": false
 }
 ```
+
+The three sizes are a **title plus a duration**: `fullVersion` is what it is
+called, `fullMinutes` is how long it takes. Two fields rather than a nested
+object because the next-best-action sizer reads the minutes for every candidate
+on every Today request, and because `PATCH` over a flat shape can change one of
+the six without restating the others.
+
+Whichever of them are present must satisfy **`minimumMinutes ≤ shortMinutes ≤
+fullMinutes`** (**400** otherwise, with the offending field named). A "short
+version" that takes longer than the full one is not a smaller option, it is a
+typo — and the sizer would happily offer it to someone who just said they were
+depleted. A `PATCH` naming one size is never rejected for a size it did not
+mention.
 
 `domain`, `title` and `scheduledStart` are required; `scheduledEnd` must be
 after `scheduledStart`; `importance` defaults to `3`.

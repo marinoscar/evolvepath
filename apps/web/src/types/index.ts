@@ -1079,6 +1079,9 @@ export interface Commitment {
   fullVersion: string | null;
   shortVersion: string | null;
   minimumVersion: string | null;
+  fullMinutes: number | null;
+  shortMinutes: number | null;
+  minimumMinutes: number | null;
   status: CommitmentStatus;
   /**
    * Computed by the API from its own matrix. The UI renders EXACTLY these, so
@@ -1116,6 +1119,10 @@ export interface CommitmentInput {
   fullVersion?: string | null;
   shortVersion?: string | null;
   minimumVersion?: string | null;
+  /** How long each declared size takes. `minimum <= short <= full`. */
+  fullMinutes?: number | null;
+  shortMinutes?: number | null;
+  minimumMinutes?: number | null;
   userConfirmed?: boolean;
 }
 

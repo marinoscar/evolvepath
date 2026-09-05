@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 
 import { CommitmentsService } from './commitments.service';
+import { createCommitmentSchema } from './dto/create-commitment.dto';
+import { updateCommitmentSchema } from './dto/update-commitment.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { createMockPrismaService, MockPrismaService } from '../../test/mocks/prisma.mock';
 
@@ -363,6 +365,73 @@ describe('CommitmentsService', () => {
       await expect(
         service.transition(userId, commitmentId, { to: 'PLANNED' } as never),
       ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  // #52: the three sizes are only useful if the smaller ones are actually
+  // smaller. A "short version" that takes longer than the full one is a typo the
+  // sizer would happily offer to someone who just said they were depleted.
+  describe('version minutes ordering', () => {
+    const base = {
+      domain: 'HEALTH',
+      title: 'Upper A',
+      scheduledStart: start.toISOString(),
+      importance: 4,
+      userConfirmed: false,
+    };
+
+    it('accepts minimum <= short <= full', () => {
+      expect(
+        createCommitmentSchema.safeParse({
+          ...base,
+          fullMinutes: 38,
+          shortMinutes: 20,
+          minimumMinutes: 10,
+        }).success,
+      ).toBe(true);
+    });
+
+    it('rejects a short version longer than the full one', () => {
+      const result = createCommitmentSchema.safeParse({
+        ...base,
+        fullMinutes: 20,
+        shortMinutes: 38,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0].path).toEqual(['shortMinutes']);
+    });
+
+    it('rejects a minimum longer than the short version', () => {
+      const result = createCommitmentSchema.safeParse({
+        ...base,
+        fullMinutes: 38,
+        shortMinutes: 10,
+        minimumMinutes: 20,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0].path).toEqual(['minimumMinutes']);
+    });
+
+    it('compares the minimum against the full one when no short version exists', () => {
+      expect(
+        createCommitmentSchema.safeParse({ ...base, fullMinutes: 10, minimumMinutes: 20 })
+          .success,
+      ).toBe(false);
+    });
+
+    // A PATCH that touches one size must not be rejected for a size it never
+    // mentioned.
+    it('ignores a pair the patch does not mention', () => {
+      expect(updateCommitmentSchema.safeParse({ shortMinutes: 45 }).success).toBe(true);
+    });
+
+    it('rejects a zero-minute or eight-hour size', () => {
+      expect(createCommitmentSchema.safeParse({ ...base, fullMinutes: 0 }).success).toBe(false);
+      expect(createCommitmentSchema.safeParse({ ...base, fullMinutes: 481 }).success).toBe(
+        false,
+      );
     });
   });
 

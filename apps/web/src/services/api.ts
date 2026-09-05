@@ -884,6 +884,14 @@ export async function createCommitment(input: CommitmentInput): Promise<Commitme
   return api.post<Commitment>('/commitments', input);
 }
 
+/** Edits a commitment. `domain` and the foreign ids are immutable server-side. */
+export async function updateCommitment(
+  id: string,
+  patch: Partial<CommitmentInput>,
+): Promise<Commitment> {
+  return api.patch<Commitment>(`/commitments/${id}`, patch);
+}
+
 export async function getCommitment(id: string): Promise<CommitmentDetail> {
   return api.get<CommitmentDetail>(`/commitments/${id}`);
 }

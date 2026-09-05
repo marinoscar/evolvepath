@@ -42,7 +42,18 @@ export const DOMAIN_MODE_LABELS: Record<DomainModeKind, string | null> = {
   PAUSE: 'Paused',
 };
 
-export const ACTION_LABELS: Record<CommitmentActionName, string> = {
+/**
+ * `edit` is a CLIENT-SIDE row action, not one of the API's `availableActions`.
+ * It maps to `PATCH /commitments/:id` rather than to an action endpoint, so it
+ * is offered from this list and never expected back from the server.
+ *
+ * Offered only for `PLANNED` and `READY`: the API refuses a PATCH on a terminal
+ * commitment with a 409, and a started one is mid-session.
+ */
+export type RowAction = CommitmentActionName | 'edit';
+
+export const ACTION_LABELS: Record<RowAction, string> = {
+  edit: 'Edit',
   start: 'Start',
   pause: 'Pause',
   continue: 'Continue',

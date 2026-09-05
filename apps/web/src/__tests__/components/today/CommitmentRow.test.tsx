@@ -35,8 +35,10 @@ const card = (over: Partial<CommitmentCard> = {}): CommitmentCard => ({
 
 describe('CommitmentRow', () => {
   // A menu the client computed would eventually offer a move the API refuses,
-  // and the user would be the one to find out.
-  it('renders exactly the API’s availableActions, and nothing else', async () => {
+  // and the user would be the one to find out. `Edit` is the one deliberate
+  // addition: it is a PATCH rather than an action endpoint, appended by the row
+  // only where the API would accept the patch.
+  it('renders the API’s availableActions, plus Edit where a PATCH is allowed', async () => {
     const user = userEvent.setup();
     render(<CommitmentRow commitment={card()} onAction={vi.fn()} />);
 
@@ -50,16 +52,40 @@ describe('CommitmentRow', () => {
     expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
       'Complete',
       'Skip',
+      'Edit',
     ]);
   });
 
-  it('offers no menu at all when the API listed one action', () => {
-    render(<CommitmentRow commitment={card({ availableActions: ['start'] })} onAction={vi.fn()} />);
+  it('offers no menu at all when there is nothing left to put in one', () => {
+    render(
+      <CommitmentRow
+        commitment={card({ status: 'STARTED', availableActions: ['pause'] })}
+        onAction={vi.fn()}
+      />,
+    );
 
-    expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /^Actions for/ }),
     ).not.toBeInTheDocument();
+  });
+
+  // The API refuses a PATCH on a started or terminal commitment.
+  it('offers Edit only while the commitment is still PLANNED or READY', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <CommitmentRow
+        commitment={card({ status: 'READY', availableActions: ['start', 'complete'] })}
+        onAction={vi.fn()}
+      />,
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Actions for Draft the proposal storyline' }),
+    );
+    expect(
+      within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Edit' }),
+    ).toBeInTheDocument();
   });
 
   it('offers nothing on a terminal commitment', () => {
