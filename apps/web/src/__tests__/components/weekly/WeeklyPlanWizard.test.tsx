@@ -195,6 +195,22 @@ describe('WeeklyPlanWizard (#84)', () => {
     );
   });
 
+  it('keeps only one step mounted on a phone', async () => {
+    // MUI's Collapse keeps its children mounted by default, so a vertical
+    // stepper without `unmountOnExit` leaves every collapsed step's Next button
+    // in the DOM and in the tab order — five buttons with the same purpose,
+    // four of them invisible and reachable by keyboard.
+    act(() => setViewportWidth(PHONE));
+    const user = userEvent.setup();
+    render(<Harness />);
+    await screen.findByTestId('weekly-plan-wizard');
+
+    expect(screen.getAllByTestId('wizard-next')).toHaveLength(1);
+
+    await user.click(next());
+    await waitFor(() => expect(screen.getAllByTestId('wizard-next')).toHaveLength(1));
+  });
+
   it('is a vertical stepper below sm and horizontal above', async () => {
     act(() => setViewportWidth(PHONE));
     const { unmount } = render(<Harness />);
