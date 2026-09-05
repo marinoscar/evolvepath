@@ -43,6 +43,15 @@ export class CommitmentResponseDto {
   @ApiPropertyOptional({ description: 'The smallest version that still counts (PRD §57)' })
   minimumVersion!: string | null;
 
+  @ApiPropertyOptional({ description: 'How long the full version takes, in minutes' })
+  fullMinutes!: number | null;
+
+  @ApiPropertyOptional({ description: 'How long the short version takes, in minutes' })
+  shortMinutes!: number | null;
+
+  @ApiPropertyOptional({ description: 'How long the minimum version takes, in minutes' })
+  minimumMinutes!: number | null;
+
   @ApiProperty({
     description: 'Lifecycle state',
     enum: [
