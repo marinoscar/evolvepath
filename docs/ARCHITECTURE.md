@@ -734,13 +734,17 @@ Best Self  →  Domains (Work / Family / Health)  →  Outcomes  →  Plans
 | `domain_modes` | Per-domain posture (GROW / MAINTAIN / RECOVER / PAUSE). |
 | `notification_interactions` | The coaching decision log (E12, #49): every send, response and suppression, with the reason the policy gave. |
 | `push_subscriptions` | A browser's web-push endpoint (E12, #49). Unique per endpoint, across users. |
+| `weekly_reviews` | One Monday-start week compared against its plan (E10, #65): deterministic `aggregates`, the coach's six-part `ai_summary`, and the ids of the proposals it raised. |
+| `weekly_plans` | The coming week (E10, #65): constraints, one primary focus, intended domain modes and the materialised proposal the user approves. |
 
 Alongside them, `user_profiles` (E04, #100) holds the typed answers the product
 itself reasons about — `timezone` (what "today" means for this user),
 `coachingStyle`, `weekdayMinutes` (the budget the next-best-action sizes
 against), quiet hours, the coaching notification policy (E12, #49 — caps and
 muted categories; quiet hours stay in their own columns so there is one
-answer to when a user is asleep), and the onboarding step. It is deliberately not part of
+answer to when a user is asleep), the weekly review rhythm (E10, #65 —
+`weekly_review_weekday` and `weekly_review_time`, the day and hour the review
+is prepared), and the onboarding step. It is deliberately not part of
 `user_settings`, whose JSONB document the API never interprets. One row per
 user, created lazily on first write; a missing row means onboarding has not
 finished.

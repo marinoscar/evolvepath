@@ -73,6 +73,10 @@ model User {
   memoryInsights      MemoryInsight[]      @relation("UserMemoryInsights")
   obstacles           Obstacle[]           @relation("UserObstacles")
 
+  // The weekly loop (epic E10)
+  weeklyReviews WeeklyReview[] @relation("UserWeeklyReviews")
+  weeklyPlans   WeeklyPlan[]   @relation("UserWeeklyPlans")
+
   @@map("users")
 }
 
@@ -755,6 +759,14 @@ model UserProfile {
   /// Quiet hours are deliberately NOT in here: they already exist as
   /// `quietHoursStart/End` columns (E04-01) and there must be one home.
   notificationPolicy Json? @map("notification_policy")
+
+  /// When the weekly review is prepared (PRD §50: "a recommended day/time
+  /// chosen by user"). 0 = Sunday … 6 = Saturday, range-checked by the database
+  /// as well as by Zod — an out-of-range weekday would silently never fire.
+  weeklyReviewWeekday Int    @default(0)       @map("weekly_review_weekday")
+  /// 'HH:mm' local wall-clock, like `quietHoursStart`. The sweep runs hourly,
+  /// so the minutes are documentation rather than a promise.
+  weeklyReviewTime    String @default("17:00") @map("weekly_review_time")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
@@ -1917,4 +1929,115 @@ model Obstacle {
 
   @@index([userId, domain, lastObservedAt(sort: Desc)])
   @@map("obstacles")
+}
+
+// =============================================================================
+// Weekly review & planning (epic E10)
+// =============================================================================
+//
+// TWO ROWS PER WEEK, AND THE WEEK IS A STRING.
+//
+// `weekStart` is the user's local Monday as 'YYYY-MM-DD' text, not `@db.Date`.
+// A date column round-trips through Prisma as UTC midnight, so a user west of
+// Greenwich reads back the Sunday — the same trap `daily_check_ins.date_local`
+// (E05-03) avoided the same way. Weeks are Monday-start everywhere in this
+// product; `localWeekBounds` and `docs/specs/family-domain.md` already fixed
+// that and a second convention would make "this week" two questions.
+//
+// A review is what happened; a plan is what is intended next. They are separate
+// rows because they have separate lifecycles — a review can be READY forever
+// with nobody planning anything — and separate unique keys on `(user, week)`,
+// so a plan for week N sits beside the review of week N-1 it came from.
+// =============================================================================
+
+enum WeeklyReviewStatus {
+  GENERATING
+  READY
+  APPROVED
+  SKIPPED
+}
+
+enum WeeklyPlanStatus {
+  DRAFT
+  APPROVED
+}
+
+/// One Monday-start week, compared against its plan (PRD §14.6, §51).
+///
+/// `aggregates` is deterministic — computed from commitments, evidence and
+/// reflections with no model involved — and `aiSummary` is the coach's reading
+/// of it, which may be `source: 'template'` when the provider is down (PRD
+/// §120). Keeping them in two columns is what makes that fallback invisible to
+/// every consumer of the numbers.
+model WeeklyReview {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  /// The user's local Monday, 'YYYY-MM-DD'. See the header for why it is text.
+  weekStart String @map("week_start") @db.VarChar(10)
+
+  status WeeklyReviewStatus @default(GENERATING)
+
+  /// `weekAggregatesSchema` (weekly.schema.ts). Validated at the boundary.
+  aggregates Json  @default("{}")
+  /// `weeklyReviewSummarySchema`. Null until a generation finishes.
+  aiSummary  Json? @map("ai_summary")
+
+  /// `PlanChangeProposal` ids, DELIBERATELY WITHOUT AN FK. E06-04 expires
+  /// proposals lazily and they may be pruned; a review is a historical record
+  /// and must survive that. Readers skip ids that no longer resolve.
+  proposalIds String[] @default([]) @map("proposal_ids")
+
+  /// `ai_invocations` id. A plain string for the same reason: telemetry is
+  /// prunable and a review must not be.
+  invocationId String? @map("invocation_id")
+
+  generatedAt DateTime? @map("generated_at") @db.Timestamptz
+  approvedAt  DateTime? @map("approved_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user  User         @relation("UserWeeklyReviews", fields: [userId], references: [id], onDelete: Cascade)
+  plans WeeklyPlan[] @relation("WeeklyPlanReview")
+
+  @@unique([userId, weekStart])
+  @@index([userId, status])
+  @@map("weekly_reviews")
+}
+
+/// The coming week, before it is committed to (PRD §50).
+///
+/// `reviewId` is SetNull rather than Cascade: deleting a review must not delete
+/// the week somebody already approved off the back of it.
+model WeeklyPlan {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  weekStart String  @map("week_start") @db.VarChar(10)
+  reviewId  String? @map("review_id") @db.Uuid
+
+  /// One sentence, ≤ 200 chars (Zod). PRD §50 step 3 — ONE primary focus.
+  primaryFocus String? @map("primary_focus")
+
+  /// `weeklyPlanConstraintsSchema` — travel days, fixed events, notes.
+  constraints Json @default("{}")
+  /// `weeklyDomainModesSchema` — the posture the user intends for next week.
+  domainModes Json @default("{}") @map("domain_modes")
+  /// `weeklyPlanProposalSchema` (E10-03) — the materialised items, the load
+  /// summary and its warnings. Cleared whenever the inputs change.
+  proposal    Json?
+
+  status     WeeklyPlanStatus @default(DRAFT)
+  approvedAt DateTime?        @map("approved_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user   User          @relation("UserWeeklyPlans", fields: [userId], references: [id], onDelete: Cascade)
+  review WeeklyReview? @relation("WeeklyPlanReview", fields: [reviewId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, weekStart])
+  @@index([userId, status])
+  @@map("weekly_plans")
 }
