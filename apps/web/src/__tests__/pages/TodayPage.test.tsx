@@ -217,7 +217,15 @@ describe('TodayPage', () => {
       await screen.findByTestId('next-best-action');
       expect(screen.getByRole('button', { name: 'Start 25 min' })).toBeInTheDocument();
 
-      await user.click(screen.getByRole('radio', { name: 'Low energy' }));
+      // Scoped to the check-in group (#180). The end-of-day reflection chips
+      // are radios too and offer "Low energy" as well — two different questions
+      // may legitimately share an answer word, so the query has to say which
+      // question it is answering.
+      await user.click(
+        within(screen.getByTestId('check-in-chips')).getByRole('radio', {
+          name: 'Low energy',
+        }),
+      );
 
       await waitFor(() =>
         expect(getTodayState().checkIn).toMatchObject({ feel: 'LOW_ENERGY' }),
