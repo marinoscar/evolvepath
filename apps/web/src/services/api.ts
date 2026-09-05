@@ -296,6 +296,7 @@ import type {
   DecompositionProposal,
   ReflectionQuickOption,
   SkipReason,
+  StartContext,
   TodayInsight,
   TodayResponse,
   BestSelfInput,
@@ -943,6 +944,18 @@ export async function postDayReflection(input: {
 // Every one of these returns a `CommitmentCard`, so a caller replaces the row it
 // acted on with the server's own answer rather than reasoning about what the
 // action implied.
+
+/**
+ * What the Start screen reads.
+ *
+ * Deliberately not `getCommitment`, which returns the RECORD — every column plus
+ * evidence and reflections. A screen that read one shape and then received a
+ * `CommitmentCard` back from every action it fires would drift from the API one
+ * field at a time.
+ */
+export async function getCommitmentCard(id: string): Promise<StartContext> {
+  return api.get<StartContext>(`/commitments/${id}/actions`);
+}
 
 export async function startCommitment(
   id: string,

@@ -1361,6 +1361,16 @@ export interface DecompositionProposal {
   source: 'ai' | 'template';
 }
 
+/**
+ * The card an execution screen reads, with the outcome's motivation joined.
+ *
+ * PRD §27 puts "why it matters" on the Start screen deliberately — a timer with
+ * no reason attached is a stopwatch.
+ */
+export interface StartContext extends CommitmentCard {
+  whyItMatters: string | null;
+}
+
 export interface CompleteCommitmentInput {
   notes?: string | null;
   minutesSpent?: number | null;
