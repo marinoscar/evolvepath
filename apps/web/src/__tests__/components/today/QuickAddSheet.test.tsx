@@ -60,14 +60,13 @@ describe('QuickAddSheet', () => {
       expect(within(kinds).getByRole('button', { name: /Family intention/ })).toBeEnabled();
     });
 
-    // Rendered and disabled rather than omitted: a user who looks for it should
-    // learn that it is coming, not conclude it does not exist.
-    it('shows Workout as coming rather than hiding it', () => {
+    // Enabled since E09-09 (#111): it starts a session from the active program.
+    it('offers Workout as a live option', () => {
       renderSheet();
 
       const workout = screen.getByRole('button', { name: /Workout/ });
-      expect(workout).toBeDisabled();
-      expect(workout).toHaveTextContent('Coming with workout programs');
+      expect(workout).toBeEnabled();
+      expect(workout).toHaveTextContent('Start a session from your program');
     });
 
     it('preselects FAMILY for a family intention', async () => {
@@ -243,6 +242,38 @@ describe('QuickAddSheet', () => {
       );
 
       expect(onClose).toHaveBeenCalled();
+    });
+  });
+
+  describe('the health media entries (epic E09)', () => {
+    it('says what to do first when there is no program to start', async () => {
+      const user = userEvent.setup();
+      act(() => setViewportWidth(DESKTOP));
+      renderSheet();
+
+      await user.click(screen.getByRole('button', { name: /Workout/ }));
+
+      // Greying it out would say "not for you"; the real reason is that there
+      // is nothing to start yet, and the fix is one tap away.
+      expect(await screen.findByText(/no active program yet/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Build a program' })).toHaveAttribute(
+        'href',
+        '/health/programs/new',
+      );
+    });
+
+    it('offers a meal check that says it is not counting', async () => {
+      const user = userEvent.setup();
+      act(() => setViewportWidth(DESKTOP));
+      renderSheet();
+
+      await user.click(screen.getByRole('button', { name: /Meal check/ }));
+
+      expect(await screen.findByText(/I look at habits, not calories/)).toBeInTheDocument();
+      expect(screen.getByLabelText('Photograph your meal')).toHaveAttribute(
+        'capture',
+        'environment',
+      );
     });
   });
 });
