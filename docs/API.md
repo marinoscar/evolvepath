@@ -3424,6 +3424,70 @@ planning through friction to re-deciding.
 
 ---
 
+### Memory Insights
+
+What the coach remembers about the user, and the controls PRD §85 gives them
+over it. An id that is not yours answers **404, never 403**.
+
+**Two booleans, two questions, and neither is the other's negation.**
+`userConfirmed` is "the user says this is true"; `doNotUse` is "never bring
+this up". An insight can be both true and forbidden.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/memory-insights?category=&includeDoNotUse=true` | Ordered by category, confirmed first, then confidence. Excluded insights are hidden unless asked for |
+| `POST` | `/api/memory-insights` | `{category, statement}` — stored `USER`, confirmed, confidence 1 |
+| `PATCH` | `/api/memory-insights/{id}` | `{statement}` — editing an AI guess **confirms** it |
+| `POST` | `/api/memory-insights/{id}/confirm` | The coach uses confirmed insights and no others |
+| `POST` | `/api/memory-insights/{id}/do-not-use` | `{doNotUse}` — leaves every prompt, stays visible here |
+| `DELETE` | `/api/memory-insights/{id}` | 204. A **hard delete**; the audit row records the category only |
+| `POST` | `/api/memory-insights/propose` | Ask the coach what it has noticed |
+
+#### Propose
+
+```http
+POST /api/memory-insights/propose
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "created": [
+    {
+      "id": "…",
+      "category": "PATTERN",
+      "statement": "Morning commitments are more reliable than evening ones.",
+      "evidenceCount": 15,
+      "confidence": 0.8,
+      "userConfirmed": false,
+      "doNotUse": false,
+      "expiresAt": "2026-12-04T…",
+      "source": "AI"
+    }
+  ],
+  "skipped": null
+}
+```
+
+Reads 28 days of **aggregated counts** — no titles, no reflection text, no
+names — and proposes at most five insights, each `userConfirmed: false` and
+expiring in 90 days. PRD §10.12: a durable inference needs explicit approval
+before it becomes a planning assumption, so the coach cannot see one until it
+is confirmed.
+
+**Always a 200.** Fewer than 10 decided commitments gives
+`skipped: "insufficient_data"` with no model call; a provider outage gives
+`skipped: "ai_unavailable"`. Neither is a broken screen.
+
+Something the user marked `doNotUse` is **never re-proposed** — "don't use
+this" is an answer, and re-asking would be the product ignoring it. (A
+*forgotten* insight is genuinely gone and may legitimately come back.)
+
+**Error Cases:**
+- 429 Too Many Requests - one run per ten minutes per user, with `retryAfterSeconds`
+
+---
+
 ### Plan Proposals
 
 A proposed change to a plan, waiting on a human (PRD §15). **Accepting one is

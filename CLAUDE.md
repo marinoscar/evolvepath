@@ -636,6 +636,17 @@ Ten intent-named routes over the same matrix. Each returns a **commitment card**
 Note: `structured` is null on a degraded turn — a fallback is deliberately
 indistinguishable from "no model output". `invocationId` is never on the wire.
 
+### Memory Insights (epic E06)
+What the coach remembers, and PRD §85's controls over it. `userConfirmed`
+("this is true") and `doNotUse` ("never bring this up") are two different
+questions — an insight can be both true and forbidden.
+- `GET /api/memory-insights?category=&includeDoNotUse=` - Ordered by category, confirmed first, then confidence
+- `POST /api/memory-insights` - Tell the coach something yourself; stored confirmed at full confidence
+- `PATCH /api/memory-insights/{id}` - Reword it. Editing an AI guess **confirms** it
+- `POST /api/memory-insights/{id}/confirm` / `POST /api/memory-insights/{id}/do-not-use` - The two flags
+- `DELETE /api/memory-insights/{id}` - Forget it (204). A **hard delete**; the audit row carries the category and nothing else (PRD §86)
+- `POST /api/memory-insights/propose` - 28 days of aggregated counts in, at most five unconfirmed insights out. Always 200 (`insufficient_data` / `ai_unavailable`); 429 beyond one run per ten minutes
+
 ### Plan Proposals (epic E06)
 The user's half of PRD §15's mutation protocol. There is deliberately no
 `POST /proposals` — proposals are created by the service that produced them.
