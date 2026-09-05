@@ -1799,8 +1799,8 @@ minimum that still counts.
 
 | From | May move to |
 |------|-------------|
-| `PLANNED` | `READY`, `STARTED`, `RESCHEDULED`, `SKIPPED`, `MISSED`, `CANCELLED` |
-| `READY` | `PLANNED`, `STARTED`, `RESCHEDULED`, `SKIPPED`, `MISSED`, `CANCELLED` |
+| `PLANNED` | `READY`, `STARTED`, `COMPLETED`, `PARTIALLY_COMPLETED`, `RESCHEDULED`, `SKIPPED`, `MISSED`, `CANCELLED` |
+| `READY` | `PLANNED`, `STARTED`, `COMPLETED`, `PARTIALLY_COMPLETED`, `RESCHEDULED`, `SKIPPED`, `MISSED`, `CANCELLED` |
 | `STARTED` | `COMPLETED`, `PARTIALLY_COMPLETED`, `RESCHEDULED`, `SKIPPED`, `CANCELLED` |
 | `COMPLETED`, `PARTIALLY_COMPLETED`, `RESCHEDULED`, `SKIPPED`, `MISSED`, `CANCELLED` | *nothing — terminal* |
 
@@ -1808,11 +1808,19 @@ A status never transitions to itself: re-applying one is not a transition, and
 treating it as one would make a double-tapped button write a second audit row
 and move `startedAt`.
 
-Three edges are the way they are on purpose:
+Four edges are the way they are on purpose:
 
 - **`PLANNED → STARTED` is direct.** PRD P4 ("start matters") wants the start
   recorded whenever it happens; a mandatory `READY` step would make the product
   either invent one or lose the fact that the user started.
+- **`PLANNED → COMPLETED` is legal** (added with the action endpoints below).
+  Most of what a user does happens away from the app: they went for the run and
+  then opened their phone. Requiring a start first would force the product to
+  choose between refusing an honest "I did it" and *manufacturing* a start —
+  writing a `startedAt` and an `APP_FLOW started` evidence row for something it
+  never observed. PRD §10.9 rules the second one out, so the matrix allows the
+  jump and no start evidence is written: `startedAt` stays null, which is itself
+  the honest record that the timer was never used.
 - **Everything past `STARTED` is terminal.** An honest record of a day is what
   the user did, and an "undo" would make evidence untrustworthy. To change your
   mind, create a new commitment — the old one stays as history (PRD §103).
@@ -1970,6 +1978,127 @@ machine-readable discriminator is in `details`:
 
 Audit: `commitment:transition` with `meta: { from, to, rescheduleCount,
 rescheduledToId, evidenceId }`.
+
+---
+
+#### Commitment actions
+
+`POST /commitments/{id}/transition` can express the status changes a user
+makes, but it cannot express the **intent** — and the intent is what decides
+which evidence gets written. "I finished" and "I gave up on the full version
+and did the minimum" are the same status and different facts.
+
+So these ten routes each name one user intent. Each owns three things the
+transition endpoint has no opinion about: the timer columns, the evidence row,
+and the audit action. Every one of them returns a **commitment card** (the same
+shape `GET /today` uses), and every one answers **404** — never 403 — for an id
+that is not the caller's.
+
+| Method | Path | Body | Result |
+|---|---|---|---|
+| POST | `/commitments/{id}/actions/start` | `{ minutes? }` | 200 card |
+| POST | `/commitments/{id}/actions/pause` | — | 200 card |
+| POST | `/commitments/{id}/actions/continue` | `{ extraMinutes? }` | 200 card |
+| POST | `/commitments/{id}/actions/complete` | `{ notes?, minutesSpent? }` | 200 card |
+| POST | `/commitments/{id}/actions/partial` | `{ notes?, minutesSpent? }` | 200 card |
+| POST | `/commitments/{id}/actions/fallback` | `{ version: "short" \| "minimum" }` | 200 card |
+| POST | `/commitments/{id}/actions/reschedule` | `{ scheduledStart, scheduledEnd? }` | 200 card of the **new** row |
+| POST | `/commitments/{id}/actions/skip` | `{ reason, text? }` | 200 card |
+| POST | `/commitments/{id}/actions/decompose` | `{ hint? }` | 200 proposal — **writes nothing** |
+| POST | `/commitments/{id}/actions/decompose/apply` | the proposal | 201 card of the **new** commitment |
+
+**The card.**
+
+```json
+{
+  "id": "5a2b…",
+  "title": "Draft the proposal storyline",
+  "domain": "WORK",
+  "status": "STARTED",
+  "scheduledStart": "2026-03-01T09:00:00.000Z",
+  "scheduledEnd": null,
+  "durationMinutes": 25,
+  "versions": {
+    "full": { "title": "Draft the storyline", "minutes": 25 },
+    "short": { "title": "Write the decision statement", "minutes": 10 },
+    "minimum": { "title": "Open the doc and write one sentence", "minutes": 5 }
+  },
+  "importance": 5,
+  "rescheduleCount": 0,
+  "startedAt": "2026-03-01T09:00:00.000Z",
+  "completedAt": null,
+  "versionUsed": null,
+  "minutesSpent": null,
+  "outcomeId": "3f2a…",
+  "decomposedFromId": null,
+  "steps": null,
+  "timer": {
+    "activeSince": "2026-03-01T09:00:00.000Z",
+    "activeSeconds": 0,
+    "elapsedSeconds": 600,
+    "timerMinutes": 25,
+    "remainingSeconds": 900
+  },
+  "availableActions": ["pause", "complete", "partial", "fallback", "skip", "decompose"]
+}
+```
+
+`versions.full` always exists — a commitment with no declared sizes is its own
+full version. `short` and `minimum` are `null` unless they were actually
+declared: inventing a short version would let the product offer a smaller
+commitment the user never agreed to. Minutes come from the `*Minutes` columns,
+then from the scheduled window for `full`, then from a 25-minute default.
+
+**The timer is server-derived.** `activeSeconds` is time banked at the last
+pause and `activeSince` is when the current run began (`null` while paused);
+`elapsedSeconds` is the sum, computed at read time. Nothing stores the elapsed
+value, so a reloaded page, a second device and a phone that slept all agree —
+and a client clock cannot inflate the record. **There is no `PAUSED` status**:
+paused is `STARTED` with `activeSince: null`.
+
+**`availableActions` is the list the client renders.** Computed from the matrix
+plus the timer, because `pause` and `continue` are the same button to a user and
+different operations to the server. A client running an older bundle would
+otherwise offer a move this API refuses.
+
+Semantics worth stating:
+
+- **`start`** stamps `startedAt` (first time only), sets `activeSince`, and
+  writes `APP_FLOW started`. A start on a *paused* commitment resumes it rather
+  than erroring — to a user there is one button. Any other timer the user left
+  running is paused first, with its own `paused` evidence: **one running timer
+  per user**, because two commitments claiming the same wall-clock minutes would
+  make every later "how long did this take" answer a lie.
+- **`complete` / `partial`** fold the running time into `activeSeconds`, stamp
+  `completedAt`, and set `minutesSpent` from the body or, failing that, from the
+  timer. `versionUsed` defaults to `FULL`. The evidence row is `USER_LOG` with
+  `qualitativeValue` carrying `{ notes, versionUsed, fallbackUsed }`.
+- **`fallback`** changes no status. It records *which size the user is
+  attempting*, at the moment they decide — PRD §101's "Evidence: fallback
+  completed" needs that decision. **400 `VERSION_NOT_DEFINED`** for a size the
+  commitment never declared.
+- **`reschedule`** delegates to the transition matrix and returns the card of
+  the **new** row. `RESCHEDULED` is terminal, so **use the returned `id` from
+  here on**. The `rescheduled` evidence row is written on the new commitment: the
+  live intention carries its own move history, and the closed row keeps only what
+  happened before it moved. **409 `ALREADY_STARTED`** for a commitment whose
+  timer has been running — its evidence belongs to today.
+- **`skip`** writes a `Reflection` with `frictionTags: [reason]`, **not
+  evidence**: a skip is not execution, and recording it as evidence would make
+  "what did you do this week" include the things you did not do. `reason` is one
+  of `TOO_MUCH`, `BAD_TIMING`, `UNEXPECTED_CONFLICT`, `LOW_ENERGY`, `AVOIDED`,
+  `OTHER`. The audit row carries the enum and never the text.
+- **`decompose`** asks the `coach` persona for 3–5 steps whose first is ≤ 10
+  minutes, and **mutates nothing** (PRD §15: AI output is not persisted without
+  the user's approval). When the coach is unavailable it answers **200** with
+  `source: "template"` and a real five-minute first move — PRD §120 requires the
+  deterministic path to keep working.
+- **`decompose/apply`** creates a **new** commitment from `firstStep`, linked by
+  `decomposedFromId`, with the steps persisted. The original is left alone: it
+  is still in the plan, and the small one is today's move.
+
+Audit: `commitment:start`, `:pause`, `:continue`, `:complete`, `:partial`,
+`:fallback`, `:reschedule`, `:skip`, `:decompose_apply`.
 
 ---
 

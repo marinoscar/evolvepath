@@ -498,6 +498,20 @@ request on boot. Reading `onboarding` never creates a `user_profiles` row.
 - `PATCH /api/commitments/{id}` - Edit (no `status` here; 409 on a terminal row)
 - `POST /api/commitments/{id}/transition` - The only status change; 409 + `details.reason: INVALID_TRANSITION`
 
+### Commitment actions
+Ten intent-named routes over the same matrix. Each returns a **commitment card**
+(the shape `GET /today` uses) and answers 404, never 403, for a foreign id.
+- `POST /api/commitments/{id}/actions/start` - Timer on; `APP_FLOW started`. Resumes a paused row; pauses any other running timer
+- `POST /api/commitments/{id}/actions/pause` - Banks the seconds; status stays STARTED (paused is `activeSince: null`)
+- `POST /api/commitments/{id}/actions/continue` - Timer back on; `extraMinutes` extends the target
+- `POST /api/commitments/{id}/actions/complete` - Legal without a start; `minutesSpent` defaults to the timer
+- `POST /api/commitments/{id}/actions/partial` - Same, to PARTIALLY_COMPLETED
+- `POST /api/commitments/{id}/actions/fallback` - Which size is being attempted; no status change; 400 `VERSION_NOT_DEFINED`
+- `POST /api/commitments/{id}/actions/reschedule` - Returns the **new** row; 409 `ALREADY_STARTED`
+- `POST /api/commitments/{id}/actions/skip` - Reflection with a friction tag, never evidence
+- `POST /api/commitments/{id}/actions/decompose` - Coach proposal; **writes nothing**; 200 `source: 'template'` when AI is down
+- `POST /api/commitments/{id}/actions/decompose/apply` - 201; a new commitment from the first step
+
 ### Evidence
 - `POST /api/evidence` - Log what happened (`source` must be `USER_LOG`)
 - `GET /api/evidence?from=&to=` - Window required, capped at 93 days
@@ -548,7 +562,7 @@ request on boot. Reading `onboarding` never creates a `user_profiles` row.
 - `plans` - One per outcome; an identity only, everything mutable lives on its versions
 - `plan_versions` - Versioned plan content (rationale, expected weekly load, lineage); at most one ACTIVE per plan, enforced by a partial unique index
 - `routines` - Repeatable behaviours prescribed by a plan version (trigger, frequency, duration, fallback)
-- `commitments` - One intended action at one time, with its lifecycle status and reschedule lineage
+- `commitments` - One intended action at one time, with its lifecycle status and reschedule lineage (+ execution fields, E05-02: `activeSince`/`activeSeconds`/`timerMinutes`, `versionUsed`, `minutesSpent`, `steps`, `decomposedFromId`, `skipNote`, and per-version minutes)
 - `evidence_items` - Facts about what actually happened; survives its commitment (`commitment_id` is SET NULL)
 - `reflections` - What the user made of a commitment, outcome, plan version or day
 - `domain_modes` - Per-domain posture (GROW, MAINTAIN, RECOVER, PAUSE); a missing row means GROW
