@@ -67,6 +67,12 @@ model User {
   notificationInteractions NotificationInteraction[] @relation("UserNotificationInteractions")
   pushSubscriptions        PushSubscription[]        @relation("UserPushSubscriptions")
 
+  // The AI coach and what it may remember (epic E06)
+  coachConversations  CoachConversation[]  @relation("UserCoachConversations")
+  planChangeProposals PlanChangeProposal[] @relation("UserPlanChangeProposals")
+  memoryInsights      MemoryInsight[]      @relation("UserMemoryInsights")
+  obstacles           Obstacle[]           @relation("UserObstacles")
+
   @@map("users")
 }
 
@@ -1096,9 +1102,10 @@ model Plan {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  user     User          @relation("UserPlans", fields: [userId], references: [id], onDelete: Cascade)
-  outcome  Outcome       @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
-  versions PlanVersion[]
+  user      User                 @relation("UserPlans", fields: [userId], references: [id], onDelete: Cascade)
+  outcome   Outcome              @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
+  versions  PlanVersion[]
+  proposals PlanChangeProposal[] @relation("PlanChangeProposals")
 
   @@index([userId])
   @@map("plans")
@@ -1140,6 +1147,10 @@ model PlanVersion {
   nextVersions    PlanVersion[] @relation("PlanVersionLineage")
   routines        Routine[]
   commitments     Commitment[]
+
+  /// Proposals whose acceptance produced this version (SetNull on the other
+  /// side: deleting a version must not erase the record of the decision).
+  appliedByProposals PlanChangeProposal[] @relation("ProposalAppliedVersion")
 
   @@unique([planId, version])
   @@index([userId])
@@ -1651,4 +1662,253 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+// =============================================================================
+// The AI coach and what it is allowed to remember (epic E06, issue #61)
+// =============================================================================
+//
+// Four product tables, and the line between them and `ai_invocations` is the
+// point of the whole group. `ai_invocations` is TELEMETRY: what we asked a
+// model, what it cost, whether it validated, prunable at will. Everything
+// below is PRODUCT STATE the user owns and can inspect — a conversation they
+// can reread, a proposal they accepted, a sentence about themselves they can
+// delete (PRD §17 Tier 3/Tier 4, §85). Losing a telemetry row must never lose
+// any of it, which is why every `invocationId` here is a plain String and not
+// a foreign key.
+//
+// The second rule the group encodes: the model never mutates a plan. A
+// `PlanChangeProposal` is a PROPOSAL until a human decides, and applying one
+// produces a new `PlanVersion` through the ordinary E02 versioning path
+// (PRD §15, VISION §19/§20). `appliedPlanVersionId` records which version the
+// acceptance produced; it can never be the mechanism that creates it.
+
+enum CoachMessageRole {
+  USER
+  COACH
+  SYSTEM
+}
+
+/// Where a plan-change proposal came from. E06 only ever writes COACH; the
+/// other three exist from day one so E09/E10/E11 land without a migration.
+enum ProposalSourceKind {
+  COACH
+  WEEKLY_REVIEW
+  WORKOUT
+  PATTERN
+}
+
+enum ProposalStatus {
+  PROPOSED
+  ACCEPTED
+  EDITED
+  REJECTED
+  EXPIRED
+}
+
+enum MemoryInsightCategory {
+  IDENTITY
+  WORK
+  FAMILY
+  HEALTH
+  COACHING_PREFERENCE
+  NOTIFICATION_PREFERENCE
+  PATTERN
+}
+
+/// Who wrote the sentence. USER insights are never proposed, never expire on
+/// their own, and are `userConfirmed` by construction.
+enum MemoryInsightSource {
+  AI
+  USER
+}
+
+/// The recurring frictions the product names (PRD §10.11). `OTHER` is the
+/// escape hatch so a detector never has to invent an enum member.
+enum ObstacleType {
+  EVENING_WORKOUT_UNRELIABLE
+  AMBIGUOUS_WORK_TASK
+  FAMILY_PLAN_COLLIDES_WITH_WORK
+  OVERCOMMITMENT
+  PERFECTIONISM
+  LOW_ENERGY_WINDOW
+  OTHER
+}
+
+/// One coach thread. Deliberately thin: the conversation is an ordering
+/// device, not a place to hang state — everything the coach reasons from is
+/// assembled fresh from product tables on each turn (PRD §14.1).
+model CoachConversation {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  /// Short human label, derived from the first user message. Nullable because
+  /// a conversation exists the moment it is opened, before anything is said.
+  title String?
+
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  /// Denormalised so the list query sorts without touching `coach_messages`.
+  lastMessageAt DateTime @default(now()) @map("last_message_at") @db.Timestamptz
+
+  user     User           @relation("UserCoachConversations", fields: [userId], references: [id], onDelete: Cascade)
+  messages CoachMessage[]
+
+  @@index([userId, lastMessageAt(sort: Desc)])
+  @@map("coach_conversations")
+}
+
+model CoachMessage {
+  id             String @id @default(uuid()) @db.Uuid
+  conversationId String @map("conversation_id") @db.Uuid
+
+  role    CoachMessageRole
+  content String           @db.Text
+
+  /// The validated `coach_reply` contract (E06-03), plus `proposal.proposalId`
+  /// when the turn created one. Null for USER and SYSTEM rows, and null for a
+  /// template fallback reply — a fallback is deliberately indistinguishable
+  /// from "no structured contract", because there was no model output.
+  structured Json?
+
+  /// Ids of `MediaAttachment` rows. NOT a foreign key and NOT a relation:
+  /// deleting an attachment must leave the message the user sent intact.
+  attachmentIds String[] @default([]) @map("attachment_ids")
+
+  /// The `ai_invocations` row this reply came from. Plain String on purpose —
+  /// see the block comment above: telemetry is prunable, product state is not.
+  invocationId String? @map("invocation_id") @db.Uuid
+
+  /// The E06-06 `SafetyDecision` that governed this turn. Present on COACH
+  /// rows; a `redirect` decision is the one case where the row exists and
+  /// `invocationId` does not, because no coach model was called at all.
+  safetyDecision Json? @map("safety_decision")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  conversation CoachConversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  proposals    PlanChangeProposal[] @relation("ProposalSourceMessage")
+
+  @@index([conversationId, createdAt])
+  @@map("coach_messages")
+}
+
+/// A proposed change to a plan, waiting on a human.
+///
+/// THE THREE onDelete CHOICES HERE ARE THE WHOLE DESIGN, so they are written
+/// down rather than inferred:
+///
+///   * `user` and `plan` CASCADE. A proposal is meaningless without either,
+///     and account deletion must leave no coaching data behind.
+///   * `sourceMessage` SET NULL. The proposal is the durable artefact; the
+///     message that produced it is conversation. Deleting a thread must not
+///     silently erase the record of a plan change the user accepted.
+///   * `appliedVersion` SET NULL. A plan version can be deleted; the fact that
+///     this proposal was accepted must survive it as history, and a Cascade
+///     here would quietly rewrite the audit trail.
+model PlanChangeProposal {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  planId String @map("plan_id") @db.Uuid
+
+  sourceKind      ProposalSourceKind @map("source_kind")
+  sourceMessageId String?            @map("source_message_id") @db.Uuid
+
+  /// One sentence the user reads before the diff. Bounded by Zod at the
+  /// boundary (≤300), not by the column: the length is a copy rule.
+  summary String
+
+  /// Array of `PlanChange` (E06-04's schema). The diff itself.
+  changes Json
+
+  /// Set the first time an edit rewrites `changes`, so "what the coach
+  /// actually proposed" is never lost behind what the user made of it.
+  originalChanges Json? @map("original_changes")
+
+  status ProposalStatus @default(PROPOSED)
+
+  appliedPlanVersionId String? @map("applied_plan_version_id") @db.Uuid
+  invocationId         String? @map("invocation_id") @db.Uuid
+
+  /// Creator sets `now + 7 days`. Expiry is evaluated lazily on read (E06-04);
+  /// there is no sweeper, because a stale row nobody reads costs nothing.
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  editedAt  DateTime? @map("edited_at") @db.Timestamptz
+  decidedAt DateTime? @map("decided_at") @db.Timestamptz
+
+  /// Why the user said no, in their words. Kept for the coach to read back.
+  decisionReason String? @map("decision_reason")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user           User          @relation("UserPlanChangeProposals", fields: [userId], references: [id], onDelete: Cascade)
+  plan           Plan          @relation("PlanChangeProposals", fields: [planId], references: [id], onDelete: Cascade)
+  sourceMessage  CoachMessage? @relation("ProposalSourceMessage", fields: [sourceMessageId], references: [id], onDelete: SetNull)
+  appliedVersion PlanVersion?  @relation("ProposalAppliedVersion", fields: [appliedPlanVersionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([planId])
+  @@map("plan_change_proposals")
+}
+
+/// A durable sentence about the user that the coach may reuse (PRD §17 Tier 3,
+/// §85). Two booleans, and they are not the same question: `userConfirmed` is
+/// "the user says this is true", `doNotUse` is "the user says never bring this
+/// up". An insight can be both true and forbidden, so neither can be modelled
+/// as the other's negation.
+model MemoryInsight {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  category  MemoryInsightCategory
+  statement String
+
+  evidenceCount Int   @default(0) @map("evidence_count")
+  /// Float, not Decimal: nothing sums it and Zod clamps it to [0,1].
+  confidence    Float
+
+  userConfirmed Boolean @default(false) @map("user_confirmed")
+  doNotUse      Boolean @default(false) @map("do_not_use")
+
+  /// Null means "until the user removes it". A past value means the assembler
+  /// skips it without deleting it, so the user can still see it and re-confirm.
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz
+
+  source       MemoryInsightSource
+  invocationId String?             @map("invocation_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation("UserMemoryInsights", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, category])
+  @@index([userId, doNotUse, userConfirmed])
+  @@map("memory_insights")
+}
+
+/// A recurring friction (PRD §10.11). E06 creates the table and lets the coach
+/// read it; nothing detects obstacles until E07-03.
+model Obstacle {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  type        ObstacleType
+  description String
+  domain      Domain
+
+  observedCount  Int      @default(1) @map("observed_count")
+  confidence     Float
+  lastObservedAt DateTime @default(now()) @map("last_observed_at") @db.Timestamptz
+
+  /// PRD §10.11 `intervention_history`: E07-03 appends `{level, at}` entries.
+  interventionHistory Json @default("[]") @map("intervention_history")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation("UserObstacles", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, domain, lastObservedAt(sort: Desc)])
+  @@map("obstacles")
 }
