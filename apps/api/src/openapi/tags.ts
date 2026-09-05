@@ -133,6 +133,14 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'Readable by any signed-in user, because every user renders their own notification ' +
           'preferences against it.',
       },
+      {
+        name: 'Coaching Notifications',
+        description:
+          'The coaching decision engine: the per-user policy it obeys (quiet hours, caps, muted ' +
+          'categories), the interactions it records, and the metrics derived from them. The engine ' +
+          'decides *whether* to interrupt; the Notifications section above decides how a message ' +
+          'is carried once that decision is yes.',
+      },
     ],
   },
   {

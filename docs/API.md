@@ -1076,6 +1076,58 @@ If-Match: 1
 
 ---
 
+### Coaching Notification Policy (current user)
+
+How often, and when, the coach may interrupt the calling user. An own-resource
+surface: `@Auth()` only, no permission and no user id in the path.
+
+Quiet hours live on `user_profiles.quiet_hours_start/end`; the caps live in
+`user_profiles.notification_policy`. The endpoint hides that split — callers see
+one object.
+
+#### GET /me/notification-policy
+
+Never 404. A user who has never opened the settings page gets the defaults, and
+their profile row is created lazily.
+
+**Response 200:**
+
+```json
+{
+  "data": {
+    "timezone": "America/Costa_Rica",
+    "quietHours": null,
+    "dailyCap": 4,
+    "weeklyCap": 20,
+    "perCommitmentMax": 2,
+    "mutedCategories": [],
+    "fatigue": { "active": false, "effectiveDailyCap": 4 }
+  }
+}
+```
+
+`fatigue` is the automatic reduction of PRD §61: when the user has been ignoring
+coaching messages, `effectiveDailyCap` is lower than `dailyCap`, and the settings
+page can say so rather than looking broken.
+
+#### PATCH /me/notification-policy
+
+A **merge patch**: an absent field is left alone.
+
+| Field | Range | Notes |
+|---|---|---|
+| `quietHours` | `{ start, end }` as `HH:mm`, or `null` | Both bounds or neither. `null` clears them. Equal bounds read back as "no quiet hours" |
+| `dailyCap` | 0–20 | 0 means "never interrupt me" |
+| `weeklyCap` | 0–100 | |
+| `perCommitmentMax` | 0–5 | How many messages one commitment may generate |
+| `mutedCategories` | up to 20 `coach.*` event keys | |
+
+Out-of-range values are **400** with the field named. Every accepted patch writes
+an audit row `notification_policy:update` carrying the names of the changed
+fields — never their values.
+
+**Response 200:** the same shape as `GET`.
+
 ### AI Settings (Admin)
 
 Which AI provider this deployment uses, the platform API key, and which model

@@ -154,3 +154,41 @@ export function greetingFor(now: Date, timeZone: string): Greeting {
 
   return 'evening';
 }
+
+/**
+ * The user's local week, Monday-start (issue #49, epic E12).
+ *
+ * MONDAY, NOT SUNDAY, and not configurable. E08 already fixed Monday-start for
+ * the family summary and `docs/specs/family-domain.md` records why; a second
+ * week convention in the same product would mean "this week" answers two
+ * different questions on two screens. The weekly cap is compared against what
+ * the user sees on the review screen, so it has to agree with it.
+ *
+ * Built on `localDayBounds`, so it inherits its DST handling for free: the
+ * bounds are real instants derived from local midnights, which is why a week
+ * containing a DST switch is 167 or 169 hours long rather than a fixed 7 * 24.
+ */
+export function localWeekBounds(
+  dateLocal: string,
+  timeZone: string,
+): { start: Date; end: Date } {
+  const [year, month, day] = dateLocal.split('-').map(Number);
+  // getUTCDay on a UTC-midnight date gives the weekday of the LOCAL calendar
+  // date, because `dateLocal` is already a local calendar date with no instant.
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  // Sunday is 0 in JS; a Monday-start week puts it six days after the start.
+  const daysSinceMonday = (weekday + 6) % 7;
+
+  const mondayUtc = new Date(
+    Date.UTC(year, month - 1, day) - daysSinceMonday * 24 * 3600_000,
+  );
+  const sundayUtc = new Date(mondayUtc.getTime() + 6 * 24 * 3600_000);
+
+  const { start } = localDayBounds(toDateLocal(mondayUtc), timeZone);
+  const { end } = localDayBounds(toDateLocal(sundayUtc), timeZone);
+  return { start, end };
+}
+
+function toDateLocal(utcMidnight: Date): string {
+  return utcMidnight.toISOString().slice(0, 10);
+}
