@@ -50,11 +50,15 @@ export function UserMenu() {
   // the sidebar gated the same page on the `admin` ROLE — the two disagreed for
   // any Contributor granted that permission. There is now one answer.
   //
-  // Home is dropped: the brand in the AppBar already routes there, and a menu
-  // row duplicating on-screen chrome is the exact bloat this epic removes.
-  const menuDestinations = DESTINATIONS.filter(
-    (destination) =>
-      destination.key !== 'home' && isDestinationVisible(destination, hasPermission),
+  // EVERY visible destination, with nothing filtered out (#51). The old
+  // version dropped Home on the grounds that the AppBar brand already routed
+  // there — but the shell now has five product destinations plus Console, and
+  // on a phone this menu is the ONLY place Console appears at all (the bottom
+  // bar omits pinned destinations). A menu that silently skips one row is a
+  // menu a reader cannot trust to be the complete list, which matters far more
+  // than saving one row that duplicates the brand.
+  const menuDestinations = DESTINATIONS.filter((destination) =>
+    isDestinationVisible(destination, hasPermission),
   );
 
   const initials = user.displayName

@@ -135,10 +135,12 @@ describe('App', () => {
     // The App will make an API call to check auth, MSW will handle it
     await waitFor(
       () => {
-        // Should either show login page or home page depending on mock auth state
+        // Either the login page or the shell's Today screen, depending on the
+        // mocked auth state. `today-empty-state` is the stable marker for
+        // "landed on `/`": the greeting above it varies with the hour.
         const welcomeText = screen.queryByText(/Welcome/i);
-        const homeText = screen.queryByText(/Home Page/i);
-        expect(welcomeText || homeText).toBeTruthy();
+        const todayScreen = screen.queryByTestId('today-empty-state');
+        expect(welcomeText || todayScreen).toBeTruthy();
       },
       { timeout: 5000 },
     );
@@ -155,6 +157,41 @@ describe('App', () => {
      * out, see the mocks above) because the thing under test is the wiring in
      * that file and nothing else.
      */
+    it('renders the Today screen at /', async () => {
+      signInAs(['user_settings:read']);
+
+      render(
+        <MemoryRouter initialEntries={['/']}>
+          <App />
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => expect(screen.getByTestId('today-empty-state')).toBeInTheDocument(), {
+        timeout: 5000,
+      });
+    });
+
+    it.each([
+      ['/path', 'path-placeholder'],
+      ['/coach', 'coach-placeholder'],
+      ['/progress', 'progress-placeholder'],
+    ])('renders the placeholder at %s', async (route, testId) => {
+      // The three destinations PRD §11 fixes but E05/E06/E11 fill. Routed now
+      // so every later child lands on a destination that already exists — and
+      // so `destinations.test.ts` can assert every route is owned.
+      signInAs(['user_settings:read']);
+
+      render(
+        <MemoryRouter initialEntries={[route]}>
+          <App />
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => expect(screen.getByTestId(testId)).toBeInTheDocument(), {
+        timeout: 5000,
+      });
+    });
+
     it('redirects a user without system_settings:read away from /admin/settings', async () => {
       // Holds neither half of the console gate's OR (no system_settings:read,
       // no users:read either) — the case a widened-but-still-single-permission
@@ -169,7 +206,7 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(() => expect(screen.getByText(/welcome back/i)).toBeInTheDocument(), {
+      await waitFor(() => expect(screen.getByTestId('today-empty-state')).toBeInTheDocument(), {
         timeout: 5000,
       });
       expect(screen.queryByRole('heading', { name: /system settings/i })).not.toBeInTheDocument();
@@ -184,7 +221,7 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(() => expect(screen.getByText(/welcome back/i)).toBeInTheDocument(), {
+      await waitFor(() => expect(screen.getByTestId('today-empty-state')).toBeInTheDocument(), {
         timeout: 5000,
       });
       expect(screen.queryByRole('heading', { name: 'Admin Users' })).not.toBeInTheDocument();
@@ -405,7 +442,7 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(() => expect(screen.getByText(/welcome back/i)).toBeInTheDocument(), {
+      await waitFor(() => expect(screen.getByTestId('today-empty-state')).toBeInTheDocument(), {
         timeout: 5000,
       });
     });
@@ -423,7 +460,7 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(() => expect(screen.getByText(/welcome back/i)).toBeInTheDocument(), {
+      await waitFor(() => expect(screen.getByTestId('today-empty-state')).toBeInTheDocument(), {
         timeout: 5000,
       });
       expect(screen.queryByRole('heading', { name: 'Admin Advanced' })).not.toBeInTheDocument();
@@ -496,7 +533,7 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(() => expect(screen.getByText(/welcome back/i)).toBeInTheDocument(), {
+      await waitFor(() => expect(screen.getByTestId('today-empty-state')).toBeInTheDocument(), {
         timeout: 5000,
       });
       expect(screen.queryByRole('heading', { name: 'Admin Users' })).not.toBeInTheDocument();

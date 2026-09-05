@@ -54,8 +54,8 @@
  * is `false` (rail expanded, subject to the width gates) whether `settings` is
  * `null` from the very first render or after the fetch has failed — so the
  * rail's rendered output never changes across that fetch settling. No spec
- * needs to wait on it. Other pages this harness can route to (`HomePage`'s
- * `UserProfileCard`, the leaf `/admin/settings/*` and `/settings/*` pages) make
+ * needs to wait on it. Other pages this harness can route to (`TodayPage`'s
+ * the leaf `/admin/settings/*` and `/settings/*` pages) make
  * their own such calls; specs that visit them scope their screenshot to the
  * `AppBar`/rail element rather than the full page, so that race can never
  * appear in a baseline.
@@ -77,7 +77,10 @@ import { ErrorBoundary } from '../src/components/common/ErrorBoundary';
 import { LoadingSpinner } from '../src/components/common/LoadingSpinner';
 import type { Role, User } from '../src/types';
 
-const HomePage = lazy(() => import('../src/pages/HomePage'));
+const TodayPage = lazy(() => import('../src/pages/TodayPage'));
+const PathPage = lazy(() => import('../src/pages/PathPage'));
+const CoachPage = lazy(() => import('../src/pages/CoachPage'));
+const ProgressPage = lazy(() => import('../src/pages/ProgressPage'));
 const UserSettingsHubPage = lazy(() => import('../src/pages/UserSettingsHubPage'));
 const UserProfilePage = lazy(() => import('../src/pages/UserProfilePage'));
 const UserAppearancePage = lazy(() => import('../src/pages/UserAppearancePage'));
@@ -207,7 +210,10 @@ function HarnessRoutes() {
             a different route tree than the app does. */}
         <Route element={<RequireAiKey />}>
           <Route element={<Layout />}>
-            <Route path="/" element={<HomePage />} />
+            <Route path="/" element={<TodayPage />} />
+            <Route path="/path" element={<PathPage />} />
+            <Route path="/coach" element={<CoachPage />} />
+            <Route path="/progress" element={<ProgressPage />} />
 
             <Route path="/settings" element={<UserSettingsHubPage />} />
             <Route path="/settings/profile" element={<UserProfilePage />} />

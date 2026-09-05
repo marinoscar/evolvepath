@@ -284,6 +284,56 @@ so it can move on its own. Say so in the component's header when you add one.
 
 ---
 
+## 5a. Product destinations
+
+The five destinations PRD §11 fixes, plus Console. `DESTINATIONS` in
+`apps/web/src/config/destinations.ts` declares them in this order, and
+**declaration order IS navigation order on every surface**:
+
+| Key | Label | Route | Gate |
+|-----|-------|-------|------|
+| `today` | Today | `/` | any authenticated user |
+| `path` | Path | `/path` | any authenticated user |
+| `coach` | Coach | `/coach` | any authenticated user |
+| `progress` | Progress | `/progress` | any authenticated user |
+| `profile` | Profile | `/settings` | any authenticated user |
+| `console` | Console | `/admin/settings` | `system_settings:read` **or** `users:read` |
+
+Two things in that table are decisions rather than descriptions:
+
+**Profile is labelled Profile and routed at `/settings`.** The label is what
+PRD §11 calls the destination; the route is the settings hub, unchanged, so
+`USER_SETTINGS_SECTIONS`, the AppBar's drill-down titles and every existing
+bookmark stay valid. Label and route answer different questions and are allowed
+to differ.
+
+**Console is the only permission-gated destination, and must stay so.** The
+five product destinations are the app: gating any of them would hide the
+product from the roles it is for. `destinations.test.ts` asserts this.
+
+### The pinned-exclusion rule
+
+`pinned: true` (Console only) means two different things on two surfaces, and
+neither of them spells `key === 'console'` in its render:
+
+- **The navigation rail** lifts pinned destinations out of the list and renders
+  them at its foot, below a divider (#105) — Console is a *mode*, not a peer of
+  the product destinations, and its position says so.
+- **The bottom bar OMITS them entirely** (#51). It has no foot to pin to — it
+  *is* the foot — and Material 3 caps a bottom bar at five destinations, which
+  the five product destinations fill exactly. A sixth tab would force a choice
+  between labels and fit.
+- **The user menu renders every visible destination**, pinned ones included. On
+  a phone it is the only place Console appears at all, so it cannot filter.
+
+Five labelled tabs fit a 360px viewport only because
+`BottomNavigationAction` is given `minWidth: 0` — MUI's default is 80px, and
+five of those is 400px of content in a 360px bar.
+`tests/visual/specs/bottom-nav.spec.ts` holds both the DOM assertion (no label
+is truncated) and the pixel baseline.
+
+---
+
 ## 6. Rejected alternatives
 
 **A tab strip per area.** Rejected: no per-section URL to link or bookmark, no

@@ -4,7 +4,7 @@
  * Issue #55, epic #51. This file is the SINGLE source of truth for the app's
  * navigation targets. Before it existed the same four menu paths were spelled
  * out in four places (`App.tsx`, `Sidebar.tsx`, `UserMenu.tsx`,
- * `home/QuickActions.tsx`), each with its own idea of who was allowed to see
+ * `home/QuickActions.tsx`, since removed), each with its own idea of who was allowed to see
  * them — which is how a Contributor holding `system_settings:read` ended up
  * with a working System Settings page, a menu entry pointing at it, and no
  * sidebar row: three gates, three answers.
@@ -37,11 +37,20 @@
  */
 
 import type { SvgIconComponent } from '@mui/icons-material';
-import HomeIcon from '@mui/icons-material/Home';
-import SettingsIcon from '@mui/icons-material/Settings';
+import TodayIcon from '@mui/icons-material/Today';
+import RouteIcon from '@mui/icons-material/Route';
+import ForumIcon from '@mui/icons-material/Forum';
+import InsightsIcon from '@mui/icons-material/Insights';
+import PersonIcon from '@mui/icons-material/Person';
 import AdminIcon from '@mui/icons-material/AdminPanelSettings';
 
-export type DestinationKey = 'home' | 'settings' | 'console';
+export type DestinationKey =
+  | 'today'
+  | 'path'
+  | 'coach'
+  | 'progress'
+  | 'profile'
+  | 'console';
 
 /**
  * Does `prefix` own `path`? True when the path equals the prefix or continues
@@ -67,8 +76,15 @@ export function owns(prefix: string, path: string): boolean {
  * would fail it as "neither owned nor deliberately unowned".
  */
 export const DESTINATION_ROUTES: Record<DestinationKey, readonly string[]> = {
-  home: ['/'],
-  settings: ['/settings'],
+  today: ['/'],
+  path: ['/path'],
+  coach: ['/coach'],
+  progress: ['/progress'],
+  // `/settings`, not `/profile`. The destination is LABELLED Profile because
+  // that is what PRD §11 calls it, but the route stays the settings hub so
+  // `USER_SETTINGS_SECTIONS`, the AppBar's drill-down titles and every
+  // existing bookmark stay valid. Label and route answer different questions.
+  profile: ['/settings'],
   console: ['/admin'],
 };
 
@@ -144,10 +160,14 @@ export interface Destination {
    * not a peer of the library destinations, which is what its position at the
    * foot communicates.
    *
-   * RAIL-ONLY, deliberately. The bottom bar has no foot to pin to (it IS the
-   * foot) and the user menu is a flat list, so both keep reading `DESTINATIONS`
-   * in declaration order and ignore this flag. Ordering here therefore still
-   * has to be the correct order for those surfaces.
+   * THE BOTTOM BAR OMITS PINNED DESTINATIONS ENTIRELY (#51), rather than
+   * pinning them — it has no foot to pin to, because it IS the foot. Material 3
+   * caps a bottom bar at five destinations and the five product destinations
+   * fill it exactly; a sixth tab would force a choice between labels and fit.
+   * An admin on a phone reaches Console through the avatar menu instead, which
+   * is a flat list and still renders every visible destination in declaration
+   * order, pinned ones included. Ordering here therefore still has to be the
+   * correct order for the menu.
    */
   pinned?: boolean;
 }
@@ -172,11 +192,16 @@ export function isDestinationVisible(
 }
 
 /**
- * The three destinations, in navigation order.
+ * The five product destinations plus Console, in navigation order.
  *
- * Declaration order IS navigation order on every surface. The rail is the one
- * exception, and only for the tail of the list: it lifts `pinned` destinations
- * out to its foot (#105) while leaving the rest in this order.
+ * The five are PRD §11's primary navigation, in PRD §11's order, and that
+ * order is deliberate rather than alphabetical: Today first because VISION
+ * Part VII §27 calls it "the most important screen", Profile last because it
+ * is the one you visit least.
+ *
+ * Declaration order IS navigation order on every surface. Two surfaces treat
+ * the tail specially, both for `pinned` destinations only: the rail lifts them
+ * to its foot (#105), and the bottom bar omits them entirely (#51).
  *
  * GATING IS BY PERMISSION, NOT BY ROLE, and the permission is the one the API
  * actually enforces — verified against the controllers rather than assumed:
@@ -202,17 +227,38 @@ export function isDestinationVisible(
  */
 export const DESTINATIONS: readonly Destination[] = [
   {
-    key: 'home',
-    label: 'Home',
-    compactLabel: 'Home',
-    Icon: HomeIcon,
+    key: 'today',
+    label: 'Today',
+    compactLabel: 'Today',
+    Icon: TodayIcon,
     path: '/',
   },
   {
-    key: 'settings',
-    label: 'User Settings',
-    compactLabel: 'Settings',
-    Icon: SettingsIcon,
+    key: 'path',
+    label: 'Path',
+    compactLabel: 'Path',
+    Icon: RouteIcon,
+    path: '/path',
+  },
+  {
+    key: 'coach',
+    label: 'Coach',
+    compactLabel: 'Coach',
+    Icon: ForumIcon,
+    path: '/coach',
+  },
+  {
+    key: 'progress',
+    label: 'Progress',
+    compactLabel: 'Progress',
+    Icon: InsightsIcon,
+    path: '/progress',
+  },
+  {
+    key: 'profile',
+    label: 'Profile',
+    compactLabel: 'Profile',
+    Icon: PersonIcon,
     path: '/settings',
   },
   {
@@ -222,9 +268,10 @@ export const DESTINATIONS: readonly Destination[] = [
     Icon: AdminIcon,
     path: '/admin/settings',
     anyPermission: ['system_settings:read', 'users:read'],
-    // Pinned at the rail's foot (#105) — a mode, not a third library
-    // destination. The permission gate above still runs first: a user who
-    // cannot reach Console gets no pinned row AND no stray divider.
+    // Pinned at the rail's foot (#105) and EXCLUDED FROM THE BOTTOM BAR (#51)
+    // — a mode, not a sixth product destination. The permission gate above
+    // still runs first: a user who cannot reach Console gets no pinned row AND
+    // no stray divider.
     pinned: true,
   },
 ];

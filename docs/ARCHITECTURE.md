@@ -80,10 +80,10 @@ Evolve Path is a production-grade web application template that establishes:
 │  │  ┌────────────────────────┐  │  │  │  ┌────────────────────────────┐  │  │
 │  │  │      Pages/Routes      │  │  │  │  │    Controllers/Guards      │  │  │
 │  │  │  • Login               │  │  │  │  │  • AuthController          │  │  │
-│  │  │  • Home                │  │  │  │  │  • UsersController         │  │  │
-│  │  │  • User Settings       │  │  │  │  │  • SettingsController      │  │  │
-│  │  │  • System Settings     │  │  │  │  │  • HealthController        │  │  │
-│  │  │  • Device Activation   │  │  │  │  └────────────────────────────┘  │  │
+│  │  │  • Today / Path        │  │  │  │  │  • UsersController         │  │  │
+│  │  │  • Coach / Progress    │  │  │  │  │  • SettingsController      │  │  │
+│  │  │  • Profile (settings)  │  │  │  │  │  • HealthController        │  │  │
+│  │  │  • Console             │  │  │  │  └────────────────────────────┘  │  │
 │  │  └────────────────────────┘  │  │  │                                  │  │
 │  │                              │  │  │  ┌────────────────────────────┐  │  │
 │  │  ┌────────────────────────┐  │  │  │  │    Services/Business       │  │  │
@@ -1021,7 +1021,10 @@ for genuinely parallel content only.
 |------|-------|------|------------|---------|
 | Login | `/login` | Public | - | OAuth provider selection |
 | Auth Callback | `/auth/callback` | Public | - | Token handling |
-| Home | `/` | Required | Any | Dashboard |
+| Today | `/` | Required | Any | The day's next best action (placeholder until E05) |
+| Path | `/path` | Required | Any | Best Self, outcomes, plans and routines |
+| Coach | `/coach` | Required | Any | The AI coach (placeholder until E06) |
+| Progress | `/progress` | Required | Any | Momentum and evidence (placeholder until E11) |
 | User Settings hub | `/settings` | Required | Any (authenticated) | Searchable hub over the user's own settings |
 | — Profile | `/settings/profile` | Required | Any (authenticated) | Display name, avatar, email |
 | — Appearance | `/settings/appearance` | Required | Any (authenticated) | Personal theme preference |

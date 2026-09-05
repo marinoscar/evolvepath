@@ -164,7 +164,11 @@ describe('UserMenu', () => {
   });
 
   describe('Menu Items', () => {
-    it('should have settings menu item', async () => {
+    it('lists every visible destination, in navigation order (#51)', async () => {
+      // The menu is the ONLY place Console appears on a phone — the bottom bar
+      // omits pinned destinations — so it renders every visible destination
+      // rather than filtering any out. A menu that silently skips a row is one
+      // a reader cannot trust to be the complete list.
       const user = userEvent.setup();
 
       render(<UserMenu />);
@@ -172,8 +176,15 @@ describe('UserMenu', () => {
       await user.click(screen.getByRole('button'));
 
       await waitFor(() => {
-        expect(screen.getByRole('menuitem', { name: /settings/i })).toBeInTheDocument();
+        expect(screen.getByRole('menuitem', { name: 'Profile' })).toBeInTheDocument();
       });
+
+      expect(
+        screen
+          .getAllByRole('menuitem')
+          .map((item) => item.textContent?.trim())
+          .filter((label) => label !== 'Logout'),
+      ).toEqual(['Today', 'Path', 'Coach', 'Progress', 'Profile']);
     });
 
     it('should have logout menu item', async () => {
@@ -237,10 +248,12 @@ describe('UserMenu', () => {
       await user.click(screen.getByRole('button'));
 
       await waitFor(() => {
-        expect(screen.getByRole('menuitem', { name: /settings/i })).toBeInTheDocument();
+        expect(screen.getByRole('menuitem', { name: 'Profile' })).toBeInTheDocument();
       });
 
-      const settingsItem = screen.getByRole('menuitem', { name: /settings/i });
+      // Labelled Profile, routed at the settings hub — the destination keeps
+      // `/settings` so every existing settings URL and bookmark stays valid.
+      const settingsItem = screen.getByRole('menuitem', { name: 'Profile' });
       await user.click(settingsItem);
 
       // Menu should close after navigation
@@ -306,7 +319,7 @@ describe('UserMenu', () => {
   });
 
   describe('Icons', () => {
-    it('should display settings icon', async () => {
+    it('should display the profile icon', async () => {
       const user = userEvent.setup();
 
       render(<UserMenu />);
@@ -314,8 +327,7 @@ describe('UserMenu', () => {
       await user.click(screen.getByRole('button'));
 
       await waitFor(() => {
-        const settingsItem = screen.getByRole('menuitem', { name: /settings/i });
-        expect(settingsItem).toBeInTheDocument();
+        expect(screen.getByRole('menuitem', { name: 'Profile' })).toBeInTheDocument();
       });
     });
 
