@@ -4222,6 +4222,70 @@ Another user's program id answers **404, never 403**.
 
 ---
 
+### Health Domain
+
+Nutrition behaviours and optional body-weight tracking (PRD §46, §47).
+**Behaviours, not calories**: there is no macro, no food database, no BMI and no
+goal weight in this section, by design (VISION §16).
+
+#### Nutrition behaviours
+
+```http
+GET  /api/nutrition/behaviors
+POST /api/nutrition/behaviors/{key}/commit   { "repeatDays": 5 }
+```
+
+A static registry — eleven behaviours with a title, a description, a natural
+time of day and **two sizes**. The minimum version is never zero: "protein with
+one meal" is what somebody does on the worst Tuesday of the month, and it is
+shown up front rather than offered after a failure.
+
+`commit` creates `repeatDays` consecutive **ordinary HEALTH commitments** through
+the same service quick add uses, carrying the registry's copy and both sizes.
+The alternative — a `nutrition_commitments` table — would give the product a
+second kind of intention that Today, the weekly review and the momentum engine
+would each have to learn about separately.
+
+#### Weight
+
+```http
+PUT    /api/health/weight        { "dateLocal": "2026-09-05", "weightKg": 82.4 }
+GET    /api/health/weight?from=&to=
+DELETE /api/health/weight/{dateLocal}
+```
+
+```json
+{
+  "data": {
+    "items": [{ "dateLocal": "2026-09-05", "weightKg": 82.4 }],
+    "trend": [{ "dateLocal": "2026-09-05", "rolling7Kg": 82.7 }],
+    "summary": { "first": 83.0, "last": 82.7, "deltaKg": -0.3, "days": 21 }
+  }
+}
+```
+
+PRD §47 is unusually explicit about what this must **not** do. Body weight moves
+two kilos on salt, sleep and the time of day, so:
+
+- The series is a **rolling seven-day mean**, `null` where fewer than two
+  readings fall in the window. A "trend" through one point is a line the reader
+  will take as a direction, and it has none.
+- **There is no per-day judgment field, anywhere.** Not a classification, not an
+  arrow, not a goal. The promise is that one measurement is never called a bad
+  day, and the way to keep it is for the field not to exist — a client cannot
+  render a red day it was never given. A test snapshots the key list.
+- One row per local date, upserted. A future date is **400
+  `WEIGHT_DATE_IN_FUTURE`**: it would sit at the right-hand end of every chart
+  and drag the trend towards a number nobody has stood on a scale for.
+- The audit row records the **date and nothing else**. A person's body weight in
+  an operational log is a thing they did not agree to.
+
+`/api/health/weight` shares a URL prefix with the liveness probe and shares
+nothing else: the probe's routes are `@Public()` one decorator at a time, and no
+path-based exemption for `/health*` exists anywhere in `auth/`.
+
+---
+
 ---
 
 ## HTTP Status Codes
