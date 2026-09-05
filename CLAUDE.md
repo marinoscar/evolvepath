@@ -778,6 +778,8 @@ Structured training. **Nothing writes a plan until the user approves** — `gene
 - `POST /api/workouts/sessions/{id}/switch-variant` - Drop to SHORT or MINIMUM. Sets for dropped movements survive under `alsoLogged`
 - `GET /api/workouts/sessions/{id}/exercises/{exerciseId}/explain` - One sentence about the progression suggestion. **The rule decides, the coach explains** (PRD §42): a reply naming any load the deterministic rule did not is discarded for the template, and `source: 'template'` is a complete answer, not a degraded one
 - `POST /api/workouts/sessions/{id}/finish` - One `WORKOUT_LOG` evidence row, then the commitment through E05's actions. Abandoning with nothing logged leaves the commitment open, on purpose
+- `POST /api/workouts/adaptation/run` / `GET /api/workouts/adaptation/candidates` - PRD §43's detectors over 14 days (skipped twice, sessions over-running, a disliked or avoided movement). Deterministic, at most one proposal per workout per fortnight, and **writes nothing** — the template changes only when the user accepts the proposal
+- `POST /api/workouts/templates/{templateId}/exercises/{id}/dislike` - "Not this one". Records a timestamp, not a flag; the swap is a proposal on the next run
 - `POST /api/workouts/programs/{id}/archive` - Retire it; future `PLANNED` days cancelled, history untouched
 - `DELETE /api/workouts/programs/{id}` - Drafts only (204). A live program is archived, never deleted
 
@@ -940,6 +942,9 @@ Note: `DATABASE_URL` is constructed automatically from these variables at runtim
 **Weekly review (epic E10):**
 - `WEEKLY_LOAD_SOFT_CAP` - The number of recurring commitments past which the product says "replace something rather than add another habit" (PRD §48, default 8). A **soft** cap: the warning is data on the response, never an exception, because a person who deliberately wants a heavy week is not making a mistake the software should refuse.
 - `WEEKLY_REVIEW_CRON_DISABLED` - Stops the hourly review sweep (default `false`). Integration tests and the e2e stack set it to `true`: a background job that writes reviews for every seeded user turns a deterministic assertion into a race.
+
+**The Health domain (epic E09):**
+- `WORKOUT_ADAPTATION_CRON_DISABLED` - Stops the daily sweep that raises workout plan-change proposals (default `false`). Set it in tests and the e2e stack: a job raising proposals for every seeded user turns a deterministic assertion into a race.
 
 **Coaching notifications (epic E12):**
 - `COACHING_NOTIFICATIONS_ENABLED` - The decision engine's five-minute cron (default: `true`). An off switch rather than a feature flag: the engine's failure mode is sending people messages, so it must be stoppable in one restart. The on-demand `POST /api/auth/test/run-job` route (non-production) is deliberately not gated by it.
