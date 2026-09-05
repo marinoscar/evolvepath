@@ -12,9 +12,19 @@ accident and expensive to rediscover, and several of them are properties of
 code that is *not* there — a query that does not select a column, a call that
 is not made — which no diff review reliably catches.
 
-> Sections are added by the E06 children as they land. This file is written
-> incrementally on purpose: a spec assembled at the end of an epic documents
-> what was built, not what was decided.
+**Contents**
+
+1. [Context scopes and budgets](#1-context-scopes-and-budgets)
+2. [Safety policy](#2-safety-policy)
+3. [The mutation protocol](#3-the-mutation-protocol)
+4. [The coaching contract and one turn](#4-the-coaching-contract-and-one-turn)
+5. [Memory tiers and user control](#5-memory-tiers-and-user-control)
+6. [The Coach screen](#6-the-coach-screen)
+7. [The memory settings page](#7-the-memory-settings-page)
+8. [Observability, verification and extension points](#8-observability-verification-and-extension-points)
+
+Each section was written as its child landed, on purpose: a spec assembled at
+the end of an epic documents what was built, not what was decided.
 
 ---
 
@@ -684,3 +694,86 @@ into the generic line.
 `MemoryInsightRow` uses `useMediaQuery(down('sm'))` to move its actions into an
 overflow menu on phones. Page-local, like `CoachPage`'s — the five coupled
 breakpoint gates are untouched.
+
+---
+
+## 8. Observability, verification and extension points
+
+*(E06-09, issue #93)*
+
+### What is recorded, and where
+
+| fact | home |
+|---|---|
+| every model call: persona, prompt version, model, tokens, latency, validity | `ai_invocations` |
+| the safety decision that governed a call | `ai_invocations.safety_decision` (jsonb) |
+| the decision the user was shown | `coach_messages.safety_decision` |
+| a reply the guard refused | `ai_invocations.status = 'invalid_output'`, `errorCode = 'hallucination_guard'` |
+| what the user decided about a plan change | `plan_change_proposals.status` + `audit_events` (`plan:change_accepted` / `plan:change_rejected`) |
+| what the user did to memory | `audit_events` (`memory_insight:create|edit|confirm|do_not_use|forget|propose`) |
+
+Spans: `coach.context.assemble` (scope, size, truncated sections — never
+content), `safety.evaluate` (decision, category, source, rule), `coach.send_message`,
+`proposals.accept`, `memory.propose`.
+
+**Three things never reach a log, a span or a response body:** the evaluated
+text on the safety path, anything resembling chain of thought, and
+`invocationId` on the wire.
+
+### The end-to-end proof
+
+`tests/e2e/specs/coach.spec.ts` drives PRD §68's sentence through the browser,
+the API and the database, on both Playwright projects. Its central assertion is
+a **count taken three times** — `plan_versions` before the proposal, after the
+proposal, and after the accept — because PRD §89/§107 is a claim about a write
+that *doesn't* happen, and nothing but a count can see one of those.
+
+The fake OpenAI stand-in answers in character
+(`tools/fake-openai/scenarios/index.mjs`, documented in
+[`docs/TESTING.md`](../TESTING.md#scenarios-epic-e06)) and reads the plan,
+routine and commitment ids back out of the rendered context. A canned proposal
+carrying invented ids would be rejected by the guard, and the suite would then
+prove only that the guard works.
+
+That is why `renderForPrompt` emits `planId=`, `routineId=` and `commitmentId=`
+lines: not for the fake server's benefit, but because the guard forbids a reply
+from naming an id the context did not contain — so a context without ids makes
+a proposal and a "Start 10 min" action impossible to produce at all.
+
+### Extension points
+
+- **E09 (workout).** `CONTEXT_SCOPES.workout` and the `workout` section already
+  exist; fill `context.workout` and add a `workout_programmer` scenario. Plan
+  changes go through `ProposalsService.createFromSource(userId, 'WORKOUT', …)`
+  — the protocol is unchanged.
+- **E10 (weekly review).** Add a `weekly_review` scope to `CONTEXT_SCOPES`, and
+  create proposals with `sourceKind: 'WEEKLY_REVIEW'`. The Weekly Review screen
+  imports `PlanChangeDiff` from `components/coach/`, so a plan change looks
+  identical wherever the user is asked about it. It also calls
+  `PatternAnalysisService.proposeInsights`.
+- **E11 (momentum).** Replace `pattern-stats.ts`'s implementation and keep its
+  shape; it has no Nest and no Prisma in it for exactly that reason.
+- **E07 (obstacles).** The `obstacles` table exists and the coach reads it;
+  E07-03 is what writes to it and appends `interventionHistory` entries.
+
+### Rejected alternatives (the whole epic)
+
+- **Streaming the reply first.** The contract is one validated JSON object, and
+  streaming can be layered on later without changing it. Streaming *first*
+  would have meant shipping a coach whose output nothing validated.
+- **Letting the model call a "mutate plan" tool.** The single most consequential
+  decision in this epic. VISION §19 — EvolvePath owns the plan — is only true
+  if there is no code path from model output to a `PlanVersion` that does not
+  pass through a human's HTTP call.
+- **Storing memory as free text on the user row.** It could not be listed,
+  confirmed, excluded or forgotten one sentence at a time, which is the whole of
+  PRD §85.
+- **Soft-deleting a forgotten insight.** A row that says something about a
+  person who asked for it to be gone.
+- **A shared breakpoint constant for the coach layout.** `CoachPage` and
+  `MemoryInsightRow` choose a layout; the five gates in
+  `Layout`/`BottomNav`/`SettingsHub`/`AppBar` mount and unmount navigation.
+  Binding them to one constant would make an unrelated page's layout tweak able
+  to move the bottom bar.
+- **Model-first safety classification.** See §2.
+- **A cron memory proposer.** See §5.

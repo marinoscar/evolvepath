@@ -16,7 +16,8 @@
     "api:test": "npm -w apps/api test",
     "web:test": "npm -w apps/web test",
     "openapi:dump": "npm run openapi:dump --workspace=api -- ../../openapi.json",
-    "openapi:lint": "spectral lint openapi.json --ruleset .spectral.yaml --fail-severity=error"
+    "openapi:lint": "spectral lint openapi.json --ruleset .spectral.yaml --fail-severity=error",
+    "test:fake-openai": "node --test \"tools/fake-openai/**/*.test.mjs\""
   },
   "overrides": {
     "@nestjs/common": "^11.1.12",

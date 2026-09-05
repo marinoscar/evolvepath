@@ -366,6 +366,39 @@ Three rules that are easy to break and expensive to rediscover:
   nothing at all for `22:00–07:00`, so quiet hours silently stop working while
   every test written against a `12:00–13:00` window still passes.
 
+## The AI coach and its memory
+
+The coaching contract, the context assembler's scopes and budgets, the safety
+layer, the mutation protocol, memory tiers and both screens have their own
+written contract in
+[`docs/specs/coach-and-memory.md`](docs/specs/coach-and-memory.md): the scope
+table and the truncation order, the rule table and the fail-to-conservative
+rule, the six plan-change ops and what accept touches, the guard, the two
+booleans on a memory insight, the observability fields, the extension points
+for E07/E09/E10/E11, and the rejected alternatives.
+
+Read it before changing anything under `apps/api/src/coach/`,
+`apps/web/src/components/coach/` or `apps/web/src/components/settings/`'s
+memory files.
+
+Three rules that are easy to break and expensive to rediscover:
+
+- **No code path except `POST /proposals/:id/accept` turns AI output into a
+  `PlanVersion`.** VISION §19, PRD §89/§107. `tests/e2e/specs/coach.spec.ts`
+  counts `plan_versions` before the proposal, after it, and after the accept —
+  because a claim about a write that does not happen is invisible to every
+  other kind of test.
+- **The prompt asks and `coach-output-guard.ts` enforces, and that is not
+  redundant.** A model may name a commitment or a plan the user does not have,
+  and the result is a confident, specific, plausible sentence a reader cannot
+  tell from a true one (PRD §90). The guard is why `renderForPrompt` emits
+  `planId=` / `routineId=` / `commitmentId=` lines: a reply may only name ids
+  the context contained.
+- **Safety runs before the model, never after.** A `redirect` is decided by a
+  regex and answered with constant copy, so the professional-care path works in
+  exactly the situation a model-written one would not — when the provider is
+  down, or the user has no key.
+
 ## The Family domain
 
 Family members, rituals, recurrence materialization, the behaviour lint and the

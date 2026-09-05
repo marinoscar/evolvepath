@@ -74,6 +74,40 @@ would otherwise be invisible.
 The 401 message is OpenAI's own wording on purpose: the admin and user pages
 render provider errors verbatim, and the e2e specs assert on that string.
 
+## Scenarios
+
+A schema-shaped placeholder proves a call happened. It does not prove the
+coach's loop works: a proposal full of `"placeholder"` strings and made-up
+uuids is rejected by the hallucination guard before anyone sees it.
+
+`scenarios/index.mjs` therefore answers some personas **in character**, keyed on
+the strict JSON schema name and a keyword in the serialized input. Anything it
+says nothing about returns `null` and falls through to the schema builder.
+
+| schema name | input contains | answer |
+|---|---|---|
+| `coach_reply` | `Wednesday` | `PLAN_CHALLENGE` with a `move` proposal, Wed 18:30 → Sat 09:00 |
+| `coach_reply` | `procrastinat` | `ACTIVATION_REDUCTION` with a 10-minute action |
+| `coach_reply` | anything else | `NORMAL_REMINDER`, no proposal |
+| `safety_decision` | `hurts` / `sore` / `tweak` | `conservative` / `injury` |
+| `safety_decision` | anything else | `allow` / `none` |
+| `insight_proposal` | — | two insights, each with its observation |
+
+**Keyed on the schema name, never on a header.** The API calls this server; the
+browser does not, so a Playwright spec cannot set a header on the request that
+matters. The only thing a spec controls is what the user types, which arrives
+inside the input.
+
+**Ids come out of the context, not out of the fixture.** The `coach_reply`
+scenario reads the first `planId=`, `routineId=` and `commitmentId=` the context
+assembler rendered and uses those. When the context has none it **declines to
+propose** rather than inventing one — a made-up uuid would look like a coach
+failure rather than the seed failure it is.
+
+```bash
+npm run test:fake-openai   # node --test, zero dependencies, from the repo root
+```
+
 ## Failure modes
 
 Send `x-fake-behaviour` on `POST /v1/responses`:

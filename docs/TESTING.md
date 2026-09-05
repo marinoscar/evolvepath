@@ -885,6 +885,12 @@ own elapsed time rather than restarting, and that Today, its rationale and
 "Make it smaller" all still work with the AI provider pointed at an unreachable
 URL (PRD §120).
 
+`specs/coach.spec.ts` (epic E06) is the second: it seeds a plan through the API,
+types PRD §68's sentence into the coach, and asserts the `plan_versions` count
+**before the proposal, after the proposal, and after the accept** — because
+"the AI never changes a plan without approval" is a claim about a write that
+does not happen, which nothing but a count can see.
+
 It runs against the compose stack **with the fake OpenAI overlay**, which
 `playwright.config.ts` already starts by default:
 
@@ -921,7 +927,8 @@ tests/e2e/
     ├── auth.spec.ts           # Authentication tests
     ├── example.spec.ts        # Example feature tests
     ├── ai-key-gate.spec.ts    # The BYOK gate, setup page and key removal
-    └── admin-ai-settings.spec.ts  # Provider, platform key, model filter, test
+    ├── admin-ai-settings.spec.ts  # Provider, platform key, model filter, test
+    └── coach.spec.ts          # E06: the coach, the mutation protocol, safety, memory
 ```
 
 ### The fake OpenAI server
@@ -960,6 +967,45 @@ Three things about it are load-bearing for the suite:
 
 Failure modes are selected with an `x-fake-behaviour` header on
 `/v1/responses`: `rate_limit`, `timeout`, `refusal`, `invalid_json`.
+
+#### Scenarios (epic E06)
+
+A schema-shaped placeholder is enough to prove a call happened. It is not
+enough to prove the coach's loop works: a proposal full of `"placeholder"`
+strings and made-up uuids is rejected by the hallucination guard before it
+reaches anybody, so the e2e would prove only that the guard works.
+
+`tools/fake-openai/scenarios/index.mjs` therefore answers some personas **in
+character**, keyed on the strict JSON schema name and a keyword in the
+serialized input:
+
+| schema name | input contains | answer |
+|---|---|---|
+| `coach_reply` | `Wednesday` | `PLAN_CHALLENGE` with a `move` proposal, Wed 18:30 → Sat 09:00 |
+| `coach_reply` | `procrastinat` | `ACTIVATION_REDUCTION` with a 10-minute `recommended_action` |
+| `coach_reply` | anything else | `NORMAL_REMINDER`, no proposal |
+| `safety_decision` | `hurts` / `sore` / `tweak` | `conservative` / `injury` |
+| `safety_decision` | anything else | `allow` / `none` |
+| `insight_proposal` | — | two insights, each with its observation |
+| anything else | — | `null` → the generic schema-driven builder |
+
+**Keyed on the schema name, not on a header, and that is forced rather than
+chosen.** The API calls the stand-in; the browser does not. A Playwright spec
+has no way to set a header on the request that matters, so the only thing it can
+influence is what the user types — which arrives inside the serialized input.
+
+**The ids come out of the context, not out of the fixture.** The scenario reads
+the first `planId=`, `routineId=` and `commitmentId=` the context assembler
+rendered (`renderForPrompt` emits them for exactly this reason) and puts those
+in its answer. A canned uuid would be rejected by the guard. When the context
+carries no ids the scenario **declines to propose** rather than inventing one —
+a made-up id would look like a coach failure rather than the seed failure it is.
+
+The matcher has its own zero-dependency test suite:
+
+```bash
+npm run test:fake-openai      # node --test, from the repo root
+```
 
 ### Seeding a key: `withAiKey`
 

@@ -682,18 +682,22 @@ function renderSection(section: SectionKey, c: CoachContext): string[] {
         'OUTCOMES:',
         ...(c.outcomes ?? []).map(
           (o) =>
-            `- [${o.domain}] ${o.title} | importance=${o.importance} | state=${o.state} | target=${field(o.targetDate)} | success=${field(o.successDefinition)}`,
+            `- [${o.domain}] ${o.title} | outcomeId=${o.outcomeId} | importance=${o.importance} | state=${o.state} | target=${field(o.targetDate)} | success=${field(o.successDefinition)}`,
         ),
       ];
 
     case 'activePlans':
+      // THE IDS ARE PART OF THE CONTRACT, not decoration. A coach reply may
+      // only name ids that appear here — `coach-output-guard.ts` rejects
+      // anything else — so a context without them makes a plan-change proposal
+      // and a `Start 10 min` action literally impossible to produce.
       return [
         'ACTIVE PLANS:',
         ...(c.activePlans ?? []).flatMap((p) => [
-          `- [${p.domain}] ${p.outcomeTitle} | v${p.versionNumber} | weeklyLoadMin=${field(p.expectedWeeklyLoad)} | why=${field(p.rationale)}`,
+          `- [${p.domain}] ${p.outcomeTitle} | planId=${p.planId} | v${p.versionNumber} | weeklyLoadMin=${field(p.expectedWeeklyLoad)} | why=${field(p.rationale)}`,
           ...p.routines.map(
             (r) =>
-              `  * ${r.title} | ${r.frequency} | days=${field(r.daysOfWeek)} | at=${field(r.preferredTime)} | ${r.estimatedDurationMin}min (min ${r.minimumDurationMin}) | fallback=${field(r.fallbackBehavior)} | active=${r.active}`,
+              `  * ${r.title} | routineId=${r.routineId} | ${r.frequency} | days=${field(r.daysOfWeek)} | at=${field(r.preferredTime)} | ${r.estimatedDurationMin}min (min ${r.minimumDurationMin}) | fallback=${field(r.fallbackBehavior)} | active=${r.active}`,
           ),
         ]),
       ];
@@ -703,7 +707,7 @@ function renderSection(section: SectionKey, c: CoachContext): string[] {
         "TODAY'S COMMITMENTS:",
         ...c.todayCommitments.map(
           (t) =>
-            `- [${t.domain}] ${t.title} | ${t.status} | at=${t.scheduledAt} | full=${field(t.fullMinutes)} | min=${field(t.minimumMinutes)} | rescheduled=${t.rescheduleCount}`,
+            `- [${t.domain}] ${t.title} | commitmentId=${t.commitmentId} | ${t.status} | at=${t.scheduledAt} | full=${field(t.fullMinutes)} | min=${field(t.minimumMinutes)} | rescheduled=${t.rescheduleCount}`,
         ),
       ];
 
