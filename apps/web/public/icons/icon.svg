@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EvolvePath">
+  <!--
+    The EvolvePath mark: a path that climbs.
+
+    Drawn inside a 512 viewBox with every inked pixel kept within the central
+    ~80% (the maskable safe zone, radius 205 from centre), so the same artwork
+    serves both the plain and the maskable icon — a maskable icon is cropped to
+    a circle by Android, and anything outside that zone is what gets cut off.
+
+    Two colours only, both from the app's own palette: the dark theme's
+    `background.default` (#121212) and the primary (#90caf9). A gradient or a
+    photographic mark would compress badly at 48px, which is the size this is
+    actually seen at on a home screen.
+  -->
+  <rect width="512" height="512" fill="#121212" />
+  <!-- The route: three rising strides, the shape the Path screen is named for. -->
+  <path
+    d="M136 376 L216 376 A40 40 0 0 0 256 336 L256 296 A40 40 0 0 1 296 256 L376 256"
+    fill="none"
+    stroke="#90caf9"
+    stroke-width="26"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <!-- Where you are now. -->
+  <circle cx="136" cy="376" r="24" fill="#90caf9" />
+  <!-- Where you are going. -->
+  <circle cx="376" cy="256" r="24" fill="#ffffff" />
+  <!-- The next step, ahead of the mark — the product's whole premise. -->
+  <path
+    d="M336 176 L376 136 L416 176"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="22"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.55"
+  />
+</svg>

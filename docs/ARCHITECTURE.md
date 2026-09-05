@@ -1126,6 +1126,62 @@ pattern this route belongs to.
 
 ---
 
+### 9.5 Progressive Web App
+
+PRD §123 makes mobile the primary platform, so the web app is installable to a
+home screen and launches without a network round trip for its shell.
+
+**What ships.** A hand-authored `public/manifest.webmanifest`, an icon set
+generated from one SVG (`npm run icons` in `apps/web`, using `sharp`; the PNGs
+are committed so a build never needs a native module), and `sw.js` — generated
+at build time by `apps/web/build/appShellServiceWorker.ts`.
+
+**What the worker caches, and what it refuses to.**
+
+| Request | Behaviour |
+|---|---|
+| Precache (install) | `index.html`, the build's hashed JS/CSS, the Inter WOFF2, the manifest and the icons |
+| Navigation | **Network first**, falling back to the cached `index.html` |
+| Same-origin static asset | Cache first (content-hashed, so a hit cannot be stale) |
+| `/api/*` | **Passthrough. Never cached, never served from cache.** |
+| Non-GET, or another origin | Passthrough |
+
+Navigations are network-first on purpose: a cache-first navigation serves the
+previous deploy for one more load after every release, which users experience
+as "the update didn't apply".
+
+The `/api` exclusion is a **security** property, not a performance choice. A
+cached API response is a user's own data sitting in a shared browser cache: it
+outlives their logout, it is served to whoever opens the app next on that
+device, and no session check the app makes can see it. Offline *data* is
+E09-08's problem and will be solved deliberately.
+
+**Update strategy.** The cache name embeds a hash of the precache list, so any
+shell change produces a new cache; `activate` deletes every other cache, and
+`skipWaiting()` + `clients.claim()` hand over immediately. `apps/web/nginx.conf`
+serves `/sw.js`, `/index.html` and `/manifest.webmanifest` with
+`Cache-Control: no-cache` so the browser actually fetches the new worker — the
+one-year `immutable` rule that is right for hashed assets would otherwise pin a
+user's entire app at the version they first installed.
+
+**Why a local Vite plugin and not `vite-plugin-pwa`.** The plugin's central
+argument — a precache list must be derived from the real build output, because
+hashed filenames change every build — is right, and the plugin here honours it
+the same way. What blocked the plugin itself is this repo's tree-wide
+`"magic-string": "^1.2.0"` override: magic-string 1.x is ESM-only, and two of
+`workbox-build`'s CommonJS dependencies `require()` it, so the build fails with
+`MagicString is not a constructor`. Narrowing the override to `workbox-build`'s
+subtree does not work (npm's top-level rule wins), and removing it would change
+the dependency tree for the API and CLI builds too.
+
+**Where E12-04 (#64) extends this.** Web push adds `push` and
+`notificationclick` listeners to the template in
+`build/appShellServiceWorker.ts`. There is no build-tool configuration to
+change for that, which is the one thing a first-party worker is better at than
+a generated one.
+
+---
+
 ## 10. Infrastructure Architecture
 
 ### 10.1 Docker Services

@@ -2,6 +2,8 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { APP_NAME } from '@app/shared';
 
+import { appShellServiceWorker } from './build/appShellServiceWorker';
+
 /**
  * Substitutes `%APP_NAME%` in `index.html` with `APP_NAME` from `@app/shared`
  * (issue #164, epic #161).
@@ -40,7 +42,16 @@ function appName(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), appName()],
+  plugins: [
+    react(),
+    appName(),
+    // The app-shell service worker (#58, epic #33). Build-only, and generated
+    // from the finished bundle so its precache list can never name an asset
+    // this build did not emit. See the plugin for what it caches, what it
+    // refuses to cache (every `/api` response), and why it is a local plugin
+    // rather than `vite-plugin-pwa`.
+    appShellServiceWorker(),
+  ],
   // `@app/shared` is CommonJS, and it reaches us as an npm WORKSPACE SYMLINK.
   // Vite treats a linked package as project source rather than as a dependency,
   // so it skips dep pre-bundling for it and serves `index.js` to the browser as
