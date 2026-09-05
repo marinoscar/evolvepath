@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
 import { loginAsTestUser } from '../helpers/auth.helper';
-import { accessToken, uniqueEmail } from '../helpers/path.helper';
+import { uniqueEmail, withToken } from '../helpers/path.helper';
 import { getCommitment } from '../helpers/commitments.helper';
 import {
   apiPostRaw,
@@ -252,7 +252,23 @@ test.describe('E08 — family rituals, commitments and the review', () => {
   }) => {
     await signIn(page, 'e08-lint');
 
-    // The API refuses it deterministically, before any write.
+    // THE UI FIRST, then the API. Every API helper here mints a token from the
+    // refresh cookie, and the app running in the page refreshes on boot too;
+    // navigating after a burst of them is what makes a long run lose the
+    // session. Driving the screen first costs nothing and removes the race.
+    await page.goto('/path/family');
+    await page.getByTestId('family-create-ritual').click();
+    await page.getByTestId('ritual-title').fill('Make Mia happier');
+
+    await expect(page.getByText(LINT_MESSAGE)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('ritual-save')).toBeDisabled();
+
+    // A good title clears it, and the rewrite — when offered — only fills the
+    // field; nothing is submitted on its behalf.
+    await page.getByTestId('ritual-title').fill('Read with Mia for 15 minutes');
+    await expect(page.getByText(LINT_MESSAGE)).toBeHidden({ timeout: 10_000 });
+
+    // The API refuses it deterministically, and left nothing behind.
     const refusal = await apiPostRaw(page, '/api/family/rituals', {
       title: 'Make Mia happier',
       recurrence: { weekdays: [1], time: '18:30', everyNWeeks: 1 },
@@ -271,20 +287,6 @@ test.describe('E08 — family rituals, commitments and the review', () => {
     const checked = await lint(page, 'Make Mia happier');
     expect(checked.ok).toBe(false);
     expect(checked.code).toBe('TARGETS_OTHER_PERSON');
-
-    // The same rule, in the editor, before submit.
-    await page.goto('/path/family');
-    await page.getByTestId('family-create-ritual').click();
-    await page.getByTestId('ritual-title').fill('Make Mia happier');
-
-    await expect(page.getByText(LINT_MESSAGE)).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('ritual-save')).toBeDisabled();
-
-    // A good title clears it, and the rewrite — when offered — only fills the
-    // field; nothing is submitted on its behalf.
-    await page.getByTestId('ritual-title').fill('Read with Mia for 15 minutes');
-    await expect(page.getByText(LINT_MESSAGE)).toBeHidden({ timeout: 10_000 });
-    expect(await listRituals(page)).toHaveLength(0);
   });
 
   test('editing a recurrence cancels only the future planned occurrences', async ({ page }) => {
@@ -376,7 +378,6 @@ test.describe('E08 — family rituals, commitments and the review', () => {
       minimumMinutes: 10,
     });
 
-    const token = await accessToken(page);
     const paths = [
       '/api/family/members',
       '/api/family/rituals',
@@ -385,9 +386,9 @@ test.describe('E08 — family rituals, commitments and the review', () => {
     ];
 
     for (const path of paths) {
-      const response = await page.request.get(path, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await withToken(page, (token) =>
+        page.request.get(path, { headers: { Authorization: `Bearer ${token}` } }),
+      );
 
       expect(response.ok(), `${path} → ${response.status()}`).toBe(true);
       expect(await response.text(), path).not.toMatch(/score|quality|rating/i);
@@ -497,10 +498,9 @@ test.describe('E08 — with the coach unreachable', () => {
    * exists to rule out.
    */
   async function setBaseUrl(page: Page, baseUrl: string | null) {
-    const token = await accessToken(page);
-    const current = await page.request.get('/api/ai-settings', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const current = await withToken(page, (token) =>
+      page.request.get('/api/ai-settings', { headers: { Authorization: `Bearer ${token}` } }),
+    );
     expect(current.ok(), 'reading the AI settings').toBe(true);
 
     const etag = current.headers()['etag'];
@@ -511,10 +511,12 @@ test.describe('E08 — with the coach unreachable', () => {
     // status block the GET adds and the PUT refuses.
     const { platformKey: _status, ...writable } = settings;
 
-    const written = await page.request.put('/api/ai-settings', {
-      headers: { Authorization: `Bearer ${token}`, ...(etag ? { 'If-Match': etag } : {}) },
-      data: { ...writable, baseUrl },
-    });
+    const written = await withToken(page, (token) =>
+      page.request.put('/api/ai-settings', {
+        headers: { Authorization: `Bearer ${token}`, ...(etag ? { 'If-Match': etag } : {}) },
+        data: { ...writable, baseUrl },
+      }),
+    );
 
     // ASSERTED, not fired and forgotten. `ai-settings` is system-wide and
     // version-checked, so a rejected write leaves the coach perfectly

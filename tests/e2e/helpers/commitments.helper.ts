@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-import { accessToken, apiGet } from './path.helper';
+import { apiGet, withToken } from './path.helper';
 
 // =============================================================================
 // Seeding and reading the Today domain over the API (issue #55, epic E05)
@@ -15,11 +15,12 @@ import { accessToken, apiGet } from './path.helper';
 
 /** A POST against the API as the signed-in user, with the body on a failure. */
 export async function apiPost<T>(page: Page, path: string, data: unknown): Promise<T> {
-  const token = await accessToken(page);
-  const response = await page.request.post(path, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: data as Record<string, unknown>,
-  });
+  const response = await withToken(page, (token) =>
+    page.request.post(path, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: data as Record<string, unknown>,
+    }),
+  );
 
   if (!response.ok()) {
     throw new Error(`POST ${path} → ${response.status()}: ${await response.text()}`);
@@ -36,11 +37,12 @@ export async function apiPut<T>(
   data: unknown,
   headers: Record<string, string> = {},
 ): Promise<T> {
-  const token = await accessToken(page);
-  const response = await page.request.put(path, {
-    headers: { Authorization: `Bearer ${token}`, ...headers },
-    data: data as Record<string, unknown>,
-  });
+  const response = await withToken(page, (token) =>
+    page.request.put(path, {
+      headers: { Authorization: `Bearer ${token}`, ...headers },
+      data: data as Record<string, unknown>,
+    }),
+  );
 
   if (!response.ok()) {
     throw new Error(`PUT ${path} → ${response.status()}: ${await response.text()}`);

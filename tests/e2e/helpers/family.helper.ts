@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 
-import { accessToken, apiGet } from './path.helper';
+import { apiGet, withToken } from './path.helper';
 import { apiPost } from './commitments.helper';
 
 // =============================================================================
@@ -24,11 +24,12 @@ import { apiPost } from './commitments.helper';
 
 /** A PATCH against the API as the signed-in user, with the body on a failure. */
 export async function apiPatch<T>(page: Page, path: string, data: unknown): Promise<T> {
-  const token = await accessToken(page);
-  const response = await page.request.patch(path, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: data as Record<string, unknown>,
-  });
+  const response = await withToken(page, (token) =>
+    page.request.patch(path, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: data as Record<string, unknown>,
+    }),
+  );
 
   if (!response.ok()) {
     throw new Error(`PATCH ${path} → ${response.status()}: ${await response.text()}`);
@@ -40,12 +41,12 @@ export async function apiPatch<T>(page: Page, path: string, data: unknown): Prom
 
 /** The raw response, for the cases that assert on a refusal. */
 export async function apiPostRaw(page: Page, path: string, data: unknown) {
-  const token = await accessToken(page);
-
-  return page.request.post(path, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: data as Record<string, unknown>,
-  });
+  return withToken(page, (token) =>
+    page.request.post(path, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: data as Record<string, unknown>,
+    }),
+  );
 }
 
 export type FamilyRelationship =
