@@ -40,7 +40,7 @@ const RISK_LABELS: Record<RiskFlag, string> = {
  */
 export function FormCheckResultCard({ result }: { result: FormCheckResult }) {
   return (
-    <Box>
+    <Box data-testid="form-check-result">
       {result.redirected && result.safetyNote ? (
         <Alert severity="warning" sx={{ mb: 2 }} data-testid="form-check-safety">
           {result.safetyNote}
@@ -146,7 +146,7 @@ export function MealCheckResultCard({
   onAddBehaviour?: (key: string, text: string) => void;
 }) {
   return (
-    <Box>
+    <Box data-testid="meal-check-result">
       <Typography variant="subtitle2" component="h3">
         What I can see
       </Typography>

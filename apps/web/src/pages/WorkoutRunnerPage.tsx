@@ -353,6 +353,7 @@ export function WorkoutRunnerPage() {
         fullWidth
         sx={{ mt: 4, minHeight: 56 }}
         onClick={() => setFinishOpen(true)}
+        data-testid="runner-finish"
       >
         Finish workout
       </Button>

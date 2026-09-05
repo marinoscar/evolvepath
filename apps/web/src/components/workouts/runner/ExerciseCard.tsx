@@ -65,6 +65,7 @@ export function ExerciseCard({
             <IconButton
               aria-label={`Record a video of your ${exercise.name} set`}
               onClick={onCheckForm}
+              data-testid="runner-form-check"
               sx={{ minWidth: 44, minHeight: 44 }}
             >
               <VideocamIcon />
@@ -76,7 +77,7 @@ export function ExerciseCard({
           {exercise.sets} × {range} · rest {exercise.restSeconds} s
         </Typography>
 
-        <Typography variant="body2" sx={{ mt: 1 }}>
+        <Typography variant="body2" sx={{ mt: 1 }} data-testid="runner-last-time">
           Last time: {exercise.lastTime ? describeSets(exercise.lastTime.sets) : '—'}
         </Typography>
 

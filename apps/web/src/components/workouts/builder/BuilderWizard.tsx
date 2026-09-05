@@ -149,7 +149,12 @@ export function BuilderWizard({ defaults = {}, submitting, onGenerate }: Builder
           <Button onClick={() => setStep((current) => current - 1)}>Back</Button>
         ) : null}
         {last ? (
-          <Button variant="contained" onClick={submit} disabled={submitting}>
+          <Button
+            variant="contained"
+            onClick={submit}
+            disabled={submitting}
+            data-testid="program-generate"
+          >
             Generate
           </Button>
         ) : (

@@ -58,7 +58,7 @@ export function RunnerHeader({
   return (
     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2 }}>
       <Box sx={{ flex: 1 }}>
-        <Typography variant="h5" component="h1">
+        <Typography variant="h5" component="h1" data-testid="runner-header">
           {title} · Workout {sessionIndex} of {sessionTotal}
         </Typography>
         <Typography variant="body2" color="text.secondary">

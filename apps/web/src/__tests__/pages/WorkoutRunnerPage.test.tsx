@@ -99,7 +99,7 @@ describe('WorkoutRunnerPage', () => {
     const user = userEvent.setup();
     render(<WorkoutRunnerPage />);
 
-    await user.click(await screen.findByTestId('progression-chip'));
+    await user.click(await screen.findByTestId('runner-progression-chip'));
 
     expect(
       await screen.findByText(/Two sessions at the top of the range/),
@@ -118,7 +118,7 @@ describe('WorkoutRunnerPage', () => {
 
     // 90 or 89: completing the set consumes real milliseconds even under fake
     // timers, and the timer reads a clock rather than a counter.
-    expect(await screen.findByTestId('rest-timer')).toHaveTextContent(/Rest (90|89) s/);
+    expect(await screen.findByTestId('runner-rest-timer')).toHaveTextContent(/Rest (90|89) s/);
 
     // The tab was hidden for a minute; a counter that decremented on an
     // interval would still say 89.
@@ -127,14 +127,14 @@ describe('WorkoutRunnerPage', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    expect(screen.getByTestId('rest-timer')).toHaveTextContent(/Rest (31|30|29) s/);
+    expect(screen.getByTestId('runner-rest-timer')).toHaveTextContent(/Rest (31|30|29) s/);
 
     act(() => {
       vi.setSystemTime(new Date(start.getTime() + 120_000));
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    expect(screen.getByTestId('rest-timer')).toHaveTextContent('Rest over');
+    expect(screen.getByTestId('runner-rest-timer')).toHaveTextContent('Rest over');
 
     vi.useRealTimers();
   });
@@ -146,7 +146,7 @@ describe('WorkoutRunnerPage', () => {
     await screen.findByTestId('set-inputs');
     await completeSet(user, { discomfort: 'Sharp pain' });
 
-    const card = await screen.findByTestId('safety-card');
+    const card = await screen.findByTestId('runner-safety-card');
     expect(within(card).getByText(/not something to train through/)).toBeInTheDocument();
 
     // Stop, and stop. No "try it lighter".

@@ -61,7 +61,7 @@ export function ProgressionChip({ suggestion, onExplain }: ProgressionChipProps)
         color={suggestion.action === 'increase' ? 'primary' : 'default'}
         onClick={(event) => void open(event)}
         sx={{ minHeight: 32 }}
-        data-testid="progression-chip"
+        data-testid="runner-progression-chip"
       />
       <Popover
         open={anchor !== null}
