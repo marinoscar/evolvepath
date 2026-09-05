@@ -7,6 +7,7 @@ import { AllowlistModule } from '../allowlist/allowlist.module';
 import { PatModule } from '../pat/pat.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { AiModule } from '../ai/ai.module';
+import { UserProfileModule } from '../user-profile/user-profile.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { GoogleStrategy } from './strategies/google.strategy';
@@ -49,6 +50,11 @@ import { TokenCleanupTask } from './tasks/token-cleanup.task';
     // Config — never `AuthModule`. Its controllers use the `@Auth()` decorator,
     // which is metadata, and the guards it resolves are registered globally.
     AiModule,
+
+    // Same shape as `AiModule` above and for the same reason: `/auth/me`
+    // reports onboarding state, and `UserProfileModule` imports only Prisma, so
+    // there is no path back into `AuthModule`.
+    UserProfileModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, GoogleStrategy, JwtStrategy, TokenCleanupTask],

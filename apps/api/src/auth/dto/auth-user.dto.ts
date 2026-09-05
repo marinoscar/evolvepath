@@ -38,6 +38,22 @@ export class AiKeySummaryDto {
 }
 
 /**
+ * Whether this user has finished onboarding (#100, epic E04).
+ *
+ * On `GET /api/auth/me` for the same reason `aiKey` is: the web app chooses
+ * between the onboarding flow and the app shell before it renders, and a
+ * second request on boot would be a waterfall in front of every page load.
+ */
+export class OnboardingStatusDto {
+  @ApiProperty({
+    example: false,
+    description:
+      'Whether the user has completed onboarding. False for an account that has never started it.',
+  })
+  completed!: boolean;
+}
+
+/**
  * Current authenticated user information
  */
 export class CurrentUserDto {
@@ -97,6 +113,12 @@ export class CurrentUserDto {
       "Whether this user has stored an OpenAI API key. The key itself is never returned.",
   })
   aiKey!: AiKeySummaryDto;
+
+  @ApiProperty({
+    type: OnboardingStatusDto,
+    description: 'Whether this user has completed onboarding.',
+  })
+  onboarding!: OnboardingStatusDto;
 }
 
 /**

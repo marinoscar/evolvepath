@@ -144,6 +144,12 @@ See [`docs/specs/domain-model.md`](specs/domain-model.md) for the full contract.
 #### GET /auth/me
 **Requires Authentication** - Get current user profile.
 
+`aiKey` and `onboarding` ride on this response rather than on requests of their
+own: the web app gates its shell on both before it renders, and a second call on
+boot would be a waterfall in front of every page load. `onboarding.completed` is
+`false` for an account that has never onboarded, and reading it creates no
+`user_profiles` row.
+
 **Response:**
 ```json
 {
@@ -160,7 +166,8 @@ See [`docs/specs/domain-model.md`](specs/domain-model.md) for the full contract.
     }
   ],
   "permissions": ["users:read", "users:write", "system_settings:read", ...],
-  "aiKey": { "configured": true, "hint": "••••abcd" }
+  "aiKey": { "configured": true, "hint": "••••abcd" },
+  "onboarding": { "completed": false }
 }
 ```
 

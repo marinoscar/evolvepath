@@ -180,6 +180,7 @@ const harnessUser: User = {
   // Configured, so the harness renders the app shell rather than the AI-key
   // setup gate (#29) on every capture.
   aiKey: { configured: true, hint: '\u2022\u2022\u2022\u20220000' },
+  onboarding: { completed: true },
 };
 
 const fakeAuth = {

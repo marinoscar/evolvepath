@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserAiKeyService } from '../../src/ai/user-key/user-ai-key.service';
+import { UserProfileService } from '../../src/user-profile/user-profile.service';
 import { NotificationsService } from '../../src/notifications/notifications.service';
 import { AuthService } from '../../src/auth/auth.service';
 import { AllowlistService } from '../../src/allowlist/allowlist.service';
@@ -72,6 +73,11 @@ describe('Auth Service - Allowlist Enforcement', () => {
               .fn()
               .mockResolvedValue({ configured: false, hint: null, updatedAt: null }),
           },
+        },
+        // `getCurrentUser` also reports whether onboarding is finished (#100).
+        {
+          provide: UserProfileService,
+          useValue: { isOnboardingComplete: jest.fn().mockResolvedValue(false) },
         },
       ],
     }).compile();

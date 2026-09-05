@@ -21,6 +21,9 @@ const mockUser = {
   // context. Configured by default so existing specs keep landing on the page
   // they are testing.
   aiKey: { configured: true, hint: '\u2022\u2022\u2022\u2022e2e1' },
+  // Epic E04 (#100). Complete by default: every existing spec is about a
+  // signed-in user who is already using the app.
+  onboarding: { completed: true },
 };
 
 const mockUserSettings = {

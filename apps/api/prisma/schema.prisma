@@ -53,6 +53,9 @@ model User {
   reflections     Reflection[]     @relation("UserReflections")
   domainModes     DomainMode[]     @relation("UserDomainModes")
 
+  // Onboarding and the typed preferences the product reasons about (epic E04)
+  profile UserProfile? @relation("UserProfile")
+
   @@map("users")
 }
 
@@ -638,6 +641,99 @@ model Notification {
 // This is TELEMETRY, not product data, and that is why `userId` is
 // `onDelete: SetNull` while the product tables cascade: deleting an account
 // must not erase the record that those calls happened and what they cost.
+// =============================================================================
+// User profile (issue #100, epic E04)
+// =============================================================================
+//
+// WHY A TABLE RATHER THAN `user_settings`: `user_settings` is a free-form JSONB
+// document owned by the settings UI — the API never reasons about its contents.
+// Everything here is read by the product's own logic and must be queryable and
+// typed: E05's next-best-action sizes an action from `weekdayMinutes` and
+// resolves "today" from `timezone`, E12's decision engine reads the quiet
+// hours, and onboarding resumes from `onboardingStep`. A JSON blob would make
+// each of those a full-document read plus a runtime parse.
+//
+// One row per user, created LAZILY on first write. `GET /auth/me` runs on every
+// app boot and must not write: a missing row simply means "onboarding not
+// finished", which is exactly what a brand-new account is.
+// =============================================================================
+
+/// Where the user is in the onboarding conversation (PRD §20). `DONE` is the
+/// terminal step; `onboardingCompletedAt` is the authoritative "finished" flag
+/// because a step can be revisited.
+enum OnboardingStep {
+  PROMISE
+  VISION
+  DOMAINS
+  REALITY
+  TIME
+  HEALTH_BASELINE
+  COACHING_STYLE
+  PROPOSAL
+  NOTIFICATIONS
+  DONE
+}
+
+/// How direct the coach should be (PRD §20 step 7). Read by every AI persona
+/// that speaks to the user, so it is a column rather than a settings key.
+enum CoachingStyle {
+  GENTLE
+  BALANCED
+  DIRECT
+}
+
+model UserProfile {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+
+  /// IANA zone. Everything that means "today" for this user resolves through
+  /// it; an unparseable value falls back to UTC at the read site rather than
+  /// failing the request.
+  timezone String @default("UTC")
+  locale   String @default("en")
+
+  onboardingStep        OnboardingStep @default(PROMISE) @map("onboarding_step")
+  onboardingCompletedAt DateTime?      @map("onboarding_completed_at") @db.Timestamptz
+
+  coachingStyle CoachingStyle @default(BALANCED) @map("coaching_style")
+
+  /// Stated availability on a normal weekday, in minutes. Nullable because a
+  /// user who has not answered must not be given a fabricated budget.
+  weekdayMinutes Int? @map("weekday_minutes")
+
+  /// "HH:mm" local wall-clock. Stored as text on purpose: a time of day with no
+  /// date has no instant, and a `time` column would invite a timezone bug.
+  quietHoursStart String? @map("quiet_hours_start")
+  quietHoursEnd   String? @map("quiet_hours_end")
+
+  /// Stable keys from `OBSTACLE_OPTIONS`, not free text — E07 groups on them.
+  obstacles String[] @default([])
+
+  sixMonthVision String? @map("six_month_vision")
+
+  /// The domains the user chose to work on. Reuses E02's `Domain` enum; there
+  /// is deliberately no second copy of it.
+  selectedDomains Domain[] @default([]) @map("selected_domains")
+
+  /// Validated at the boundary by Zod (`user-profile.schema.ts`), not by the
+  /// database: these shapes belong to onboarding's conversation and change with
+  /// its copy, and neither should be a migration.
+  domainReflections Json? @map("domain_reflections")
+  healthBaseline    Json? @map("health_baseline")
+  pendingProposal   Json? @map("pending_proposal")
+
+  confidenceScore Int? @map("confidence_score")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation("UserProfile", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// "Who is stuck mid-onboarding?" — the only non-key query this table has.
+  @@index([onboardingStep])
+  @@map("user_profiles")
+}
+
 // =============================================================================
 
 enum AiInvocationOperation {
