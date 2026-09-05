@@ -66,7 +66,7 @@ interface DrillDown {
 
 /**
  * Resolve a pathname to the compact bar's title and its UP destination, or
- * `null` when the path is not a settings surface at all.
+ * `null` when the path is neither a product drill-down nor a settings surface.
  *
  * UP ONE LEVEL, NEVER `navigate(-1)`. History-relative back is right only when
  * the user actually walked down the hierarchy in this tab. It diverges the
@@ -92,7 +92,30 @@ interface DrillDown {
  * guard has already had its say. Naming a page the user is looking at leaks
  * nothing the page itself does not.
  */
+/**
+ * Product drill-downs — the non-settings pages that are one level below a
+ * destination (#56).
+ *
+ * DATA, NOT A GATE. `isCompactWindow` above is one of the five coupled
+ * breakpoint gates and is untouched by this table; adding a row here changes
+ * what the bar SAYS on a route, never at which width it changes shape. E05 and
+ * E09 add `/today/...` and workout rows the same way.
+ *
+ * The pattern is anchored at both ends and admits exactly one segment, so
+ * `/path/outcomes/abc` matches and `/path/outcomes/abc/anything` does not —
+ * a deeper page would need its own row with its own title and its own parent.
+ */
+const PRODUCT_DRILLDOWNS: ReadonlyArray<{ pattern: RegExp; title: string; upPath: string }> = [
+  { pattern: /^\/path\/outcomes\/[^/]+$/, title: 'Outcome', upPath: '/path' },
+];
+
 function resolveDrillDown(pathname: string): DrillDown | null {
+  for (const drilldown of PRODUCT_DRILLDOWNS) {
+    if (drilldown.pattern.test(pathname)) {
+      return { title: drilldown.title, upPath: drilldown.upPath };
+    }
+  }
+
   for (const surface of SETTINGS_SURFACES) {
     const title = settingsPageTitle(
       surface.sections,

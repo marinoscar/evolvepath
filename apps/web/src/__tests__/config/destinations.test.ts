@@ -48,6 +48,7 @@ describe('destinations — route ownership', () => {
       expect.arrayContaining([
         '/',
         '/path',
+        '/path/outcomes/:id',
         '/coach',
         '/progress',
         '/settings',
@@ -154,8 +155,10 @@ describe('destinations — segment-boundary matching', () => {
     // lights the right tab (#51).
     expect(resolveActiveDestination('/settings/profile')).toBe('profile');
     expect(resolveActiveDestination('/settings/tokens')).toBe('profile');
-    // The drill-down #56 adds, resolving through its parent prefix.
+    // The outcome drill-down (#56), resolving through its parent prefix — it
+    // needs no entry of its own in DESTINATION_ROUTES.
     expect(resolveActiveDestination('/path/outcomes/abc')).toBe('path');
+    expect(resolveActiveDestination('/path/outcomes/abc')).not.toBe('today');
     expect(resolveActiveDestination('/admin/settings/users')).toBe('console');
     expect(resolveActiveDestination('/admin/settings/users/abc-123')).toBe('console');
   });

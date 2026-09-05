@@ -32,6 +32,7 @@ Web Application Foundation with React UI + Node API + PostgreSQL. Production-gra
       Dockerfile            # API container (near its code)
     web/                    # Frontend React app
       src/
+      src/components/path/  # Path screen components (Best Self, outcomes, plans, routines, commitments)
       src/pwa/              # Service worker registration (production only)
       src/__tests__/
       build/                # Build-time Vite plugins (app-shell service worker)
@@ -697,6 +698,44 @@ settings hub makes on its own axis (epic #109, wired end to end by #128).
 Live examples of all three steps: `AuthService.handleGoogleLogin`
 (`user.welcome`), `AllowlistService.addEmail` (`allowlist.invitation`), and
 `UsersService.updateUserRoles` (`security.role_changed`, mandatory).
+
+### Adding a Path resource
+
+The EvolvePath product domain (epic #33) is six layers deep, and every layer is
+reached the same way. Adding a resource to it is six steps in one direction —
+never a component that fetches for itself:
+
+1. **Types** in `apps/web/src/types/index.ts`, mirroring the Prisma model. They
+   are hand-maintained: generating them would put the API's build output on the
+   web app's critical path for values that change about once an epic.
+2. **API functions** in `apps/web/src/services/api.ts`, in the EvolvePath block
+   at the bottom. That block is the ONLY place the web app names these
+   endpoints — if a route or a field moves, it plus the types are the entire
+   reconciliation surface.
+3. **A hook** in `apps/web/src/hooks/`, shaped like `useOutcomes.ts`:
+   `{ data, isLoading, error, refresh, …mutations }`, every `setState` past an
+   `await` guarded by `useIsMounted`. **Mutations refetch rather than splice**:
+   the API decides the ordering, and reproducing it client-side is a second,
+   wrong implementation of it.
+4. **A component** in `apps/web/src/components/path/`. Presentational — it
+   takes data and callbacks, never a hook.
+5. **A handler** in `apps/web/src/__tests__/mocks/pathHandlers.ts`, which is a
+   real in-memory store rather than canned responses. Any rule the API enforces
+   must be enforced there too, or page tests pass against behaviour the server
+   rejects.
+6. **A test** driving the real hook against that store.
+
+Two rules the Path screen holds that are easy to break:
+
+- **No client-side authorization decision, ever.** An id that is not yours
+  answers 404 — identical to one that never existed — and that answer is the
+  truth. `useOutcome` renders a not-found state for it rather than redirecting,
+  because a redirect would make a mistyped URL look like a working one.
+- **The commitment action menu renders the API's `allowedTransitions`,** never
+  a locally computed list. `apps/web/src/utils/commitmentTransitions.ts` is a
+  verbatim copy of the API's matrix and exists only for optimistic rendering
+  between a successful transition and its refetch; each file points at the
+  other.
 
 ### Adding an AI persona
 

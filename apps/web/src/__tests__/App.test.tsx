@@ -172,13 +172,13 @@ describe('App', () => {
     });
 
     it.each([
-      ['/path', 'path-placeholder'],
       ['/coach', 'coach-placeholder'],
       ['/progress', 'progress-placeholder'],
     ])('renders the placeholder at %s', async (route, testId) => {
-      // The three destinations PRD §11 fixes but E05/E06/E11 fill. Routed now
-      // so every later child lands on a destination that already exists — and
-      // so `destinations.test.ts` can assert every route is owned.
+      // The destinations PRD §11 fixes but E06/E11 fill. Routed now so every
+      // later child lands on a destination that already exists — and so
+      // `destinations.test.ts` can assert every route is owned. `/path` is a
+      // real page since #56 and is covered by `PathPage.test.tsx`.
       signInAs(['user_settings:read']);
 
       render(
