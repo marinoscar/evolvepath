@@ -129,6 +129,8 @@ describe('Coaching notifications (integration)', () => {
     context.prismaMock.domainMode.findFirst.mockResolvedValue(null);
     context.prismaMock.commitment.findMany.mockResolvedValue([]);
     context.prismaMock.commitment.count.mockResolvedValue(0);
+    // The scanner's second source (N8, epic E10) reads weekly reviews.
+    context.prismaMock.weeklyReview.findMany.mockResolvedValue([]);
     context.prismaMock.notificationInteraction.findMany.mockResolvedValue([]);
     context.prismaMock.notificationInteraction.count.mockResolvedValue(0);
     context.prismaMock.notificationInteraction.findFirst.mockResolvedValue(null);

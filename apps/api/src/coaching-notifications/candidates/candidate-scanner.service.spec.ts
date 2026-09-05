@@ -68,6 +68,7 @@ describe('CandidateScannerService (#59)', () => {
     prisma.notificationInteraction.findMany.mockResolvedValue([] as never);
     prisma.ritual.findUnique.mockResolvedValue(null as never);
     prisma.familyMember.findUnique.mockResolvedValue(null as never);
+    prisma.weeklyReview.findMany.mockResolvedValue([] as never);
   });
 
   const scanWith = async (rows: ReturnType<typeof commitment>[]) => {
@@ -372,6 +373,71 @@ describe('CandidateScannerService (#59)', () => {
 
       expect(candidate.eventKey).toBe('coach.start_cue');
       expect(candidate.commitment?.status).toBe('COMPLETED');
+    });
+  });
+
+  describe('N8 — the week is ready to review', () => {
+    const review = (over: Record<string, unknown> = {}) => ({
+      id: 'review-1',
+      userId: USER,
+      weekStart: '2026-08-31',
+      generatedAt: new Date(NOW.getTime() - 30 * 60_000),
+      ...over,
+    });
+
+    const scanReviews = async (rows: ReturnType<typeof review>[]) => {
+      prisma.commitment.findMany.mockResolvedValue([] as never);
+      prisma.weeklyReview.findMany.mockResolvedValue(rows as never);
+      return scanner.scan(NOW);
+    };
+
+    it('raises a candidate for a review generated in the last day', async () => {
+      const [candidate] = await scanReviews([review()]);
+
+      expect(candidate.eventKey).toBe('coach.weekly_review_ready');
+      expect(candidate.category).toBe('N8');
+      expect(candidate.payload).toEqual({ reviewId: 'review-1', weekStart: '2026-08-31' });
+    });
+
+    // Daily, not once-ever: a review prepared on Sunday evening may be
+    // mentioned that evening and once the next day, and then never again.
+    it('carries the local date in its dedupe key', async () => {
+      const [candidate] = await scanReviews([review()]);
+
+      expect(candidate.dedupeKey).toBe('review-1:2026-09-08');
+    });
+
+    it('asks only for READY reviews inside the window', async () => {
+      await scanReviews([]);
+
+      const where = prisma.weeklyReview.findMany.mock.calls[0][0]?.where as {
+        status: string;
+        generatedAt: { gte: Date };
+      };
+
+      expect(where.status).toBe('READY');
+      expect(where.generatedAt.gte.getTime()).toBe(NOW.getTime() - 24 * 60 * 60_000);
+    });
+
+    // It is the review's own moment, not this instant: the interaction row
+    // records what the message was *for*.
+    it('uses the generation time as the moment the message is for', async () => {
+      const generatedAt = new Date(NOW.getTime() - 90 * 60_000);
+      const [candidate] = await scanReviews([review({ generatedAt })]);
+
+      expect(candidate.dueAt).toEqual(generatedAt);
+    });
+
+    it('drops one whose decision has already been recorded today', async () => {
+      prisma.notificationInteraction.findMany.mockResolvedValue([
+        {
+          userId: USER,
+          eventKey: 'coach.weekly_review_ready',
+          dedupeKey: 'review-1:2026-09-08',
+        },
+      ] as never);
+
+      await expect(scanReviews([review()])).resolves.toEqual([]);
     });
   });
 
