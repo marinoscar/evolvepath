@@ -487,17 +487,43 @@ test.describe('E08 — family rituals, commitments and the review', () => {
 test.describe('E08 — with the coach unreachable', () => {
   const UNREACHABLE = 'http://127.0.0.1:1/v1';
 
+  /**
+   * Point the provider somewhere, and CHECK THAT IT TOOK.
+   *
+   * The write is asserted rather than fired and forgotten: `ai-settings` is
+   * system-wide and version-checked, so a stale `If-Match` after another spec
+   * has written makes the PUT a silent 412 — and this whole test would then
+   * pass against a perfectly reachable coach, which is the one outcome it
+   * exists to rule out.
+   */
   async function setBaseUrl(page: Page, baseUrl: string | null) {
     const token = await accessToken(page);
     const current = await page.request.get('/api/ai-settings', {
       headers: { Authorization: `Bearer ${token}` },
     });
-    const etag = current.headers()['etag'];
+    expect(current.ok(), 'reading the AI settings').toBe(true);
 
-    await page.request.put('/api/ai-settings', {
+    const etag = current.headers()['etag'];
+    const settings = ((await current.json()) as { data: Record<string, unknown> }).data;
+
+    // A FULL REPLACE, not a patch: `PUT /ai-settings` validates the whole
+    // object, so `{ baseUrl }` alone is a 400. `platformKey` is the read-only
+    // status block the GET adds and the PUT refuses.
+    const { platformKey: _status, ...writable } = settings;
+
+    const written = await page.request.put('/api/ai-settings', {
       headers: { Authorization: `Bearer ${token}`, ...(etag ? { 'If-Match': etag } : {}) },
-      data: { baseUrl },
+      data: { ...writable, baseUrl },
     });
+
+    // ASSERTED, not fired and forgotten. `ai-settings` is system-wide and
+    // version-checked, so a rejected write leaves the coach perfectly
+    // reachable — and this test would then pass against the one thing it
+    // exists to rule out.
+    expect(
+      written.ok(),
+      `writing baseUrl=${baseUrl} → ${written.status()}: ${await written.text()}`,
+    ).toBe(true);
   }
 
   test('the refusal still stands, without the rewrite', async ({ page }) => {
