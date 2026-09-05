@@ -187,6 +187,18 @@ describe('destinations — segment-boundary matching', () => {
   // `/path/family` (epic E08) is a PRODUCT SURFACE under Path, not a sixth
   // destination: PRD §11 fixes the five, and prefix ownership means the Family
   // page needed no registry entry and no navigation change to be reachable.
+  it('lets Progress own the weekly review and its wizard', () => {
+    // Epic E10 (#84). `/progress/*` is already owned by prefix, so these two
+    // routes need no `DESTINATION_ROUTES` entry — and the tab still lights up.
+    for (const path of ['/progress/week', '/progress/week/plan']) {
+      expect(resolveActiveDestination(path)).toBe('progress');
+    }
+  });
+
+  it('lets Profile own the weekly rhythm settings page', () => {
+    expect(resolveActiveDestination('/settings/weekly-rhythm')).toBe('profile');
+  });
+
   it('lets Path own /path/family, and nothing else claim it', () => {
     expect(owns('/path', '/path/family')).toBe(true);
 

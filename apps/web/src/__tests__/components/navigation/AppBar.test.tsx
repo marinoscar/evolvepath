@@ -262,6 +262,37 @@ describe('AppBar', () => {
       expect(screen.queryByText(APP_NAME)).not.toBeInTheDocument();
     });
 
+    // Epic E10 (#84). Two levels, and the wizard's parent is the review it was
+    // opened from rather than the Progress tab — structural up, not history.
+    it.each([
+      ['/progress/week', 'Your Week'],
+      ['/progress/week/plan', 'Plan next week'],
+    ])('shows Back + %s title on %s', (route, title) => {
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route } });
+
+      expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+      expect(screen.getByText(title)).toBeInTheDocument();
+      expect(screen.queryByText(APP_NAME)).not.toBeInTheDocument();
+    });
+
+    it('keeps the normal toolbar on the Progress list itself', () => {
+      // `/progress` is a DESTINATION: it has a bottom-bar tab, and a back arrow
+      // there would go up to nothing.
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/progress' } });
+
+      expect(screen.getByText(APP_NAME)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    });
+
+    it('shows Back + "Weekly rhythm" from the settings registry', () => {
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/settings/weekly-rhythm' } });
+
+      expect(screen.getByText('Weekly rhythm')).toBeInTheDocument();
+    });
+
     it('still renders UserMenu in the drill-down branch', () => {
       setViewportWidth(375);
       render(<AppBar />, { wrapperOptions: { route: '/admin/settings' } });

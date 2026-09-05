@@ -141,3 +141,40 @@ describe('USER_SETTINGS_SECTIONS - AI Memory card (issue #90)', () => {
     ).toBe('AI Memory');
   });
 });
+
+/**
+ * Issue #84, epic E10. Under `Account` rather than `AI`: the card is about the
+ * rhythm of the product's own week, not about AI configuration — the review is
+ * generated whether or not a model answers (PRD §120), and the two columns it
+ * edits live on `user_profiles` beside the timezone.
+ */
+describe('USER_SETTINGS_SECTIONS - Weekly rhythm card (issue #84)', () => {
+  const rhythmCard = () =>
+    USER_SETTINGS_SECTIONS.find((section) => section.label === 'Account')!.cards.find(
+      (card) => card.title === 'Weekly rhythm',
+    );
+
+  it('is declared in the Account section', () => {
+    expect(rhythmCard()).toBeDefined();
+  });
+
+  it('points at /settings/weekly-rhythm with no permission', () => {
+    // `PUT /api/weekly/settings` is plain `@Auth()`, so a permission here would
+    // be an authorization rule the API does not enforce — CLAUDE.md rule 3.
+    expect(rhythmCard()!.path).toBe('/settings/weekly-rhythm');
+    expect(rhythmCard()!.permission).toBeUndefined();
+  });
+
+  it('resolves the AppBar title for its route from the registry', () => {
+    // The hub card, the compact AppBar title and the page's own <h1> have to
+    // name the page identically, and this is the resolver the AppBar uses.
+    expect(
+      settingsPageTitle(
+        USER_SETTINGS_SECTIONS,
+        USER_HUB_PATH,
+        USER_HUB_TITLE,
+        '/settings/weekly-rhythm',
+      ),
+    ).toBe('Weekly rhythm');
+  });
+});
