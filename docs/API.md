@@ -3758,6 +3758,191 @@ passes through quiet hours and the caps like every other coaching message. See
 
 ---
 
+### Weekly Planning
+
+The PRD §135 loop's second half, and PRD §50's seven steps: review last week →
+fixed constraints → one primary focus → domain modes → propose commitments →
+check the load → approve. The draft row is what makes it a flow rather than a
+form: each step is a `PATCH`, so closing the tab on step three loses nothing.
+
+**No model is called anywhere in this section.** Materialisation is arithmetic
+over the user's own routines; asking a model to produce next week's dates would
+make a deterministic thing occasionally wrong and never reproducible.
+
+#### Start (or resume) next week
+
+```http
+POST /api/weekly/plans
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{ "weekStart": "2026-09-07" }
+```
+
+`weekStart` defaults to next Monday in the user's own timezone. **Idempotent**:
+a second call returns the existing `DRAFT` rather than a second one — the wizard
+calls this on mount, and a refresh must not fork the week. **201** for a new
+draft, **200** when an existing one comes back.
+
+`domainModes` opens on the postures the user is in **today**, so a user who
+changes nothing keeps what they had.
+
+| Status | Code | Meaning |
+|---|---|---|
+| 400 | `INVALID_WEEK_START` | Not a Monday, or a week that has already ended |
+| 409 | `WEEKLY_PLAN_APPROVED` | That week is already approved |
+
+#### Save one step
+
+```http
+PATCH /api/weekly/plans/{id}
+Content-Type: application/json
+
+{
+  "constraints": {
+    "travelDays": ["2026-09-09"],
+    "fixedEvents": [
+      { "date": "2026-09-11", "title": "Dentist", "startTime": "10:00", "endTime": "11:00" }
+    ],
+    "notes": null
+  },
+  "primaryFocus": "Ship the proposal draft",
+  "domainModes": { "FAMILY": "MAINTAIN" }
+}
+```
+
+`constraints` is **replaced whole** — removing a travel day has to be
+expressible, and a merge patch cannot delete an array element. `domainModes` is
+**merged** — naming `FAMILY` means "leave the other two alone", which is
+different from asserting `GROW` for domains the user never looked at.
+
+Any of these **clears the previous proposal**, which now describes a week nobody
+asked for. `DRAFT` only; otherwise 409 `WEEKLY_PLAN_NOT_EDITABLE`.
+
+#### Propose the week
+
+```http
+POST /api/weekly/plans/{id}/propose
+Content-Type: application/json
+
+{ "extras": [
+  { "domain": "WORK", "title": "Reading block", "date": "2026-09-08",
+    "startTime": "20:00", "estimatedMinutes": 20, "recurring": true }
+] }
+```
+
+Every active routine — on an `ACTIVE` plan version under an `ACTIVE` outcome —
+is expanded across the week, the constraints and paused domains are applied, the
+user's extras are appended, and the load check runs.
+
+```json
+{
+  "proposal": {
+    "items": [
+      {
+        "key": "9c3a…:2026-09-09",
+        "source": "routine",
+        "include": false,
+        "excludedBy": "travel_day",
+        "domain": "WORK",
+        "title": "Morning focus block",
+        "date": "2026-09-09",
+        "startTime": "07:30",
+        "estimatedMinutes": 50,
+        "recurring": true
+      }
+    ],
+    "summary": {
+      "recurringCount": 2,
+      "estimatedMinutes": 320,
+      "byDomain": { "WORK": { "count": 4, "minutes": 200 } },
+      "softCap": 8,
+      "capacityMinutes": 1200
+    },
+    "warnings": [],
+    "proposedAt": "2026-09-06T20:00:00.000Z"
+  }
+}
+```
+
+**An excluded occurrence is still an item.** PRD §50 step 5 shows the user what
+their week *would* be, so a Wednesday dropped for a travel day comes back with
+`include: false` and an `excludedBy` reason rather than omitted — a silently
+missing row is indistinguishable from one the product forgot about.
+
+`excludedBy` is `travel_day`, `fixed_event` (a timed event that overlaps the
+occurrence, or an event with **no** times, which blocks the whole day) or
+`paused_domain`. An occurrence that **already exists** on the calendar is not
+returned at all: it is not a proposal any more.
+
+**Recurring counts are per routine, not per occurrence.** Five morning focus
+blocks are one habit; counting occurrences would put every weekday routine over
+an eight-commitment cap on its own.
+
+Warnings are **data, never exceptions** (PRD §48 recommends, it does not
+refuse):
+
+| Code | Raised when |
+|---|---|
+| `RECURRING_OVER_CAP` | `recurringCount > WEEKLY_LOAD_SOFT_CAP` (default 8) |
+| `MINUTES_OVER_CAPACITY` | Total minutes exceed `5 × weekdayMinutes` |
+| `DAY_OVER_CAPACITY` | The single heaviest day exceeds `weekdayMinutes` |
+
+A null `weekdayMinutes` — the user never told us — produces no capacity warning
+at all rather than one about a fabricated budget.
+
+#### Approve next week
+
+```http
+POST /api/weekly/plans/{id}/approve
+Content-Type: application/json
+
+{ "acknowledgeWarnings": true }
+```
+
+One transaction: a `PLANNED` commitment per included item (through the ordinary
+commitment service, so ownership checks, the family behaviour lint and the
+`commitment:create` audit row all apply), the domain modes that **actually
+changed** (through `DomainModesService`, so `domain_mode:set` is written with
+its reason), and the previous week's review marked `APPROVED`.
+
+```json
+{
+  "plan": { "id": "…", "status": "APPROVED", "approvedAt": "…" },
+  "createdCommitmentIds": ["…"],
+  "skippedExisting": 0,
+  "warnings": []
+}
+```
+
+**Idempotent under retry**: an occurrence already on the calendar is skipped and
+counted in `skippedExisting`, so a half-completed approve is finished rather
+than duplicated.
+
+`userConfirmed` is `true` on every created commitment, and **only** because the
+user pressed approve.
+
+| Status | Code | Meaning |
+|---|---|---|
+| 409 | `WEEKLY_PLAN_NOT_EDITABLE` | Already approved |
+| 409 | `WEEKLY_PLAN_NOT_PROPOSED` | Nothing has been proposed to approve |
+| 422 | `LOAD_WARNINGS_UNACKNOWLEDGED` | Warnings outstanding; they are in `details.warnings` |
+
+The 422 is deliberate rather than a 409: the request is well-formed and the
+state is legal. What is missing is that the user has *read* the warning — which
+is all acknowledgement means. The software has not agreed with them.
+
+#### List and read
+
+```http
+GET /api/weekly/plans?weekStart=2026-09-07
+GET /api/weekly/plans/{id}
+```
+
+Another user's plan id answers **404, never 403**.
+
+---
+
 ## HTTP Status Codes
 
 | Code | Description |
