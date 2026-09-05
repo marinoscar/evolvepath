@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
+  Button,
   CircularProgress,
   Container,
   Grid,
@@ -14,14 +15,26 @@ import { useCheckIn } from '../hooks/useCheckIn';
 import { useCommitmentActions } from '../hooks/useCommitmentActions';
 import { useToday } from '../hooks/useToday';
 import { useTodayInsight } from '../hooks/useTodayInsight';
-import { postDayReflection } from '../services/api';
+import {
+  createCommitment,
+  getOutcomes,
+  postDayReflection,
+  transitionCommitment,
+  updateCommitment,
+} from '../services/api';
 import type {
   CommitmentActionName,
   CommitmentCard,
   DecompositionProposal,
   NextBestAction,
+  Outcome,
 } from '../types';
+import type { CommitmentFormValues } from '../utils/commitmentForm.schema';
+import { toCommitmentInput } from '../utils/commitmentForm.schema';
 import { CheckInChips } from '../components/today/CheckInChips';
+import { QuickAddFab } from '../components/today/QuickAddFab';
+import { QuickAddSheet } from '../components/today/QuickAddSheet';
+import type { RowAction } from '../components/today/todayLabels';
 import { CoachInsightCard } from '../components/today/CoachInsightCard';
 import { DomainCard } from '../components/today/DomainCard';
 import { NextBestActionCard } from '../components/today/NextBestActionCard';
@@ -68,6 +81,11 @@ export default function TodayPage() {
   const [proposalLoading, setProposalLoading] = useState(false);
   const [proposalError, setProposalError] = useState<string | null>(null);
   const [reflectionDone, setReflectionDone] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [editing, setEditing] = useState<CommitmentCard | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [outcomes, setOutcomes] = useState<Outcome[]>([]);
+  const [undoId, setUndoId] = useState<string | null>(null);
 
   const actions = useCommitmentActions({
     onCard: replaceCommitment,
@@ -85,9 +103,22 @@ export default function TodayPage() {
     [today],
   );
 
+  // Loaded once, for the editor's "serves which outcome?" select. Failing is
+  // survivable: the select falls back to "No outcome (just today)", which is a
+  // complete answer on its own.
+  useEffect(() => {
+    void getOutcomes()
+      .then(setOutcomes)
+      .catch(() => setOutcomes([]));
+  }, []);
+
   const openDialogFor = useCallback(
-    (action: CommitmentActionName, commitment: CommitmentCard) => {
+    (action: RowAction, commitment: CommitmentCard) => {
       switch (action) {
+        case 'edit':
+          setEditing(commitment);
+          setQuickAddOpen(true);
+          return true;
         case 'complete':
         case 'partial':
           setCompleteFor(commitment);
@@ -125,7 +156,7 @@ export default function TodayPage() {
   );
 
   const handleAction = useCallback(
-    async (action: CommitmentActionName, commitment: CommitmentCard) => {
+    async (action: RowAction, commitment: CommitmentCard) => {
       if (openDialogFor(action, commitment)) return;
 
       switch (action) {
@@ -184,6 +215,60 @@ export default function TodayPage() {
       void handleAction(action as CommitmentActionName, commitment);
     }
   }, [searchParams, today, allCommitments, navigate, setSearchParams, handleAction]);
+
+  const submitQuickAdd = useCallback(
+    async (values: CommitmentFormValues) => {
+      setSaving(true);
+      try {
+        const input = toCommitmentInput(values);
+
+        if (editing) {
+          // `domain` is immutable server-side, so it is not in the patch: a
+          // field that silently does nothing is worse than no field.
+          const { domain: _domain, ...patch } = input;
+          await updateCommitment(editing.id, patch);
+          setToast('Saved');
+        } else {
+          const created = await createCommitment(input);
+          setUndoId(created.id);
+          setToast('Added to today');
+        }
+
+        setQuickAddOpen(false);
+        setEditing(null);
+        await refresh();
+      } catch (err) {
+        // The sheet stays open with the values intact — the server's message
+        // says what to change, and re-typing the form is not part of that.
+        setToast(err instanceof Error ? err.message : 'Could not save that');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [editing, refresh],
+  );
+
+  /**
+   * Undo an add.
+   *
+   * CANCELLED rather than deleted: the API exposes no delete for a commitment,
+   * and it should not — PRD §103 keeps the record of a day, and a row the user
+   * created and immediately dismissed is still something that happened. It
+   * leaves today's board because a cancelled commitment offers no actions.
+   */
+  const undoAdd = useCallback(async () => {
+    if (!undoId) return;
+
+    const id = undoId;
+    setUndoId(null);
+    setToast(null);
+    try {
+      await transitionCommitment(id, { to: 'CANCELLED' });
+      await refresh();
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : 'Could not undo that');
+    }
+  }, [undoId, refresh]);
 
   const startNba = useCallback(
     (nba: NextBestAction) => navigate(`/start/${nba.commitmentId}`),
@@ -286,6 +371,25 @@ export default function TodayPage() {
         )}
       </Box>
 
+      <QuickAddFab
+        onClick={() => {
+          setEditing(null);
+          setQuickAddOpen(true);
+        }}
+      />
+
+      <QuickAddSheet
+        open={quickAddOpen}
+        editing={editing}
+        outcomes={outcomes}
+        submitting={saving}
+        onClose={() => {
+          setQuickAddOpen(false);
+          setEditing(null);
+        }}
+        onSubmit={submitQuickAdd}
+      />
+
       <CompleteDialog
         open={completeFor !== null}
         commitment={completeFor}
@@ -326,9 +430,21 @@ export default function TodayPage() {
 
       <Snackbar
         open={Boolean(toast)}
+        // Six seconds is the undo window: long enough to notice a mistake,
+        // short enough that the offer is gone before it becomes a decision.
         autoHideDuration={6000}
-        onClose={() => setToast(null)}
+        onClose={() => {
+          setToast(null);
+          setUndoId(null);
+        }}
         message={toast}
+        action={
+          undoId ? (
+            <Button color="secondary" size="small" onClick={() => void undoAdd()}>
+              Undo
+            </Button>
+          ) : undefined
+        }
       />
     </Container>
   );
