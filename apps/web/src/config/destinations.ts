@@ -107,6 +107,12 @@ export const UNOWNED_ROUTES: readonly string[] = [
   // renders OUTSIDE `Layout` — there is no rail and no bottom bar on it to
   // highlight, and a user who is on it cannot reach any destination anyway.
   '/setup/ai-key',
+  // The Start flow (#48, epic E05). PRD §11 lets an execution screen replace
+  // the navigation entirely: it renders outside `Layout`, so there is no rail
+  // and no bottom bar on it to highlight. Listed as the route App.tsx declares,
+  // parameter and all, because the ownership test compares these strings to
+  // that file's `path` props verbatim.
+  '/start/:commitmentId',
 ];
 
 /**
