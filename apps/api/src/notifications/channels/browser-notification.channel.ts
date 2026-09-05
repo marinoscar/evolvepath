@@ -199,6 +199,19 @@ export const EVENT_BROWSER_TEMPLATES: Partial<
   // boundary the channel's `render` describes at length. It is inside the
   // channel's try/catch, so a payload that does not match is a recorded
   // delivery failure, never a thrown role change.
+  'memory.insight_proposed': (data: never): BrowserNotificationContent => {
+    const { count } = data as { count: number };
+
+    return {
+      title: 'The coach noticed a pattern',
+      // The COUNT and nothing else. Putting the statement in the notification
+      // would show the user a durable claim about themselves before they had
+      // any way to disagree with it (PRD §10.12).
+      body: `${count} new insight${count === 1 ? '' : 's'} to confirm or dismiss.`,
+      link: '/settings/ai-memory',
+    };
+  },
+
   'security.role_changed': (data: never): BrowserNotificationContent => {
     const { previousRoles, currentRoles } = data as RoleChangedEmailData;
 
