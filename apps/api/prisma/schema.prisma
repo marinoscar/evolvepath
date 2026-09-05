@@ -63,6 +63,10 @@ model User {
   familyMembers FamilyMember[] @relation("UserFamilyMembers")
   rituals       Ritual[]       @relation("UserRituals")
 
+  // E12 (#49): the coaching decision log and this account's push endpoints.
+  notificationInteractions NotificationInteraction[] @relation("UserNotificationInteractions")
+  pushSubscriptions        PushSubscription[]        @relation("UserPushSubscriptions")
+
   @@map("users")
 }
 
@@ -496,6 +500,9 @@ model NotificationDelivery {
   // Relations
   user User? @relation("UserNotificationDeliveries", fields: [userId], references: [id], onDelete: SetNull)
 
+  // E12 (#49).
+  interactions NotificationInteraction[]
+
   @@index([userId, eventKey])
   @@index([status, createdAt])
   @@map("notification_deliveries")
@@ -614,6 +621,9 @@ model Notification {
   // forever, and `userId` is NOT NULL here so SetNull is not even expressible.
   user User @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
 
+  // E12 (#49): the OPENED/ACTIONED rows recorded against this inbox row.
+  interactions NotificationInteraction[]
+
   // The two queries this table actually serves, and nothing speculative.
   //
   // 1. THE UNREAD BADGE: `where { userId, readAt: null }`, run on every bell
@@ -730,6 +740,15 @@ model UserProfile {
   pendingProposal   Json? @map("pending_proposal")
 
   confidenceScore Int? @map("confidence_score")
+
+  /// E12 (#49): caps, muted categories and anything else the coaching decision
+  /// engine reads per user. JSON rather than columns for the same reason as
+  /// `domainReflections` above — these are policy knobs whose shape moves with
+  /// the engine, and `notification-policy.schema.ts` validates them at the
+  /// boundary. `resolvePolicy` is total: an unparseable value yields defaults.
+  /// Quiet hours are deliberately NOT in here: they already exist as
+  /// `quietHoursStart/End` columns (E04-01) and there must be one home.
+  notificationPolicy Json? @map("notification_policy")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
@@ -1270,20 +1289,24 @@ model Commitment {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  user            User          @relation("UserCommitments", fields: [userId], references: [id], onDelete: Cascade)
-  outcome         Outcome?      @relation(fields: [outcomeId], references: [id], onDelete: SetNull)
-  planVersion     PlanVersion?  @relation(fields: [planVersionId], references: [id], onDelete: SetNull)
-  routine         Routine?      @relation(fields: [routineId], references: [id], onDelete: SetNull)
-  rescheduledFrom Commitment?   @relation("CommitmentReschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
-  rescheduledTo   Commitment[]  @relation("CommitmentReschedule")
+  user            User         @relation("UserCommitments", fields: [userId], references: [id], onDelete: Cascade)
+  outcome         Outcome?     @relation(fields: [outcomeId], references: [id], onDelete: SetNull)
+  planVersion     PlanVersion? @relation(fields: [planVersionId], references: [id], onDelete: SetNull)
+  routine         Routine?     @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  rescheduledFrom Commitment?  @relation("CommitmentReschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
+  rescheduledTo   Commitment[] @relation("CommitmentReschedule")
   /// SetNull, like every other history pointer here: deleting the big
   /// commitment must not delete the small one the user actually did.
-  decomposedFrom  Commitment?   @relation("CommitmentDecomposition", fields: [decomposedFromId], references: [id], onDelete: SetNull)
-  decomposedTo    Commitment[]  @relation("CommitmentDecomposition")
+  decomposedFrom  Commitment?  @relation("CommitmentDecomposition", fields: [decomposedFromId], references: [id], onDelete: SetNull)
+  decomposedTo    Commitment[] @relation("CommitmentDecomposition")
   evidence        Evidence[]
   reflections     Reflection[]
-  ritual          Ritual?       @relation(fields: [ritualId], references: [id], onDelete: SetNull)
-  familyMember    FamilyMember? @relation(fields: [familyMemberId], references: [id], onDelete: SetNull)
+
+  // E12 (#49): which coaching messages concerned this commitment. SetNull, so
+  // the metric rows survive a deleted commitment.
+  interactions NotificationInteraction[]
+  ritual       Ritual?                   @relation(fields: [ritualId], references: [id], onDelete: SetNull)
+  familyMember FamilyMember?             @relation(fields: [familyMemberId], references: [id], onDelete: SetNull)
 
   /// MATERIALIZATION IDEMPOTENCY (issue #37, epic E08). Re-running the
   /// materializer over the same horizon must not double-book an occurrence, and
@@ -1482,4 +1505,150 @@ model Ritual {
 
   @@index([userId, active])
   @@map("rituals")
+}
+
+// =============================================================================
+// Coaching notifications — the decision log and push endpoints (issue #49, E12)
+// =============================================================================
+//
+// WHY A SECOND TABLE NEXT TO `notification_deliveries`.
+//
+// `notification_deliveries` answers "did a channel accept this message?" — an
+// operational question about a transport. E12 asks four different questions
+// that no delivery row can answer:
+//
+//   1. WAS IT SENT AT ALL, AND IF NOT, WHY? A message the policy suppressed
+//      never reaches a channel, so it produces no delivery row. "We stayed
+//      quiet because you were in quiet hours" is the single most important
+//      fact this epic records, and it is invisible in the delivery table.
+//   2. WHAT DID THE USER DO WITH IT? `notifications.readAt` records an inbox
+//      click and nothing else — not "moved it", not "skipped", not "dismissed
+//      from the OS shade with no session".
+//   3. WHICH COMMITMENT DID IT CONCERN? Required by the per-commitment cap
+//      (PRD §61) and by the independence metric (PRD §65), and a delivery row
+//      has no product foreign keys by design.
+//   4. HAVE WE ALREADY DECIDED ABOUT THIS CANDIDATE? The scheduler re-scans
+//      the same window every few minutes; without a unique decision key it
+//      would re-send on every tick.
+//
+// One table answers all four because they are one timeline: a SENT row and the
+// OPENED/ACTIONED/DISMISSED rows that point back at it through
+// `sentInteractionId`. Splitting sends from responses would mean joining two
+// tables for every single metric in E12-06.
+
+enum NotificationInteractionKind {
+  /// The policy said yes and the message went out.
+  SENT
+  /// The user brought the message up (bell click, push click, deep link).
+  OPENED
+  /// The user did the thing the message asked for.
+  ACTIONED
+  /// The user explicitly got rid of it. Distinct from "ignored", which is the
+  /// absence of any response and is computed, not stored.
+  DISMISSED
+  /// The policy said no. `suppressReason` says which rule fired.
+  SUPPRESSED
+
+  @@map("notification_interaction_kind")
+}
+
+enum NotificationActionKind {
+  START
+  IN
+  MOVE
+  SHORT
+  SKIP
+
+  @@map("notification_action_kind")
+}
+
+enum NotificationSuppressReason {
+  QUIET_HOURS
+  DAILY_CAP
+  WEEKLY_CAP
+  PER_COMMITMENT_MAX
+  SKIPPED
+  MUTED
+  DOMAIN_PAUSED
+  FATIGUE
+  ALREADY_DONE
+
+  @@map("notification_suppress_reason")
+}
+
+model NotificationInteraction {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  /// Plain string, NOT a foreign key — the same reasoning spelled out on
+  /// `Notification.eventKey`: events live in code and persisted rows outlive
+  /// their definitions.
+  eventKey String @map("event_key")
+
+  kind NotificationInteractionKind
+
+  commitmentId   String? @map("commitment_id") @db.Uuid
+  /// The inbox row, once the browser channel has written one.
+  notificationId String? @map("notification_id") @db.Uuid
+  /// The `notification_deliveries` row, once a channel has queued one.
+  deliveryId     String? @map("delivery_id") @db.Uuid
+
+  /// OPENED/ACTIONED/DISMISSED point back at the SENT row they answer.
+  sentInteractionId String? @map("sent_interaction_id") @db.Uuid
+
+  action         NotificationActionKind?
+  suppressReason NotificationSuppressReason? @map("suppress_reason")
+
+  /// Scheduler idempotency. A PLAIN STRING chosen by the caller — no structure
+  /// is parsed out of it, so the engine can change how it identifies a
+  /// candidate without a migration. NULL on responses, which is what makes the
+  /// unique index below harmless for them (NULLs never conflict in Postgres).
+  dedupeKey String? @map("dedupe_key")
+
+  /// `{ leadMinutes?, copySource?: 'ai' | 'template', category?: 'N1'…'N9', localDate? }`
+  meta Json?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user            User                      @relation("UserNotificationInteractions", fields: [userId], references: [id], onDelete: Cascade)
+  commitment      Commitment?               @relation(fields: [commitmentId], references: [id], onDelete: SetNull)
+  notification    Notification?             @relation(fields: [notificationId], references: [id], onDelete: SetNull)
+  delivery        NotificationDelivery?     @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+  sentInteraction NotificationInteraction?  @relation("SentInteraction", fields: [sentInteractionId], references: [id], onDelete: SetNull)
+  responses       NotificationInteraction[] @relation("SentInteraction")
+
+  /// One decision per candidate. NULL dedupe keys never conflict, so responses
+  /// are unconstrained by it.
+  @@unique([userId, eventKey, dedupeKey])
+  /// Caps and fatigue: SENT rows inside a local day or week.
+  @@index([userId, kind, createdAt(sort: Desc)])
+  /// Per-commitment max, and the independence metric.
+  @@index([userId, commitmentId, kind])
+  @@index([sentInteractionId])
+  @@map("notification_interactions")
+}
+
+model PushSubscription {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  /// The push service URL. UNIQUE ACROSS USERS, not per user: a browser
+  /// profile handed to another account re-registers the same endpoint, and two
+  /// rows would mean the new owner's messages reach the old one's device.
+  endpoint String @unique
+
+  /// `{ p256dh, auth }` — the subscription's own encryption keys, validated by
+  /// `push-subscription.schema.ts` at the boundary. Not secrets of ours; they
+  /// are useless without the endpoint they belong to.
+  keys Json
+
+  userAgent String? @map("user_agent")
+
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz
+
+  user User @relation("UserPushSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }

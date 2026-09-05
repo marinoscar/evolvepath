@@ -5,6 +5,7 @@ import {
   localDate,
   localDayBounds,
   localHour,
+  localWeekBounds,
   safeTimeZone,
 } from './local-date';
 
@@ -114,6 +115,58 @@ describe('local-date (#38)', () => {
   describe('localHour', () => {
     it('reports midnight as 0, not 24', () => {
       expect(localHour(new Date('2026-03-02T00:00:00.000Z'), 'UTC')).toBe(0);
+    });
+  });
+
+  describe('localWeekBounds (#49)', () => {
+    const MADRID = 'Europe/Madrid'; // DST, for the 167-hour week
+
+    it('starts the week on Monday, not Sunday', () => {
+      // 2026-09-05 is a Saturday.
+      const { start, end } = localWeekBounds('2026-09-05', CR);
+
+      // Monday 2026-08-31 00:00 in Costa Rica is 06:00 UTC.
+      expect(start.toISOString()).toBe('2026-08-31T06:00:00.000Z');
+      // Exclusive end: Monday 2026-09-07 00:00 local.
+      expect(end.toISOString()).toBe('2026-09-07T06:00:00.000Z');
+    });
+
+    it('puts Sunday at the END of its week, six days after the start', () => {
+      // 2026-09-06 is a Sunday; it belongs to the week that began 2026-08-31.
+      expect(localWeekBounds('2026-09-06', CR).start.toISOString()).toBe(
+        '2026-08-31T06:00:00.000Z',
+      );
+    });
+
+    it('gives a Monday its own week', () => {
+      const { start } = localWeekBounds('2026-08-31', CR);
+      expect(start.toISOString()).toBe('2026-08-31T06:00:00.000Z');
+    });
+
+    it('spans 168 hours in a zone with no DST', () => {
+      const { start, end } = localWeekBounds('2026-09-05', CR);
+      expect(end.getTime() - start.getTime()).toBe(168 * 3600_000);
+    });
+
+    it('spans 167 hours across the spring DST switch in Madrid', () => {
+      // Spain springs forward on the last Sunday of March: 2026-03-29.
+      const { start, end } = localWeekBounds('2026-03-25', MADRID);
+
+      expect(end.getTime() - start.getTime()).toBe(167 * 3600_000);
+    });
+
+    it('spans 169 hours across the autumn DST switch in Madrid', () => {
+      // Spain falls back on the last Sunday of October: 2026-10-25.
+      const { start, end } = localWeekBounds('2026-10-21', MADRID);
+
+      expect(end.getTime() - start.getTime()).toBe(169 * 3600_000);
+    });
+
+    it('agrees with localDayBounds on the first day of the week', () => {
+      const week = localWeekBounds('2026-09-05', KTM);
+      const monday = localDayBounds('2026-08-31', KTM);
+
+      expect(week.start.toISOString()).toBe(monday.start.toISOString());
     });
   });
 });

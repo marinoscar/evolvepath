@@ -17,6 +17,7 @@ import { StorageModule } from './storage/storage.module';
 import { PatModule } from './pat/pat.module';
 import { CredentialsModule } from './credentials/credentials.module';
 import { EmailModule } from './email/email.module';
+import { CoachingNotificationsModule } from './coaching-notifications/coaching-notifications.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AiModule } from './ai/ai.module';
 import { PathModule } from './path/path.module';
@@ -80,6 +81,7 @@ import configuration from './config/configuration';
     // so a broken channel graph — a duplicate channel registration, a missing
     // transport — fails at boot rather than at the first notification.
     NotificationsModule,
+    CoachingNotificationsModule,
     // AI provider configuration and the gateway (epic #20). Registered here
     // from #22 onward, while it still provides nothing, so that each later
     // child of the epic is an addition to a graph that already boots rather

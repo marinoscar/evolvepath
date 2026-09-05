@@ -653,6 +653,9 @@ actions — there are deliberately no family-specific lifecycle endpoints.
 - `user_profiles` - Typed per-user preferences the product reasons about: `timezone` (what "today" means), `coachingStyle`, `weekdayMinutes`, quiet hours and onboarding progress; one row per user, created lazily (a missing row means onboarding has not finished)
 - `family_members` - Someone the user shares a ritual with. Exactly `nickname`, `relationship`, optional date-only `birthday` — and nothing else, by design (PRD §33, VISION §50: the people in it never consented to being modeled)
 - `rituals` - A recurring family behaviour the user is protecting: the recurrence rule (`weekdays`, `HH:mm`, `everyNWeeks`), ideal and minimum minutes, fallback text and the materialization horizon. A rule, not a schedule — the materializer turns it into ordinary `commitments`
+- `notification_interactions` - The coaching decision log: one `SENT`, `OPENED`, `ACTIONED`, `DISMISSED` or `SUPPRESSED` row per decision or response. The only place that records **why a message was not sent** (`suppress_reason`), what the user did with one, and which commitment it concerned. The unique `(user_id, event_key, dedupe_key)` index is the scheduler's idempotency; responses carry a null dedupe key and are unconstrained by it
+- `push_subscriptions` - A browser's web-push endpoint and its `{p256dh, auth}` keys. `endpoint` is unique **across users**, not per user: a browser profile handed to another account must not keep delivering to the previous owner
+- `user_profiles.notification_policy` - Caps (`dailyCap`, `weeklyCap`, `perCommitmentMax`) and `mutedCategories` for the coaching engine. Quiet hours are deliberately **not** here — they stay on the `quiet_hours_start/end` columns, so there is one answer to "when is this person asleep?"
 
 ## Access Control: Email Allowlist
 

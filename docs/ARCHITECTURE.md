@@ -732,11 +732,15 @@ Best Self  →  Domains (Work / Family / Health)  →  Outcomes  →  Plans
 | `evidence_items` | What actually happened. Survives its commitment. |
 | `reflections` | What the user made of it. |
 | `domain_modes` | Per-domain posture (GROW / MAINTAIN / RECOVER / PAUSE). |
+| `notification_interactions` | The coaching decision log (E12, #49): every send, response and suppression, with the reason the policy gave. |
+| `push_subscriptions` | A browser's web-push endpoint (E12, #49). Unique per endpoint, across users. |
 
 Alongside them, `user_profiles` (E04, #100) holds the typed answers the product
 itself reasons about — `timezone` (what "today" means for this user),
 `coachingStyle`, `weekdayMinutes` (the budget the next-best-action sizes
-against), quiet hours, and the onboarding step. It is deliberately not part of
+against), quiet hours, the coaching notification policy (E12, #49 — caps and
+muted categories; quiet hours stay in their own columns so there is one
+answer to when a user is asleep), and the onboarding step. It is deliberately not part of
 `user_settings`, whose JSONB document the API never interprets. One row per
 user, created lazily on first write; a missing row means onboarding has not
 finished.
