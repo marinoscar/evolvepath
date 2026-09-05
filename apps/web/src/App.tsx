@@ -30,6 +30,11 @@ const OutcomeDetailPage = lazy(() => import('./pages/OutcomeDetailPage'));
 const FamilyPage = lazy(() => import('./pages/FamilyPage'));
 const CoachPage = lazy(() => import('./pages/CoachPage'));
 const ProgressPage = lazy(() => import('./pages/ProgressPage'));
+// Progress surfaces, not sixth destinations: `DESTINATION_ROUTES.progress`
+// already owns `/progress/*` by prefix, so the weekly review and its planning
+// wizard need no registry entry (epic E10).
+const WeeklyReviewPage = lazy(() => import('./pages/WeeklyReviewPage'));
+const WeeklyPlanPage = lazy(() => import('./pages/WeeklyPlanPage'));
 // User settings — the hub (#96) plus one route per card in
 // `config/userSettingsSections.tsx` (#91, epic #90). These replace the single
 // stacked `UserSettingsPage`, which is deleted rather than left unrouted.
@@ -43,6 +48,8 @@ const UserNotificationsPage = lazy(() => import('./pages/UserNotificationsPage')
 const UserTokensPage = lazy(() => import('./pages/UserTokensPage'));
 const UserAiKeyPage = lazy(() => import('./pages/UserAiKeyPage'));
 const UserAiMemoryPage = lazy(() => import('./pages/UserAiMemoryPage'));
+// Epic E10 (#84) — the day and time the weekly review is prepared.
+const UserWeeklyRhythmPage = lazy(() => import('./pages/UserWeeklyRhythmPage'));
 const AiKeySetupPage = lazy(() => import('./pages/AiKeySetupPage'));
 
 // Console — the hub (#93) plus one route per card in
@@ -169,6 +176,12 @@ function AppRoutes() {
                     rail lights up on both without a registry change. */}
                 <Route path="/coach/:conversationId" element={<CoachPage />} />
                   <Route path="/progress" element={<ProgressPage />} />
+                  {/* Epic E10. `/progress/week` rather than `/review`: the
+                      review IS the weekly view of progress, so it belongs under
+                      the destination whose rail and bottom-bar tab light up for
+                      it — and no `DESTINATION_ROUTES` change is needed. */}
+                  <Route path="/progress/week" element={<WeeklyReviewPage />} />
+                  <Route path="/progress/week/plan" element={<WeeklyPlanPage />} />
                   {/* The per-user settings surface (#96, epic #90) — the same
                       hub component `/admin/settings` renders, over
                       `USER_SETTINGS_SECTIONS`, plus one route per card.
@@ -204,6 +217,10 @@ function AppRoutes() {
                       the caller's own row and the API answers 404, not 403,
                       for anyone else's. */}
                   <Route path="/settings/ai-memory" element={<UserAiMemoryPage />} />
+                  {/* Epic E10 (#84). Ungated like its siblings: the review
+                      rhythm is two columns on the caller's own profile, and the
+                      API route is plain `@Auth()` for the same reason. */}
+                  <Route path="/settings/weekly-rhythm" element={<UserWeeklyRhythmPage />} />
                   {/* Route-level AUTHORIZATION, not just authentication.
                       `ProtectedRoute` above only establishes that someone is
                       logged in — before this, a Viewer typing `/admin/settings`

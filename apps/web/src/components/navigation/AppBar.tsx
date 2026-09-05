@@ -107,6 +107,10 @@ interface DrillDown {
  */
 const PRODUCT_DRILLDOWNS: ReadonlyArray<{ pattern: RegExp; title: string; upPath: string }> = [
   { pattern: /^\/path\/outcomes\/[^/]+$/, title: 'Outcome', upPath: '/path' },
+  // Epic E10. Two levels: the wizard's up is the review it was opened from,
+  // not the Progress tab — structural up, as the header explains.
+  { pattern: /^\/progress\/week$/, title: 'Your Week', upPath: '/progress' },
+  { pattern: /^\/progress\/week\/plan$/, title: 'Plan next week', upPath: '/progress/week' },
 ];
 
 function resolveDrillDown(pathname: string): DrillDown | null {

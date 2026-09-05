@@ -7,6 +7,7 @@ import { resetFamilyState } from './mocks/familyHandlers';
 import { resetMemoryState } from './mocks/memoryHandlers';
 import { resetPathState } from './mocks/pathHandlers';
 import { resetTodayState } from './mocks/todayHandlers';
+import { resetWeeklyState } from './mocks/weeklyHandlers';
 
 // Set base URL for fetch
 const BASE_URL = 'http://localhost:3000';
@@ -233,6 +234,7 @@ afterEach(() => {
   resetCoachState();
   resetMemoryState();
   resetTodayState();
+  resetWeeklyState();
   resetViewportWidth();
   mediaQueryListRegistry.clear();
 });

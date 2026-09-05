@@ -1,7 +1,6 @@
 # The weekly loop
 
-> Status: **partial**. The section marked *(E10-04)* is filled in by that
-> child; E10-05 (#89) completes the document.
+> Status: complete except for the end-to-end verification E10-05 (#89) adds.
 
 PRD §135 states the loop this epic closes: *review plan → compare planned vs
 done → identify friction → learn pattern → adjust plan → approve next week*.
@@ -223,7 +222,60 @@ retried after a partial failure — or one racing a quick add on the Today scree
 
 ## Screens
 
-*(E10-04)*
+Two routes under the `progress` destination, and one settings page.
+
+| Route | Page | AppBar drill-down |
+|---|---|---|
+| `/progress/week` | Your Week | "Your Week", up to `/progress` |
+| `/progress/week/plan` | Plan next week | "Plan next week", up to `/progress/week` |
+| `/settings/weekly-rhythm` | Weekly rhythm | from the settings registry |
+
+**`/progress/week`, not `/review`.** The review is the weekly view of progress,
+so it lives under the destination whose rail row and bottom-bar tab light up for
+it — and `DESTINATION_ROUTES.progress` already owns `/progress/*` by prefix, so
+this epic adds no navigation registry entry at all. A sixth destination for a
+screen opened once a week would cost a permanent tab.
+
+The settings page is declared as a card in `USER_SETTINGS_SECTIONS` under
+`Account`, with **no `permission`** — `PUT /api/weekly/settings` is plain
+`@Auth()`, and a gate in the registry would be an authorization rule the API
+does not enforce (CLAUDE.md's settings rule 3).
+
+**Review screen states**: no review → an empty state with **Generate review**;
+`GENERATING` → a skeleton that polls every five seconds; `READY` / `APPROVED` /
+`SKIPPED` → the sections in PRD §51's order (tiles, What worked, What got in the
+way, Pattern, Recommendation, Keep unchanged, Not yet, Next week). A page test
+asserts the `h2` order directly, because that order IS the screen's contract.
+
+Two rules the screen holds:
+
+- **The tile number is never coloured.** VISION §30 — this product does not
+  signal worth, and a "2 / 3" in red is a verdict on somebody's week dressed as
+  data visualisation.
+- **A template summary is labelled.** PRD §120 lets the screen work with the
+  provider down; the "coach was unavailable" notice is what stops that being a
+  silent substitution. The numbers are identical either way.
+
+The Recommendation section renders E06-07's `ProposalCard` — the same card the
+coach uses, over the API's own `preview.diff`. Forking it would mean two
+renderings of a plan change, and the day they diverged the user would be
+agreeing to whichever one they happened to be looking at.
+
+**Wizard**: five steps over PRD §50's seven. "Review last week" is the screen it
+was opened from, and "check the workload" happens inside the commitments step
+where the thing being measured is on screen. Every step `PATCH`es before
+advancing, so closing the tab on step three costs nothing. Entering the
+commitments step calls `/propose`; the wizard never computes the week itself.
+
+**Responsive**: below `sm` everything stacks and the stepper is vertical; at and
+above `sm` the tiles are a row and the stepper horizontal; at and above `md` the
+review is two columns. The stepper's orientation is a LOCAL
+`useMediaQuery(down('sm'))` choice and is deliberately **not** one of the five
+coupled breakpoint gates — nothing mounts or unmounts, a horizontal stepper
+simply does not fit a phone. The wizard sits inside `Layout` rather than
+full-screen, unlike E09's workout runner: a weekly plan is a deliberate
+sit-down, not a live activity, and taking the navigation away would make leaving
+it feel like abandoning something.
 
 ## Observability
 
@@ -263,6 +315,10 @@ retried after a partial failure — or one racing a quick add on the Today scree
 - **AI-worded commitment titles in V1.** A `?wording=ai` flag on `/propose`
   that called the `planner` persona for titles only is a reasonable P1;
   deterministic materialisation stays the source of ids and times either way.
+- **A separate `/review` destination.** A sixth permanent tab for a screen
+  opened once a week; `/progress/*` already owns the route.
+- **Recomputing the load summary in the wizard.** Two implementations of "how
+  many commitments is this week" is two answers, and the wrong one is on screen.
 
 ## Extension points
 

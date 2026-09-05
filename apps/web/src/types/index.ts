@@ -1817,3 +1817,208 @@ export interface ProposeInsightsResult {
   /** Never an error: a proposer that cannot run is not a broken screen. */
   skipped: 'insufficient_data' | 'ai_unavailable' | null;
 }
+
+// =============================================================================
+// The weekly loop (epic E10)
+// =============================================================================
+//
+// Hand-maintained mirrors of the API DTOs, like every other type in this file.
+// Generating them would put the API's build output on the web app's critical
+// path for values that change about once an epic.
+
+export type WeeklyReviewStatus = 'GENERATING' | 'READY' | 'APPROVED' | 'SKIPPED';
+export type WeeklyPlanStatus = 'DRAFT' | 'APPROVED';
+
+export interface DomainCounts {
+  planned: number;
+  completed: number;
+  partial: number;
+  missed: number;
+  unresolved: number;
+  skipped: number;
+  rescheduled: number;
+  started: number;
+  fallbackUsed: number;
+  minutesPlanned: number;
+  minutesSpent: number;
+  completionRate: number;
+}
+
+export type WeekTimeWindow =
+  | 'early_morning'
+  | 'morning'
+  | 'midday'
+  | 'afternoon'
+  | 'evening'
+  | 'night';
+
+export interface WeekAggregates {
+  weekStart: string;
+  timezone: string;
+  /** `partial` is true while the week is still running — a caption, not a flaw. */
+  coverage: { from: string; to: string; partial: boolean };
+  domains: Record<Domain, DomainCounts>;
+  totals: DomainCounts;
+  timeWindows: Array<{
+    window: WeekTimeWindow;
+    planned: number;
+    completed: number;
+    successRate: number;
+  }>;
+  weekdays: Array<{ weekday: number; planned: number; completed: number }>;
+  rescheduleLeaders: Array<{
+    commitmentId: string;
+    title: string;
+    domain: Domain;
+    rescheduleCount: number;
+  }>;
+  focusStarts: { planned: number; started: number; completed: number };
+  workouts: {
+    planned: number;
+    completed: number;
+    fallbackUsed: number;
+    sessionsLogged: number;
+  };
+  frictionTags: Array<{ tag: string; count: number }>;
+}
+
+/**
+ * PRD §14.4: three separate claims, and the screen labels each. `inference` and
+ * `recommendation` are null on a template summary, because a template is not
+ * allowed to guess.
+ */
+export interface ReviewPattern {
+  observation: string;
+  inference: string | null;
+  recommendation: string | null;
+  confidence: number;
+  domain: Domain | null;
+}
+
+export interface WeeklyReviewAiSummary {
+  whatWorked: string[];
+  whatDidNot: string[];
+  patterns: ReviewPattern[];
+  proposedChanges: Array<{ planId: string; summary: string }>;
+  keepUnchanged: string[];
+  doNotAddYet: string[];
+  /** `'template'` means the coach was unavailable and the numbers are unchanged. */
+  source: 'ai' | 'template';
+  promptVersion: string | null;
+  generatedAt: string;
+}
+
+export interface WeeklyReviewSummary {
+  id: string;
+  weekStart: string;
+  status: WeeklyReviewStatus;
+  counts: Record<Domain, { planned: number; completed: number }>;
+  generatedAt: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+}
+
+export interface WeeklyReviewDetail extends WeeklyReviewSummary {
+  aggregates: WeekAggregates;
+  aiSummary: WeeklyReviewAiSummary | null;
+  proposals: ProposalDetail[];
+  plan: { id: string; status: WeeklyPlanStatus } | null;
+}
+
+export interface WeeklySettings {
+  /** 0 = Sunday … 6 = Saturday. */
+  weeklyReviewWeekday: number;
+  weeklyReviewTime: string;
+  timezone: string;
+  nextReviewAt: string;
+}
+
+export interface WeeklyPlanConstraints {
+  travelDays: string[];
+  fixedEvents: Array<{
+    date: string;
+    title: string;
+    /** Both null means the event blocks the whole day. */
+    startTime: string | null;
+    endTime: string | null;
+  }>;
+  notes: string | null;
+}
+
+export type WeeklyDomainModes = Partial<Record<Domain, DomainModeKind>>;
+
+export interface ProposedCommitment {
+  key: string;
+  source: 'routine' | 'extra';
+  include: boolean;
+  domain: Domain;
+  title: string;
+  date: string;
+  startTime: string;
+  estimatedMinutes: number;
+  minimumMinutes: number | null;
+  routineId: string | null;
+  planVersionId: string | null;
+  outcomeId: string | null;
+  fullVersion: string | null;
+  shortVersion: string | null;
+  minimumVersion: string | null;
+  recurring: boolean;
+  /** Why this occurrence is greyed out. Never omitted from the list. */
+  excludedBy: 'travel_day' | 'fixed_event' | 'paused_domain' | null;
+}
+
+export interface ExtraCommitment {
+  domain: Domain;
+  title: string;
+  date: string;
+  startTime: string;
+  estimatedMinutes: number;
+  minimumVersion?: string | null;
+  recurring: boolean;
+}
+
+export interface LoadWarning {
+  code: 'RECURRING_OVER_CAP' | 'MINUTES_OVER_CAPACITY' | 'DAY_OVER_CAPACITY';
+  message: string;
+  suggestion: string;
+  detail: Record<string, unknown>;
+}
+
+export interface WeeklyPlanProposal {
+  items: ProposedCommitment[];
+  extras: ExtraCommitment[];
+  summary: {
+    recurringCount: number;
+    estimatedMinutes: number;
+    byDomain: Record<Domain, { count: number; minutes: number }>;
+    softCap: number;
+    capacityMinutes: number | null;
+  };
+  warnings: LoadWarning[];
+  proposedAt: string;
+}
+
+export interface WeeklyPlanSummary {
+  id: string;
+  weekStart: string;
+  status: WeeklyPlanStatus;
+  primaryFocus: string | null;
+  reviewId: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+}
+
+export interface WeeklyPlanDetail extends WeeklyPlanSummary {
+  constraints: WeeklyPlanConstraints;
+  domainModes: WeeklyDomainModes;
+  proposal: WeeklyPlanProposal | null;
+  review: { id: string; weekStart: string; status: WeeklyReviewStatus } | null;
+}
+
+export interface ApproveWeeklyPlanResult {
+  plan: WeeklyPlanDetail;
+  createdCommitmentIds: string[];
+  skippedExisting: number;
+  warnings: LoadWarning[];
+}

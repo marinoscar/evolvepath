@@ -99,6 +99,17 @@ export function degradeNextSend(): void {
   state.nextDegraded = true;
 }
 
+/**
+ * Put a proposal in the store without a conversation.
+ *
+ * A weekly review's recommendation is created by the reviewer, not by a chat
+ * turn (E10), but it is decided through the SAME `/proposals/:id/*` routes. One
+ * store, so a spec cannot accept a proposal the accept route has never heard of.
+ */
+export function seedProposal(proposal: ProposalSummary): void {
+  state.proposals[proposal.id] = proposal;
+}
+
 export function coachState(): Readonly<CoachState> {
   return state;
 }
