@@ -626,6 +626,16 @@ Ten intent-named routes over the same matrix. Each returns a **commitment card**
 - `POST /api/reflections` - Note/tags/scores on a commitment, outcome, plan version or day
 - `GET /api/reflections` - Newest first, capped at 200
 
+### Coach (epic E06)
+- `POST /api/coach/messages` - One coaching turn. **Always 201**: a provider failure, or output naming things the user does not have, is a readable message plus `degraded: true` (PRD §120). A safety `redirect` answers with professional-care copy and never calls the model
+- `POST /api/coach/conversations` / `GET /api/coach/conversations` - Start / list threads (most recently used first)
+- `GET /api/coach/conversations/{id}/messages` - Read a thread, ascending; `before` pages upward
+- `DELETE /api/coach/conversations/{id}` - Delete it and its messages (204, PRD §84). A proposal created from one survives with `sourceMessageId: null`
+- `GET /api/coach/suggested-prompts` - The seven PRD §66 chips, in order
+
+Note: `structured` is null on a degraded turn — a fallback is deliberately
+indistinguishable from "no model output". `invocationId` is never on the wire.
+
 ### Plan Proposals (epic E06)
 The user's half of PRD §15's mutation protocol. There is deliberately no
 `POST /proposals` — proposals are created by the service that produced them.
