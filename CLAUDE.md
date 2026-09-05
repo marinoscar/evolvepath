@@ -458,6 +458,10 @@ Note: `GET /api/auth/me` also carries `aiKey: { configured, hint }` and
 `onboarding: { completed }`, so the web app can gate its shell without a second
 request on boot. Reading `onboarding` never creates a `user_profiles` row.
 
+### Today
+- `GET /api/today` - The day: deterministic next best action with rationale, three domain sections (always three, including paused), the check-in. **Makes no AI call**
+- `GET /api/today/insight` - The coach's sentence. Always 200; `source: 'template'` when AI is unavailable
+
 ### Best Self (current user)
 - `GET /api/me/best-self` - The caller's Best Self profile; `data: null` until saved
 - `PUT /api/me/best-self` - Replace it whole and stamp `lastReviewedAt` (no PATCH by design)
