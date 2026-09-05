@@ -516,6 +516,85 @@ reached differently because the two controls decide differently.
 
 ---
 
+## 7c. Learning metrics
+
+PRD §64 asks the system to learn which messages are acted on, which timing works
+and which categories are ignored. PRD §65 defines the independence metric.
+VISION §38 says what it is all *for*:
+
+> "You needed nine workout reminders in your first month. This month you needed
+> two."
+
+That is a strange thing for a product to want. Every other metric in a
+notification system measures engagement; this one measures its own decline. **Read
+these numbers in the direction of "can we stop?", not "how do we get more
+clicks?"** — a coach that is working needs to say less over time.
+
+`metrics/notification-metrics.ts` is **pure**, with no Prisma type anywhere in
+it. The service maps rows in; the file does arithmetic. That is what makes every
+rule below a unit test with a fixture rather than a database and a clock.
+
+### Independence — PRD §65
+
+A completion is **unprompted** when there is no `SENT` interaction for that
+commitment *before* `completedAt`.
+
+The word "before" is the whole definition. A send afterwards does not count,
+because N7 (the celebration) fires after a completion by construction — counting
+it would make every celebrated success look prompted, driving the metric down
+exactly when the user is doing best.
+
+`ratio` is `null` at zero completions, not `0`. Nothing having happened is no
+answer, not "0% independent".
+
+`NotificationMetricsService.independence()` is **exported** so `GET /progress`
+(E11-01) calls the same function. Two implementations of PRD §65 would drift the
+first time either was adjusted, and the number on a progress card is precisely
+the one a user would notice contradicting itself.
+
+### Lead-time buckets
+
+Sends are bucketed at 5, 10, 20 and 30 minutes rather than averaged: the question
+is "which lead time works best?", and a mean over a bimodal distribution answers
+a question nobody asked.
+
+`bestLeadMinutes` reports the bucket with the highest action rate among those
+with at least `MIN_BUCKET_SENDS` (3) sends, and only when that rate is above
+zero. The threshold is what makes it a finding rather than a coincidence — one
+send that happened to be acted on is a 100% action rate.
+
+### Counts
+
+Every coaching event appears, in registry order, **even at zero**. A response
+whose shape depends on what happened is one a client has to guard every field of,
+and a category that vanished because nothing fired is indistinguishable from one
+that was removed.
+
+`ignored = sent − opened − actioned − dismissed`, floored at zero: a response can
+outlive the window its send fell outside of, and a negative count would be
+nonsense rather than a signal.
+
+### The trend, and the sentences
+
+`reminderTrend` groups by calendar month **in the user's own timezone** — a UTC
+month files a Costa Rican user's 30 September evening under October. A send whose
+commitment was never completed is filed under no domain rather than a guessed
+one.
+
+`insights` are at most three deterministic sentences, **template-only**: these
+are read on a progress screen, where a model that occasionally editorialised
+about somebody's month would be far worse than a flat sentence. They are held to
+the same `banned-phrases.ts` rule as the notification copy, by a test.
+
+The decline sentence requires the domain to have **completions in both months**.
+Fewer reminders with no completions is somebody who stopped, and congratulating
+them for it would be the worst thing this screen could say.
+
+The "going unused" sentence names the **category** and offers the setting, never
+the person: a message being unhelpful is a fact about the message.
+
+---
+
 ## 8. Rejected alternatives
 
 **Report every applicable suppress reason.** Rejected: it makes the metrics

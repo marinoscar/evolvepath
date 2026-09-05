@@ -10,6 +10,8 @@ import { CoachingNotificationsService } from './coaching-notifications.service';
 import { NotificationCopywriterService } from './copy/notification-copywriter.service';
 import { NotificationInteractionsController } from './interactions/notification-interactions.controller';
 import { NotificationInteractionsService } from './interactions/notification-interactions.service';
+import { NotificationMetricsController } from './metrics/notification-metrics.controller';
+import { NotificationMetricsService } from './metrics/notification-metrics.service';
 import { NotificationPolicyController } from './policy/notification-policy.controller';
 import { NotificationPolicyService } from './policy/notification-policy.service';
 import { CoachingNotificationTask } from './tasks/coaching-notification.task';
@@ -36,7 +38,11 @@ import { CoachingNotificationTask } from './tasks/coaching-notification.task';
     AiModule,
     EmailModule,
   ],
-  controllers: [NotificationPolicyController, NotificationInteractionsController],
+  controllers: [
+    NotificationPolicyController,
+    NotificationInteractionsController,
+    NotificationMetricsController,
+  ],
   providers: [
     NotificationPolicyService,
     NotificationInteractionsService,
@@ -44,11 +50,16 @@ import { CoachingNotificationTask } from './tasks/coaching-notification.task';
     NotificationCopywriterService,
     CoachingNotificationsService,
     CoachingNotificationTask,
+    NotificationMetricsService,
   ],
   exports: [
     NotificationPolicyService,
     NotificationInteractionsService,
     CoachingNotificationsService,
+    // Exported for E11-01's progress endpoint: `independence()` is PRD §65's
+    // one formula, and a second implementation on the progress screen would
+    // drift the first time either was adjusted.
+    NotificationMetricsService,
   ],
 })
 export class CoachingNotificationsModule {}

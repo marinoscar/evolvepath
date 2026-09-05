@@ -535,6 +535,7 @@ above. Don't restate any of that here; extend those three instead.
 ### Coaching Notifications (current user)
 - `GET /api/me/notification-policy` - Quiet hours, the three caps, muted categories and the current fatigue reduction
 - `PATCH /api/me/notification-policy` - Merge patch; `quietHours: null` clears. Audited as `notification_policy:update`
+- `GET /api/notifications/metrics?days=` - Per-category sends/opens/actions/suppressions, the independence metric (PRD §65) and the month-by-month reminder trend. `days` is 7-180
 
 ### AI Settings (Admin)
 - `GET /api/ai-settings` - Provider, models and the masked platform-key status
