@@ -180,6 +180,26 @@ export default () => {
     },
   },
 
+  // Web push (VAPID) — issue #64, epic E12.
+  //
+  // ALL THREE OPTIONAL, and the deployment runs normally without them: the push
+  // channel simply reports no address, the dispatcher logs and skips, and the
+  // user still gets the inbox row and the live SSE update. That is the fallback
+  // the epic asks for, and it needs no code because `resolveTo` returning null
+  // already means exactly this.
+  //
+  // Generate a pair once per deployment with `npx web-push generate-vapid-keys`.
+  // ROTATING THEM INVALIDATES EVERY EXISTING SUBSCRIPTION — the browser signed
+  // up against the old public key — so it is a deliberate act, not a routine
+  // secret rotation.
+  webPush: {
+    publicKey: process.env.WEB_PUSH_PUBLIC_KEY ?? null,
+    // A SECRET. Never logged, never returned by any endpoint, never sent to the
+    // browser — only the public half is.
+    privateKey: process.env.WEB_PUSH_PRIVATE_KEY ?? null,
+    subject: process.env.WEB_PUSH_SUBJECT ?? null,
+  },
+
   // The coaching decision engine's clock (#59, epic E12).
   //
   // An OFF SWITCH, not a feature flag: the engine's failure mode is sending

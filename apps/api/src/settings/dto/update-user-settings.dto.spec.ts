@@ -960,7 +960,7 @@ describe('notifications namespace (PUT)', () => {
     expect(() =>
       updateUserSettingsSchema.parse({
         ...baseValid,
-        notifications: { push: { 'user.welcome': true } },
+        notifications: { sms: { 'user.welcome': true } },
       }),
     ).toThrow();
   });
@@ -1140,7 +1140,7 @@ describe('notifications namespace (PATCH)', () => {
   it('rejects an unknown channel', () => {
     expect(() =>
       patchUserSettingsSchema.parse({
-        notifications: { push: { 'user.welcome': true } },
+        notifications: { sms: { 'user.welcome': true } },
       }),
     ).toThrow();
   });

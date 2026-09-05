@@ -273,7 +273,12 @@ describe('CoachingNotificationsService (#59)', () => {
         }),
       ]);
       prisma.userSettings.findUnique.mockResolvedValue({
-        value: { notifications: { browser: { 'coach.weekly_review_ready': false } } },
+        value: {
+          notifications: {
+            browser: { 'coach.weekly_review_ready': false },
+            push: { 'coach.weekly_review_ready': false },
+          },
+        },
       } as never);
 
       await service.runOnce(NOW);

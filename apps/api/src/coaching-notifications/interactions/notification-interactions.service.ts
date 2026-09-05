@@ -238,6 +238,23 @@ export class NotificationInteractionsService {
     }
   }
 
+  /**
+   * The SENT row behind a dismissal, looked up with no caller (issue #64).
+   *
+   * Separate from `recordResponse` because the public dismissal route has no
+   * user to check ownership against — the UUID IS the authorisation. Keeping
+   * that as its own named method means the ownership check in `recordResponse`
+   * is never accidentally relaxed to serve it.
+   */
+  async findSentRowForDismissal(
+    sentInteractionId: string,
+  ): Promise<{ id: string; userId: string } | null> {
+    return this.prisma.notificationInteraction.findFirst({
+      where: { id: sentInteractionId, kind: NotificationInteractionKind.SENT },
+      select: { id: true, userId: true },
+    });
+  }
+
   async hasDecision(
     userId: string,
     eventKey: string,

@@ -153,6 +153,112 @@ self.addEventListener('fetch', (event) => {
     caches.match(request, { cacheName: CACHE_NAME }).then((cached) => cached ?? fetch(request)),
   );
 });
+
+// ===========================================================================
+// Web push (#64, epic E12)
+// ===========================================================================
+//
+// PRD §123: the moment of action is rarely one with the app open. Everything
+// above serves a page that is being looked at; everything below is what reaches
+// somebody who is not looking.
+//
+// Three handlers, and the third is the one that is easy to leave out:
+// \`notificationclose\` is the only place a user's "no, not this" is observable
+// at all, and it fires with no page, no session and no token — which is why the
+// endpoint it calls is the one public route in the epic.
+
+function isInternalPath(value) {
+  return (
+    typeof value === 'string' &&
+    value.startsWith('/') &&
+    !value.startsWith('//') &&
+    !value.startsWith('/\\')
+  );
+}
+
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch (error) {
+    // A malformed payload is not something the user can act on and not
+    // something a notification can usefully say. Dropping it is better than
+    // showing "undefined".
+    return;
+  }
+
+  if (!payload || typeof payload.title !== 'string') return;
+
+  const actions = Array.isArray(payload.actions) ? payload.actions : [];
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: typeof payload.body === 'string' ? payload.body : '',
+      // The decision's id, so a re-send about the same moment REPLACES the
+      // banner rather than stacking a second one beside it.
+      tag: typeof payload.tag === 'string' ? payload.tag : undefined,
+      renotify: false,
+      data: {
+        link: payload.link,
+        actions,
+        sentInteractionId: payload.sentInteractionId,
+      },
+      actions: actions
+        .slice(0, 2)
+        .map((action) => ({ action: action.action, title: action.label })),
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const data = event.notification.data || {};
+  const chosen = event.action
+    ? (data.actions || []).find((action) => action.action === event.action)
+    : null;
+  const link = chosen ? chosen.link : data.link;
+
+  // The server validates this on the way in (\`sanitizeLink\`), and the worker
+  // validates it again on the way out. A push payload arrives over a channel
+  // this app does not control end to end, and \`clients.openWindow\` with an
+  // attacker-chosen URL is a redirect out of the application.
+  if (!isInternalPath(link)) return;
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clientList) => {
+        // Reuse an open tab rather than opening a second one: the user has one
+        // app, and a duplicate tab loses whatever they had on screen.
+        for (const client of clientList) {
+          if (new URL(client.url).origin === self.location.origin) {
+            return client.focus().then((focused) => focused.navigate(link));
+          }
+        }
+        return self.clients.openWindow(link);
+      })
+      .catch(() => undefined),
+  );
+});
+
+self.addEventListener('notificationclose', (event) => {
+  const id = (event.notification.data || {}).sentInteractionId;
+  if (typeof id !== 'string') return;
+
+  // No credentials, and none needed: the UUID is the capability, and the route
+  // answers 204 whatever happens. Failures are ignored because there is nobody
+  // to tell — the notification is already gone.
+  event.waitUntil(
+    fetch('/api/notifications/interactions/dismissed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sentInteractionId: id }),
+    }).catch(() => undefined),
+  );
+});
 `;
 }
 

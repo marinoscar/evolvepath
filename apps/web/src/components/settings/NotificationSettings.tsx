@@ -94,6 +94,7 @@ import type {
   NotificationChannel,
   NotificationEventDef,
   NotificationPreferences,
+  PushState,
 } from '../../types';
 import type { BrowserNotificationPermission } from '../../hooks/useBrowserNotificationPermission';
 
@@ -187,6 +188,11 @@ export function preferenceWriteFor(
 const CHANNEL_LABELS: Record<NotificationChannel, string> = {
   email: 'Email',
   browser: 'Browser',
+  // #64. The `Record<NotificationChannel, …>` is what made this column
+  // MANDATORY rather than optional: widening the channel union in the API's
+  // registry failed this file's typecheck until the label existed, and the
+  // matrix below then derived the cells from each event's own `channels`.
+  push: 'Push',
 };
 
 function channelLabel(channel: NotificationChannel): string {
@@ -272,6 +278,85 @@ export function browserChannelState(
   }
 }
 
+/**
+ * How the push column and its switch must behave for a given state (#64).
+ *
+ * The same table treatment `browserChannelState` gets one channel over, and for
+ * the same reason: the honest answer to "what does `unconfigured` do?" should be
+ * one readable row, not three ternaries in a render.
+ *
+ * FOUR "NO" CASES, THREE OWNERS. Only `unsubscribed` is the user's to act on
+ * here; `denied` is theirs but only in browser settings; `unconfigured` is an
+ * operator's; `unsupported` is nobody's. Collapsing them to one disabled switch
+ * is how a settings page ends up telling somebody to turn on a thing that
+ * cannot be turned on.
+ */
+export function pushChannelState(state: PushState, isDev: boolean): BrowserChannelState & {
+  switchDisabled: boolean;
+  helper: string;
+} {
+  if (isDev && (state === 'unsupported' || state === 'unsubscribed')) {
+    return {
+      disabled: true,
+      note: 'Needs the production build',
+      alert: null,
+      switchDisabled: true,
+      // The single most confusing state for a developer: everything looks
+      // right and nothing arrives, because `npm run dev` registers no service
+      // worker at all and push has nowhere to be delivered.
+      helper: 'Push needs the production build — the dev server registers no service worker.',
+    };
+  }
+
+  switch (state) {
+    case 'subscribed':
+      return {
+        disabled: false,
+        note: null,
+        alert: null,
+        switchDisabled: false,
+        helper: 'This device will receive coaching notifications even with the app closed.',
+      };
+    case 'unsubscribed':
+      return {
+        disabled: false,
+        note: 'Not enabled on this device',
+        alert: null,
+        switchDisabled: false,
+        helper: 'Turn this on to receive coaching notifications with the app closed.',
+      };
+    case 'denied':
+      return {
+        disabled: true,
+        note: 'Blocked by your browser',
+        alert: null,
+        switchDisabled: true,
+        helper:
+          'Notifications are blocked for this site in your browser settings. ' +
+          'This application cannot ask again.',
+      };
+    case 'unconfigured':
+      return {
+        disabled: true,
+        note: 'Not configured on this server',
+        alert: null,
+        switchDisabled: true,
+        // Named as somebody else's problem on purpose: there is nothing the
+        // reader can do, and implying otherwise wastes their time.
+        helper: 'Push is not configured on this server.',
+      };
+    case 'unsupported':
+    default:
+      return {
+        disabled: true,
+        note: 'Not supported by this browser',
+        alert: null,
+        switchDisabled: true,
+        helper: 'This browser cannot receive push notifications.',
+      };
+  }
+}
+
 // =============================================================================
 // Component
 // =============================================================================
@@ -325,6 +410,24 @@ export interface NotificationSettingsProps {
    * stack a second request behind the browser's modal.
    */
   isRequestingPermission?: boolean;
+
+  // ---------------------------------------------------------------------------
+  // Push (#64, epic E12)
+  // ---------------------------------------------------------------------------
+
+  /** What this browser can do about push, from `usePushSubscription`. */
+  pushState?: PushState;
+  /**
+   * Turn push on for this device.
+   *
+   * SAME SPLIT AS `onRequestPermission` above, for the same reason: subscribing
+   * triggers the browser's permission prompt, and the prompt is a one-shot
+   * resource. The call lives in the page's click handler, so there is no code
+   * in this component that COULD fire it on mount.
+   */
+  onSubscribePush?: () => void;
+  onUnsubscribePush?: () => void;
+  isChangingPush?: boolean;
 }
 
 export function NotificationSettings({
@@ -335,6 +438,10 @@ export function NotificationSettings({
   browserPermission,
   onRequestPermission,
   isRequestingPermission = false,
+  pushState = 'unsupported',
+  onSubscribePush,
+  onUnsubscribePush,
+  isChangingPush = false,
 }: NotificationSettingsProps) {
   // `useId` rather than interpolating `event.key`: two instances of this
   // component (or a future second matrix on the page) would otherwise emit
@@ -343,11 +450,13 @@ export function NotificationSettings({
   const idPrefix = useId();
 
   const browser = browserChannelState(browserPermission);
+  const push = pushChannelState(pushState, import.meta.env.DEV);
 
   // Only relevant if some event actually declares the channel. Today only
   // `security.role_changed` does, and an event list that declares none must not
   // show a banner about a column that is not on screen.
   const showsBrowserChannel = events.some((event) => event.channels.includes('browser'));
+  const showsPushChannel = events.some((event) => event.channels.includes('push'));
 
   if (events.length === 0) {
     // A REAL ANSWER, not a loading state — the caller renders a spinner while
@@ -431,6 +540,52 @@ export function NotificationSettings({
           </Alert>
         )}
 
+        {/*
+          ===================================================================
+          PUSH ON THIS DEVICE (#64, epic E12)
+          ===================================================================
+          Per DEVICE, not per account, and the copy says so — a user with a
+          laptop and a phone has to turn it on twice, and a switch labelled
+          "Push notifications" would read as an account setting that mysteriously
+          did nothing on the other machine.
+
+          Inside the existing permission card on purpose: it is the second half
+          of the same question ("may we interrupt you, and where?"), and none of
+          the five coupled breakpoint gates is involved.
+
+          THE CLICK IS THE MECHANISM, exactly as for the permission button
+          above: `pushManager.subscribe()` triggers the browser's prompt, a
+          denial is effectively permanent, and this component contains no code
+          that could reach it on mount.
+        */}
+        {showsPushChannel && (
+          <Box sx={{ mb: 2 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={pushState === 'subscribed'}
+                  disabled={push.switchDisabled || isChangingPush || isSaving}
+                  onChange={(_event, checked) =>
+                    checked ? onSubscribePush?.() : onUnsubscribePush?.()
+                  }
+                  slotProps={{
+                    input: { 'aria-describedby': `${idPrefix}-push-helper` },
+                  }}
+                />
+              }
+              label="Push on this device"
+            />
+            <Typography
+              id={`${idPrefix}-push-helper`}
+              variant="body2"
+              color="text.secondary"
+              sx={{ ml: 0.5 }}
+            >
+              {isChangingPush ? 'Waiting for your browser…' : push.helper}
+            </Typography>
+          </Box>
+        )}
+
         <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
           {events.map((event, index) => {
             const descriptionId = `${idPrefix}-${event.key}-description`;
@@ -506,8 +661,14 @@ export function NotificationSettings({
                     {event.channels.map((channel) => {
                       const checked = isEventChannelEnabled(event, channel, preferences);
                       const isBrowser = channel === 'browser';
-                      const channelDisabled = isBrowser && browser.disabled;
-                      const note = isBrowser ? browser.note : null;
+                      const isPush = channel === 'push';
+                      // Each channel answers for itself. Push is disabled by a
+                      // state of its own — an unsubscribed device, a server with
+                      // no VAPID keys — which is independent of whether the
+                      // browser has granted notification permission.
+                      const channelDisabled =
+                        (isBrowser && browser.disabled) || (isPush && push.disabled);
+                      const note = isBrowser ? browser.note : isPush ? push.note : null;
                       const noteId = note ? `${idPrefix}-${event.key}-${channel}-note` : undefined;
 
                       return (

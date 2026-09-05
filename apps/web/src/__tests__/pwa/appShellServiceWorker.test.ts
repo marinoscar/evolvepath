@@ -134,3 +134,77 @@ describe('appShellServiceWorker', () => {
     expect(sw).toContain('key !== CACHE_NAME');
   });
 });
+
+// =============================================================================
+// Web push handlers (#64, epic E12)
+// =============================================================================
+//
+// The worker is a generated string, so these assert on its SOURCE rather than
+// on its behaviour. That is a real limit and worth naming: it catches a handler
+// that was deleted or a guard that was removed, not one that is subtly wrong.
+// The behavioural coverage is the e2e (E12-07), which drives a real browser.
+//
+// What is asserted here is exactly what a reviewer would otherwise have to
+// notice by eye — the three handlers exist, the deep link is validated before
+// it is opened, and the dismissal fetch carries no credentials.
+
+describe('the worker’s push handlers (#64)', () => {
+  const worker = () => generate(['assets/index-abc123.js']);
+
+  it.each(['push', 'notificationclick', 'notificationclose'])(
+    'registers a %s handler',
+    (event) => {
+      expect(worker()).toContain(`addEventListener('${event}'`);
+    },
+  );
+
+  it('shows a notification rather than only logging one', () => {
+    expect(worker()).toContain('self.registration.showNotification');
+  });
+
+  // The server validates on the way in; the worker validates on the way out. A
+  // push payload arrives over a channel this app does not control end to end,
+  // and `openWindow` with an attacker-chosen URL is a redirect out of the app.
+  it('refuses a link that is not root-relative before opening it', () => {
+    const source = worker();
+
+    expect(source).toContain('function isInternalPath');
+    expect(source).toContain("value.startsWith('/')");
+    expect(source).toContain("!value.startsWith('//')");
+    expect(source).toContain('if (!isInternalPath(link)) return;');
+  });
+
+  // A duplicate tab loses whatever the user had on screen.
+  it('reuses an open tab before opening a new one', () => {
+    const source = worker();
+
+    expect(source).toContain('matchAll');
+    expect(source.indexOf('client.focus()')).toBeLessThan(
+      source.indexOf('self.clients.openWindow'),
+    );
+  });
+
+  it('reports a dismissal to the public route, with no credentials', () => {
+    const source = worker();
+
+    expect(source).toContain('/api/notifications/interactions/dismissed');
+    expect(source).toContain('sentInteractionId');
+    expect(source).not.toContain('Authorization');
+  });
+
+  // A re-send about the same moment must replace the banner, not stack beside it.
+  it('passes the decision id through as the notification tag', () => {
+    expect(worker()).toContain('tag: typeof payload.tag');
+  });
+
+  it('drops a malformed payload rather than showing "undefined"', () => {
+    const source = worker();
+
+    expect(source).toContain("typeof payload.title !== 'string'");
+  });
+
+  // The push handlers must not have disturbed the property #58 exists for.
+  it('still refuses to cache anything under /api', () => {
+    expect(worker()).toContain("url.pathname.startsWith('/api/')");
+  });
+});

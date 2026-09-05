@@ -110,7 +110,46 @@ export interface DataTableSettings {
  * `components/settings/NotificationSettings.tsx`, which falls back to the raw
  * key rather than rendering a blank label.
  */
-export type NotificationChannel = 'email' | 'browser';
+export type NotificationChannel = 'email' | 'browser' | 'push';
+
+/**
+ * What this browser can do about push, right now (#64, epic E12).
+ *
+ * FIVE STATES, not a boolean, because each of the three "no" cases needs a
+ * different sentence and only one of them is the user's to fix:
+ *
+ *   `unsupported`  — no `PushManager` (an old browser, or a desktop Safari
+ *                    before 16.4). Nothing anybody can do here.
+ *   `unconfigured` — the SERVER has no VAPID keys. The user cannot fix this and
+ *                    should not be told to try; an operator can.
+ *   `denied`       — the user blocked notifications for this site. Recoverable,
+ *                    but only in browser settings — this app cannot re-prompt.
+ *   `unsubscribed` — everything is ready and they simply have not turned it on.
+ *   `subscribed`   — on.
+ *
+ * Collapsing these to `canSubscribe: boolean` is exactly how a settings page
+ * ends up saying "turn this on" to somebody for whom it cannot be turned on.
+ */
+export type PushState =
+  | 'unsupported'
+  | 'unconfigured'
+  | 'denied'
+  | 'unsubscribed'
+  | 'subscribed';
+
+/**
+ * One device, as the API is willing to describe it.
+ *
+ * `endpointHost`, never the endpoint — a full push endpoint is a bearer
+ * capability for that device.
+ */
+export interface PushSubscriptionSummary {
+  id: string;
+  endpointHost: string;
+  userAgent: string | null;
+  createdAt: string;
+  lastSeenAt: string;
+}
 
 /**
  * One entry of the event registry, as served by `GET /api/notifications/events`.

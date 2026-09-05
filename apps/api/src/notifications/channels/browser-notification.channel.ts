@@ -381,16 +381,40 @@ export class BrowserNotificationChannel implements NotificationChannelSender {
   ):
     | { ok: true; content: BrowserNotificationContent }
     | { ok: false; error: string } {
+    const result = renderBrowserContent(context);
+    if (result.ok && result.usedFallback) {
+      this.logger.warn(
+        `No browser template registered for '${context.event.key}'; ` +
+          `falling back to the registry's label and description.`,
+      );
+    }
+    return result;
+  }
+}
+
+/**
+ * Render one event's payload into what the user sees — extracted from the
+ * channel so the PUSH channel renders the identical thing (issue #64).
+ *
+ * One template, two transports, on purpose. A user with a phone and an open tab
+ * must not read two different sentences about the same moment, and the way to
+ * guarantee that is not "keep the two templates in sync" but "there is one".
+ * Pure: it logs nothing and touches nothing, which is why the channel above
+ * still owns the fallback warning.
+ */
+export function renderBrowserContent(
+  context: NotificationDispatchContext,
+):
+  | { ok: true; content: BrowserNotificationContent; usedFallback: boolean }
+  | { ok: false; error: string } {
+  {
     const { event, data } = context;
     const template = EVENT_BROWSER_TEMPLATES[event.key];
 
     if (!template) {
-      this.logger.warn(
-        `No browser template registered for '${event.key}'; ` +
-          `falling back to the registry's label and description.`,
-      );
       return {
         ok: true,
+        usedFallback: true,
         content: { title: event.label, body: event.description },
       };
     }
@@ -403,7 +427,7 @@ export class BrowserNotificationChannel implements NotificationChannelSender {
       // a caller's typo throws a `TypeError` at runtime, and letting that
       // propagate would violate #125's containment rule — a bad payload would
       // take down the role change that triggered it.
-      return { ok: true, content: template(data as never) };
+      return { ok: true, usedFallback: false, content: template(data as never) };
     } catch (err) {
       return {
         ok: false,

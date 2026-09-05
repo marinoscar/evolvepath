@@ -569,6 +569,25 @@ export const handlers = [
     });
   }),
 
+  // Web push (#64, epic E12). Canned, deliberately: nothing in the web app
+  // reasons about these responses — it hands the browser's own subscription
+  // object over and reads one key back.
+  http.get(`${API_BASE}/notifications/push/public-key`, () => {
+    return HttpResponse.json({ data: { publicKey: null } });
+  }),
+
+  http.get(`${API_BASE}/notifications/push-subscriptions`, () => {
+    return HttpResponse.json({ data: { items: [] } });
+  }),
+
+  http.post(`${API_BASE}/notifications/push-subscriptions`, () => {
+    return HttpResponse.json({ data: { id: 'push-sub-1' } }, { status: 201 });
+  }),
+
+  http.delete(`${API_BASE}/notifications/push-subscriptions`, () => {
+    return new HttpResponse(null, { status: 204 });
+  }),
+
   // The EvolvePath product domain (#56, epic #33), in its own file: a stateful
   // store with the transition matrix enforced, rather than canned responses.
   ...pathHandlers,

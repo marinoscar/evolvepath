@@ -1887,6 +1887,78 @@ exactly this reason. Recorded here and in
 
 ---
 
+## 15. Web Push (VAPID) and the One Public Route
+
+*Epic E12, issue #64. Full design rationale in
+[`docs/specs/coaching-notifications.md`](specs/coaching-notifications.md).*
+
+### VAPID key handling
+
+| Value | Where it lives | Who sees it |
+|---|---|---|
+| `WEB_PUSH_PUBLIC_KEY` | environment | every signed-in user, via `GET /notifications/push/public-key` — a browser cannot subscribe without it |
+| `WEB_PUSH_PRIVATE_KEY` | environment | nobody. Never logged, never returned by any endpoint, never sent to a browser |
+| `WEB_PUSH_SUBJECT` | environment | the push service |
+
+All three are **optional**. Without them the push channel reports no address and
+is skipped; users still receive notifications in the app's inbox and live over
+SSE. `WebPushProvider` is the only module that touches the private key, and it
+calls `setVapidDetails` once at construction — a malformed pair logs an error
+and leaves push inactive rather than failing the whole API at boot.
+
+Unlike `SECRETS_ENCRYPTION_KEY`, these keys have **no rotation runbook**, because
+rotating them is not a routine operation: every browser subscribed against the
+old public key, so a rotation silently invalidates every subscription and every
+user has to re-enable push on every device.
+
+### A push endpoint is a bearer capability
+
+Anyone holding a subscription's `endpoint` can push to that device. It is
+therefore treated as a secret in three places:
+
+- `GET /notifications/push-subscriptions` returns the endpoint **host**, never
+  the endpoint, and never the `p256dh`/`auth` keys.
+- Log lines carry the host only, never the full endpoint.
+- `DELETE` takes the endpoint in the **body**. A 2 KB capability URL in a query
+  string lands in access logs and browser history.
+
+The `endpoint` column is unique **across users**, not per user: a browser profile
+handed to another account re-owns the endpoint, so the previous owner's coaching
+cannot keep reaching a device they no longer have.
+
+### `POST /notifications/interactions/dismissed` — public, and why
+
+This is the only unauthenticated write in epic E12.
+
+A dismissal happens with **no page open**: `notificationclose` fires in a service
+worker that may be the only thing running, so there is no session and no bearer
+token to present. The two alternatives are worse:
+
+- **Never record dismissals.** This loses the single clearest signal a user gives
+  about unwanted messages — the signal the fatigue reduction (PRD §61) is built
+  on.
+- **Keep a credential in the service worker.** A long-lived token in worker
+  storage is a credential in the least protected place in the browser, readable
+  by any XSS on the origin and outliving every session.
+
+The capability is a v4 UUID and what it can do is deliberately almost nothing:
+
+- It marks **one** already-sent notification as dismissed.
+- It reads nothing back. The response is **204 in every case**, including for an
+  id that does not exist — a different answer for a real id would make this an
+  oracle for guessing them.
+- It cannot be enumerated: 122 bits of randomness per id.
+- Replaying it writes one more row saying the same thing.
+- It is throttled to 30 requests per minute per address, in-process, the same
+  shape as the AI test throttle.
+
+### The service worker validates links twice
+
+`sanitizeLink` validates a link as root-relative before it is stored, and the
+worker validates it **again** before `clients.openWindow`. A push payload reaches
+the worker over a channel this application does not control end to end, and
+`openWindow` with an attacker-chosen URL is a redirect out of the application.
+
 ## Conclusion
 
 This security architecture provides defense-in-depth through multiple layers:
