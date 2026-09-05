@@ -340,6 +340,36 @@ Read it before changing anything under `apps/api/src/path/` or
 fails if the schema grows an enum member or a table the document does not
 mention, so the two cannot drift silently.
 
+## The Family domain
+
+Family members, rituals, recurrence materialization, the behaviour lint and the
+planned-versus-kept summary have their own written contract in
+[`docs/specs/family-domain.md`](docs/specs/family-domain.md): the privacy
+boundary and the four places that enforce it, the recurrence rules (weekday
+numbering, Monday-start weeks, DST), the 7-day horizon and the idempotency
+index, the cancel-not-delete rule on edit, the lint's three rules, the summary's
+count semantics, the no-score rule, and the rejected alternatives.
+
+Read it before changing anything under `apps/api/src/family/` or
+`apps/web/src/components/family/`.
+`apps/api/test/docs/family-domain-doc.spec.ts` fails if a constant, a prompt
+version or the coach's sentence changes without the document changing with it.
+
+Three rules that are easy to break and expensive to rediscover:
+
+- **A family member record is five fields, and there is no sixth.** PRD §33 fixes
+  it; VISION §50 explains it — the people in it never consented to being modeled.
+  The schema, a `.strict()` response schema, an explicit mapper projection and a
+  sorted-equality test all enforce it, and audit rows carry the relationship and
+  nothing else.
+- **Editing a ritual cancels only the slots the new rule dropped.** Cancelling
+  everything and re-materializing looks right and fails silently: the unique
+  `(ritual_id, scheduled_start)` index turns each re-created slot into a
+  `skipped`, so unticking Sunday would leave Tuesday and Thursday cancelled.
+- **There is no family score, ratio or percentage, anywhere.** VISION §12 and
+  PRD §105. `apps/api/src/family/no-score.guard.spec.ts` fails the build if one
+  reaches a family schema, DTO or `/api/family` OpenAPI path.
+
 ## Architecture Principles
 
 1. **Separation of Concerns**: UI handles presentation only; API handles all business logic and authorization
