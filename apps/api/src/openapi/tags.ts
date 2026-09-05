@@ -219,6 +219,18 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
     ],
   },
   {
+    name: 'Coaching',
+    tags: [
+      {
+        name: 'Coach',
+        description:
+          'Conversations and one coaching turn. POST /coach/messages is ALWAYS a 201: a ' +
+          'provider failure, or output naming things the user does not have, produces a ' +
+          'readable message plus `degraded: true` rather than an error (PRD §120).',
+      },
+    ],
+  },
+  {
     name: 'Storage',
     tags: [
       {
