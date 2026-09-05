@@ -628,3 +628,59 @@ read as the app being broken rather than as the app being careful.
   only missing piece.
 - Editing or deleting individual messages, renaming a conversation, markdown in
   replies, conversation search.
+
+---
+
+## 7. The memory settings page
+
+*(E06-08, issue #90 — `/settings/ai-memory`)*
+
+### A registry card, not a tab
+
+`USER_SETTINGS_SECTIONS`'s AI section gains an **AI Memory** card, per
+CLAUDE.md's settings rules. "What does the coach remember about me?" is a
+different question from "which key pays for it" — a destination gate is about
+reachability, a tab gate is about content, and these are not two views of one
+question. The card carries **no `permission`**: an insight is the caller's own
+row and the controller answers 404 for anyone else's, so an invented permission
+string here would be exactly the drift rule 3 warns about.
+
+### Excluded insights are listed
+
+This page is the one place a `doNotUse` insight must remain visible. "Don't use
+this for coaching" hides a sentence from the coach, **not** from the person it
+is about — so `useMemoryInsights` always asks with `includeDoNotUse: true`.
+
+### Confidence is words
+
+`likely` (≥ 0.7), `possible` (≥ 0.4), `tentative` below. **Never a number and
+never a percentage.** "0.72" invites the reader to treat a heuristic as a
+measurement and to argue with the second decimal place; "likely" says the only
+thing the number actually supports. VISION §12's objection to scores applies
+here as much as it does to the family summary.
+
+### The switch carries the statement
+
+`aria-label` is `Use "<statement>" for coaching`. A screen-reader user moving
+through eight rows of identical "Use for coaching" toggles has no way to tell
+which sentence each one governs.
+
+### Forget asks first
+
+The server delete is hard, so the dialog says "This can't be undone. The coach
+keeps no copy." That sentence is the difference between an informed choice and
+a surprise.
+
+### Every proposer outcome is copy
+
+`insufficient_data` → "Not enough history yet…", `ai_unavailable` → "The coach
+is unavailable right now…", HTTP 429 → "Insights were proposed recently. Try
+again in a few minutes." The throttle branch reads `ApiError.status`, not the
+message text — a copy change on the server would otherwise silently turn it
+into the generic line.
+
+### Layout
+
+`MemoryInsightRow` uses `useMediaQuery(down('sm'))` to move its actions into an
+overflow menu on phones. Page-local, like `CoachPage`'s — the five coupled
+breakpoint gates are untouched.

@@ -640,6 +640,8 @@ indistinguishable from "no model output". `invocationId` is never on the wire.
 What the coach remembers, and PRD §85's controls over it. `userConfirmed`
 ("this is true") and `doNotUse` ("never bring this up") are two different
 questions — an insight can be both true and forbidden.
+The user-facing surface is `/settings/ai-memory`, declared as a card in
+`USER_SETTINGS_SECTIONS` — a destination, never a tab on the key page.
 - `GET /api/memory-insights?category=&includeDoNotUse=` - Ordered by category, confirmed first, then confidence
 - `POST /api/memory-insights` - Tell the coach something yourself; stored confirmed at full confidence
 - `PATCH /api/memory-insights/{id}` - Reword it. Editing an AI guess **confirms** it

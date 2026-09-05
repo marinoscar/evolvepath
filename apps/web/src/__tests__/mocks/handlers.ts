@@ -2,6 +2,7 @@ import { http, HttpResponse } from 'msw';
 
 import { coachHandlers } from './coachHandlers';
 import { familyHandlers } from './familyHandlers';
+import { memoryHandlers } from './memoryHandlers';
 import { pathHandlers } from './pathHandlers';
 import { todayHandlers } from './todayHandlers';
 
@@ -630,4 +631,5 @@ export const handlers = [
   ...todayHandlers,
   ...familyHandlers,
   ...coachHandlers,
+  ...memoryHandlers,
 ];

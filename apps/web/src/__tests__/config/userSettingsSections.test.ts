@@ -79,9 +79,10 @@ describe('USER_SETTINGS_SECTIONS - Notifications card (issue #126)', () => {
 describe('USER_SETTINGS_SECTIONS - OpenAI API Key card (issue #28)', () => {
   const aiSection = () => USER_SETTINGS_SECTIONS.find((section) => section.label === 'AI');
 
-  it('declares exactly one card, in its own AI group', () => {
+  it('leads its AI group', () => {
     expect(aiSection()).toBeDefined();
-    expect(aiSection()!.cards).toHaveLength(1);
+    // The key comes first: without one the coach cannot run, so the card that
+    // unlocks the app sits above the card that inspects what it remembered.
     expect(aiSection()!.cards[0]!.title).toBe('OpenAI API Key');
   });
 
@@ -100,5 +101,43 @@ describe('USER_SETTINGS_SECTIONS - OpenAI API Key card (issue #28)', () => {
   it('sits above Security, because supplying a key is mandatory and a PAT is not', () => {
     const labels = USER_SETTINGS_SECTIONS.map((section) => section.label);
     expect(labels.indexOf('AI')).toBeLessThan(labels.indexOf('Security'));
+  });
+});
+
+/**
+ * The AI Memory card (issue #90, epic E06).
+ *
+ * A REGISTRY ENTRY, not a tab on the key page. CLAUDE.md's settings rules make
+ * the distinction: a destination gate is about reachability and a tab gate is
+ * about content, and "what does the coach remember about me?" is a different
+ * question from "which key pays for it" — not a second view of the same one.
+ */
+describe('USER_SETTINGS_SECTIONS - AI Memory card (issue #90)', () => {
+  const memoryCard = () =>
+    USER_SETTINGS_SECTIONS.find((section) => section.label === 'AI')!.cards.find(
+      (card) => card.title === 'AI Memory',
+    );
+
+  it('is declared in the AI section', () => {
+    expect(memoryCard()).toBeDefined();
+  });
+
+  it('points at /settings/ai-memory with no permission', () => {
+    // Own resource: the controller answers 404 for anyone else's insight
+    // rather than gating on a role, so an invented permission here would be
+    // exactly the drift CLAUDE.md rule 3 warns about.
+    expect(memoryCard()!.path).toBe('/settings/ai-memory');
+    expect(memoryCard()!.permission).toBeUndefined();
+  });
+
+  it('resolves the AppBar title for its route from the registry', () => {
+    expect(
+      settingsPageTitle(
+        USER_SETTINGS_SECTIONS,
+        USER_HUB_PATH,
+        USER_HUB_TITLE,
+        '/settings/ai-memory',
+      ),
+    ).toBe('AI Memory');
   });
 });

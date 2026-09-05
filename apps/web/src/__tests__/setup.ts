@@ -4,6 +4,7 @@ import { afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { server } from './mocks/server';
 import { resetCoachState } from './mocks/coachHandlers';
 import { resetFamilyState } from './mocks/familyHandlers';
+import { resetMemoryState } from './mocks/memoryHandlers';
 import { resetPathState } from './mocks/pathHandlers';
 import { resetTodayState } from './mocks/todayHandlers';
 
@@ -230,6 +231,7 @@ afterEach(() => {
   resetPathState();
   resetFamilyState();
   resetCoachState();
+  resetMemoryState();
   resetTodayState();
   resetViewportWidth();
   mediaQueryListRegistry.clear();
