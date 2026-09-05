@@ -56,6 +56,9 @@ model User {
   // Onboarding and the typed preferences the product reasons about (epic E04)
   profile UserProfile? @relation("UserProfile")
 
+  // The Today screen (epic E05)
+  dailyCheckIns DailyCheckIn[] @relation("UserDailyCheckIns")
+
   @@map("users")
 }
 
@@ -840,6 +843,44 @@ model AiInvocation {
   /// "What is failing right now?" — the operational query.
   @@index([status, createdAt])
   @@map("ai_invocations")
+}
+
+// =============================================================================
+// Daily check-in (issue #43, epic E05)
+// =============================================================================
+//
+// PRD §73: an optional one-tap "How does today feel?" that "can alter suggested
+// action size". One row per user per LOCAL day, upserted — the question is
+// asked once and the answer can be changed, so a history of taps would be noise.
+//
+// `dateLocal` is TEXT, not `@db.Date`, and that is deliberate: it is a label in
+// the user's own timezone, and Prisma's `Date` mapping round-trips through UTC —
+// which would file a 19:00 check-in in Costa Rica under the following day.
+// =============================================================================
+
+enum CheckInFeel {
+  NORMAL
+  PACKED
+  LOW_ENERGY
+  UNEXPECTED_PROBLEM
+}
+
+model DailyCheckIn {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  /// `YYYY-MM-DD` in the user's timezone. See the header for why it is text.
+  dateLocal String      @map("date_local")
+  feel      CheckInFeel
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation("UserDailyCheckIns", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// One answer per day. This constraint IS the upsert.
+  @@unique([userId, dateLocal])
+  @@map("daily_check_ins")
 }
 
 // =============================================================================
