@@ -1056,6 +1056,63 @@ npm run test:headed
 npx playwright test auth.spec.ts
 ```
 
+### Two browser projects, not one viewport
+
+PRD §123 makes mobile the **primary** platform, so the suite runs every spec on
+two projects:
+
+| Project | Device | What only it exercises |
+|---|---|---|
+| `chromium` | Desktop Chrome | `NavigationRail`, the two-column outcome detail layout |
+| `mobile-chromium` | Pixel 7 (412px) | `BottomNav`, the drill-down top bar, full-screen dialogs |
+
+These are **different components**, not one component at two sizes — the shell
+mounts the rail at `sm` and up and the bottom bar below it — so a desktop-only
+run would never load half the navigation. Specs that assert something existing
+in one class only guard with
+`test.skip(testInfo.project.name !== '…', 'reason')`.
+
+```bash
+# Both projects (the default)
+npx playwright test
+
+# One of them
+npx playwright test --project=mobile-chromium
+```
+
+### Accessibility assertions
+
+`@axe-core/playwright` runs on every screen the E02 specs visit. The helper in
+`tests/e2e/helpers/path.helper.ts` filters to **serious and critical** impacts
+only, deliberately: a blanket "zero violations" gate over a third-party
+component library fails on `moderate` findings nobody in this repo can fix, and
+a gate that cannot be satisfied gets disabled — at which point it catches
+nothing at all. Failures print the rule, its impact and the offending selectors.
+
+A page object must come from `browser.newContext()`; `@axe-core/playwright`
+refuses one created by a bare `browser.newPage()`.
+
+### Running the E02 specs
+
+E02 (epic #33) ships `navigation.spec.ts` and `path.spec.ts`. They need the
+**fake OpenAI provider**, because the AI-key gate stands in front of every
+screen — `playwright.config.ts`'s `webServer` already includes
+`fake-openai.compose.yml` for exactly this reason, and `loginAsTestUser`
+defaults `withAiKey: true` so a spec lands on the page it is about rather than
+on `/setup/ai-key`.
+
+```bash
+cd tests/e2e
+npm install && npx playwright install chromium
+npx playwright test navigation.spec.ts path.spec.ts
+```
+
+`path.spec.ts` is a `test.describe.serial` block sharing one page: it is one
+story — build a Path, change the plan, keep a commitment — and every step's
+meaning depends on the previous one having happened. Each run creates a fresh
+user (`uniqueEmail`), so parallel workers and repeat runs never share rows and
+the suite has no leftover-state dependence.
+
 ### Security Note
 
 The test authentication endpoint (`/api/auth/test/login`) and the test login page (`/testing/login`) are **completely disabled in production** through multiple security layers. See [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md#13-test-authentication-development-only) for details.

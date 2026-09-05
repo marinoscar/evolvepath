@@ -16,6 +16,15 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    // PRD §123 makes mobile the PRIMARY platform, so the phone treatment is a
+    // first-class project rather than a viewport tweak inside one spec. Pixel
+    // 7 is 412px wide — below the `sm` (600px) boundary — so this project is
+    // what actually exercises the bottom bar, the drill-down top bar and the
+    // full-screen dialogs. A desktop-only suite would never load any of them.
+    {
+      name: 'mobile-chromium',
+      use: { ...devices['Pixel 7'] },
+    },
   ],
   // Start the local stack if it is not already running.
   //

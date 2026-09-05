@@ -72,6 +72,28 @@ Endpoints returning lists support pagination with the following query parameters
 
 ---
 
+### Product resources and ownership
+
+Every EvolvePath resource — outcomes, plans, plan versions, routines,
+commitments, evidence, reflections — belongs to exactly one user, and the API
+answers **404 for a resource that is not yours**, byte-identical to one that
+never existed.
+
+**This is deliberate, and it is not a 403.** A 403 confirms that a guessed id
+is real; a 404 tells an attacker nothing they did not already know. The two
+responses come from one code path so they cannot diverge, and no client is
+expected to distinguish them — the web app renders a "not found" screen for
+both rather than redirecting, because a redirect would make a mistyped URL look
+like a working one.
+
+The corollary: **no client makes an authorization decision** about these
+resources. There is nothing to check before requesting one, and nothing a stale
+client could get wrong.
+
+See [`docs/specs/domain-model.md`](specs/domain-model.md) for the full contract.
+
+---
+
 ## Endpoints
 
 ### Authentication

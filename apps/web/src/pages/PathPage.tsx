@@ -94,6 +94,7 @@ export default function PathPage() {
               <Switch
                 checked={showArchived}
                 onChange={(event) => setShowArchived(event.target.checked)}
+                data-testid="show-archived"
               />
             }
             label="Show archived"

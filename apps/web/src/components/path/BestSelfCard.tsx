@@ -40,7 +40,12 @@ export function BestSelfCard({ profile, onEdit }: BestSelfCardProps) {
           <Typography variant="overline" color="text.secondary">
             Best Self
           </Typography>
-          <Button size="small" startIcon={<EditIcon />} onClick={onEdit}>
+          <Button
+            size="small"
+            startIcon={<EditIcon />}
+            onClick={onEdit}
+            data-testid="best-self-edit"
+          >
             Edit Best Self
           </Button>
         </Stack>

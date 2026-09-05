@@ -249,6 +249,7 @@ export default function OutcomeDetailPage() {
             setMenuAnchor(null);
             setArchiveOpen(true);
           }}
+          data-testid="outcome-archive"
         >
           Archive
         </MenuItem>

@@ -110,6 +110,7 @@ export function CommitmentList({
                   color={STATUS_COLORS[commitment.status]}
                   aria-haspopup="menu"
                   aria-label={`Change status of ${commitment.title}. Currently ${STATUS_LABELS[commitment.status]}`}
+                  data-testid={`commitment-status-${commitment.id}`}
                   disabled={disabled || commitment.allowedTransitions.length === 0}
                   onClick={(event) =>
                     commitment.allowedTransitions.length > 0 &&
@@ -121,7 +122,13 @@ export function CommitmentList({
           </Box>
         )}
 
-        <Button size="small" startIcon={<AddIcon />} onClick={onAdd} disabled={disabled}>
+        <Button
+          size="small"
+          startIcon={<AddIcon />}
+          onClick={onAdd}
+          disabled={disabled}
+          data-testid="add-commitment"
+        >
           Add commitment
         </Button>
       </CardContent>

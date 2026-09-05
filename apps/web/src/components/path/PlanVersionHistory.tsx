@@ -142,7 +142,7 @@ export function PlanVersionHistory({
 
               <AccordionDetails>
                 {loading === version.version ? (
-                  <CircularProgress size={20} />
+                  <CircularProgress size={20} aria-label="Loading this version's routines" />
                 ) : (
                   <Box>
                     {routines.length === 0 ? (
@@ -164,6 +164,7 @@ export function PlanVersionHistory({
                           variant="contained"
                           disabled={disabled}
                           onClick={() => onActivate(version.version)}
+                          data-testid={`activate-version-${version.version}`}
                         >
                           Activate v{version.version}
                         </Button>
