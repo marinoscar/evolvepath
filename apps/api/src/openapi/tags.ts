@@ -256,6 +256,13 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
     name: 'Health',
     tags: [
       {
+        name: 'Health Domain',
+        description:
+          'Nutrition behaviours and optional body-weight tracking (PRD §46, §47). Behaviours, ' +
+          'not calories: there is no macro, no food database and no goal weight here by design. ' +
+          'The weight response carries a trend and deliberately no per-day judgment.',
+      },
+      {
         name: 'Workouts',
         description:
           'Structured training: the exercise catalog, the AI program builder and its ' +

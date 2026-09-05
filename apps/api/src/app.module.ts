@@ -24,6 +24,7 @@ import { PathModule } from './path/path.module';
 import { CommitmentsModule } from './commitments/commitments.module';
 import { TodayModule } from './today/today.module';
 import { WorkoutsModule } from './workouts/workouts.module';
+import { HealthDomainModule } from './health-domain/health-domain.module';
 import { CoachModule } from './coach/coach.module';
 import { SafetyModule } from './coach/safety/safety.module';
 import { FamilyModule } from './family/family.module';
@@ -103,6 +104,7 @@ import configuration from './config/configuration';
     CommitmentsModule,
     TodayModule,
     WorkoutsModule,
+    HealthDomainModule,
 
     // The Family domain (epic E08): members, rituals and their materialized
     // occurrences. Separate from PathModule because a ritual is a rule the

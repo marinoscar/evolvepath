@@ -38,6 +38,15 @@ export const healthBaselineSchema = z.object({
   equipment: z.array(z.string().max(60)).max(20),
   preferences: z.string().max(500).optional(),
   limitations: z.string().max(500).optional(),
+  /**
+   * Up to three PRD §46 eating habits the user picked at onboarding (E09-10).
+   *
+   * Stored as keys, not copy: the registry owns the wording, and a stored
+   * sentence would go stale the moment the copy improved. Nothing is scheduled
+   * from these automatically — they appear on `/health` with an "add to this
+   * week" button, which keeps E04's guardrails untouched.
+   */
+  nutritionBehaviors: z.array(z.string().max(60)).max(3).optional(),
 });
 
 export type HealthBaseline = z.infer<typeof healthBaselineSchema>;
