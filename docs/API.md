@@ -3324,6 +3324,106 @@ Readiness check - includes database connectivity test.
 
 ---
 
+### Coach
+
+The AI coach (PRD §14.3, §66). Every reply is a validated structured object,
+never free prose (PRD §16).
+
+**`POST /api/coach/messages` is always a 201.** A provider timeout, a rate
+limit, a missing key, a schema violation, or a reply naming things the user
+does not have all produce a readable coach message plus `degraded: true` — PRD
+§120's promise is "the screen still works", not "the API fails quickly".
+
+A conversation that is not yours answers **404, never 403**.
+
+#### Send a message
+
+```http
+POST /api/coach/messages
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+  "conversationId": "0a44…",
+  "text": "My schedule changed. I can't work out Wednesday anymore.",
+  "attachmentIds": []
+}
+```
+
+`conversationId` is optional — omitting it starts a thread titled from the
+first 60 characters of `text`.
+
+```json
+{
+  "conversationId": "0a44…",
+  "userMessage": { "id": "…", "role": "USER", "content": "My schedule changed…", "structured": null, "safety": null, "attachmentIds": [], "createdAt": "…" },
+  "coachMessage": {
+    "id": "…",
+    "role": "COACH",
+    "content": "Wednesday evenings keep slipping. Want to move it to Saturday morning?",
+    "structured": {
+      "intervention_type": "PLAN_CHALLENGE",
+      "reasoning_summary": "Wednesday has been missed three weeks running.",
+      "user_message": "Wednesday evenings keep slipping…",
+      "recommended_action": null,
+      "fallback_action": null,
+      "proposal": { "kind": "plan_change", "planId": "…", "summary": "…", "changes": [ … ], "proposalId": "6f0d…" },
+      "friction_question": null
+    },
+    "safety": { "decision": "allow", "category": "none" },
+    "attachmentIds": [],
+    "createdAt": "…"
+  },
+  "proposal": { "id": "6f0d…", "status": "PROPOSED", … },
+  "degraded": false
+}
+```
+
+Notes on the shape:
+
+- `structured` is **null** on a degraded turn. A template fallback is
+  deliberately indistinguishable from "no model output", because that is what
+  it is — a client that could tell them apart would start rendering a fake
+  intervention type.
+- `reasoning_summary` is what "Why this?" shows. It is a summary, never chain of
+  thought (PRD §16, §88).
+- A `proposal` creates exactly one `PlanChangeProposal` and **zero**
+  `PlanVersion` rows. Accepting it is a separate call — see **Plan Proposals**.
+- `safety` carries only `decision`, `category` and `userFacingNote`. The matched
+  rule id and prompt version are audit fields and stay server-side.
+- `invocationId` is never on the wire.
+
+**Error Cases:**
+- 400 Bad Request - `attachment_not_found` (not yours, or not `ready`), or an invalid body
+- 404 Not Found - no such conversation of yours
+
+#### Conversations
+
+```http
+POST   /api/coach/conversations            { "title": "Schedule change" }  → 201
+GET    /api/coach/conversations?limit=20&cursor=<id>                        → 200
+GET    /api/coach/conversations/{id}/messages?limit=50&before=<messageId>   → 200
+DELETE /api/coach/conversations/{id}                                        → 204
+```
+
+The list is ordered by `lastMessageAt` descending. Messages come back ascending
+by time and paginate upward with `before`.
+
+Deleting a conversation removes its messages (PRD §84). A proposal created from
+one of them survives with `sourceMessageId: null` — the record of a plan change
+the user was offered is not part of the conversation.
+
+#### Suggested prompts
+
+```http
+GET /api/coach/suggested-prompts
+```
+
+The seven PRD §66 chips, in order. **The order is the spec**: they run from
+planning through friction to re-deciding.
+
+---
+
 ### Plan Proposals
 
 A proposed change to a plan, waiting on a human (PRD §15). **Accepting one is

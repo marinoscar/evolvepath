@@ -336,3 +336,101 @@ larger thing to own than a `WHERE` clause.
   the same service keeps the invariants together without the ceremony.
 - **403 for a foreign proposal.** The repo answers 404 everywhere
   (`path/owned-resource.ts`): a 403 confirms the id exists.
+
+---
+
+## 4. The coaching contract and one turn
+
+*(E06-03, issue #70 — `apps/api/src/coach/`)*
+
+### The reply is an object, not prose
+
+PRD §16. `coachReplySchema` (`contracts/coach-reply.contract.ts`) is the whole
+of what a coach reply may be. Two fields carry most of the weight:
+
+- **`reasoning_summary`** is what "Why this?" shows: one or two sentences about
+  *why this action, from the context*. It is bounded at 400 characters
+  specifically so it cannot quietly become a transcript of the model's working
+  — chain of thought is never stored and never shown (PRD §16, §88).
+- **`intervention_type`** makes every reply classifiable against PRD §26's
+  ladder and VISION §21's modes. E11 asks which kinds of coaching actually move
+  behaviour, and that question is only answerable if each reply labels itself.
+
+Everything optional is `.nullable()`, never `.optional()`: the gateway emits
+`strict: true` schemas where every declared property is required, and
+`toOpenAiStrictSchema` turns an optional property into a nullable required one.
+`.nullable()` is the shape that round-trips losslessly.
+
+### The order of a turn
+
+1. Resolve the conversation (creating one titled from the first 60 characters
+   of the message — asking a model to name the thread would put a second AI
+   call on the critical path of a screen whose promise is that it works when
+   the model does not).
+2. Validate attachments against the caller's own ready `storage_objects`.
+3. Persist the USER message.
+4. **Safety** (`SafetyPolicyService.evaluate`). A `redirect` returns the
+   professional-care copy and **never calls the coach persona**.
+5. Assemble the context (§1) and the last 10 turns as plain text — never
+   `structured`, never the whole thread (PRD §17 Tier 4).
+6. Invoke the `coach` persona with `coach.v1` and the safety decision.
+7. **Guard** (`coach-output-guard.ts`).
+8. A `proposal` becomes a `PlanChangeProposal` row (§3), pointed at the coach
+   message so accepting it can drop a SYSTEM notice back into the thread.
+
+Steps 4, 7 and 8 exist to be hard to remove, and each is asserted by a test:
+
+- **Safety runs before the model**, so the copy a user in trouble reads is a
+  constant that still answers when the provider is down.
+- **The guard runs before the user.**
+- **A proposal is a row, not a change.**
+
+### The guard
+
+PRD §90 names the failures: a fabricated completion, an incorrect active plan,
+an invented schedule conflict. `guardCoachOutput` checks that every id in the
+reply — `recommended_action.commitmentId`, `proposal.planId`, every
+`changes[].target.id` — belongs to this user and to that plan, and that a reply
+does not carry both a `proposal` and a `friction_question` (two questions, one
+place to answer).
+
+**The prompt asks and the guard enforces, and that is not redundant.** A prompt
+is a request a model may decline under pressure — an ambiguous question, an
+unusual context, a new model version — and the failure it produces is the worst
+one this product has: a confident, specific, plausible sentence about something
+that did not happen. A reader cannot tell that apart from a true one.
+
+The guard is id-only and never reads the message text. Judging prose is what
+the model was for; a guard that tried would be a second unreliable classifier
+in front of the first.
+
+A guard failure updates the `ai_invocations` row to `invalid_output` with
+`errorCode: 'hallucination_guard'`, so "how often does the coach invent things?"
+is a question about the model answered where questions about the model live.
+
+### Always 201
+
+Every provider failure, schema violation and guard rejection is a readable
+coach message plus `degraded: true`. PRD §120's promise is "the screen still
+works", not "the API fails quickly".
+
+`structured` is **null** on a degraded turn. A template fallback is
+deliberately indistinguishable from "no model output", because that is what it
+is — a client that could tell them apart would start rendering a fake
+intervention type.
+
+### What never reaches the client
+
+- `invocationId`. It is a support handle; a client that had it would turn it
+  into an API.
+- The safety decision's `matchedRule` and `promptVersion`. Audit fields — a UI
+  rendering them would be showing the user our regex names.
+- Anything resembling chain of thought. See `reasoning_summary` above.
+
+### Rejected alternatives
+
+- **A model-written conversation title.** A second AI call on the critical path
+  of the one screen that must survive an AI outage.
+- **Synthesising a `structured` object for fallbacks.** See "Always 201".
+- **A guard that reads the message text.** See "The guard".
+- **403 for a foreign conversation.** The repo answers 404 everywhere.
