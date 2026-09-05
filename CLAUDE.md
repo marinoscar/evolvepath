@@ -765,6 +765,15 @@ Own data only; a foreign or unknown id answers 404, never 403.
 Completing, moving and skipping a ritual occurrence are the ordinary commitment
 actions — there are deliberately no family-specific lifecycle endpoints.
 
+### Workouts (epic E09)
+Structured training. **Nothing writes a plan until the user approves** — `generate` writes `workout_programs` rows and stops (PRD §15).
+- `GET /api/workouts/exercises?q=&group=` - The seeded catalog plus the caller's own custom rows. `substitutionGroup` makes "what can I do instead?" a lookup, not a model call
+- `POST /api/workouts/programs/generate` - Safety pre-check → the programmer persona → deterministic rules (beginner day cap, contraindications, time budget). Any failure returns the **starter program** with a `reason` (`invalid_output` / `ai_unavailable` / `safety_redirect` / `requested`); 412 `AI_KEY_REQUIRED` is the one exception, because that is the user's to fix
+- `GET /api/workouts/programs?status=` / `GET /api/workouts/programs/{id}` - List / read (404 for a foreign id)
+- `POST /api/workouts/programs/{id}/approve` - The only path that turns a draft into a plan. One transaction: the Health outcome and plan, a user-approved `PlanVersion`, one `Routine` per FULL template linked by `workout_templates.routine_id`, the previous program archived, and 14 days of commitments carrying all three sizes. 409 `PROGRAM_NOT_DRAFT`
+- `POST /api/workouts/programs/{id}/archive` - Retire it; future `PLANNED` days cancelled, history untouched
+- `DELETE /api/workouts/programs/{id}` - Drafts only (204). A live program is archived, never deleted
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)

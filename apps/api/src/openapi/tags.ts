@@ -253,6 +253,19 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
     ],
   },
   {
+    name: 'Health',
+    tags: [
+      {
+        name: 'Workouts',
+        description:
+          'Structured training: the exercise catalog, the AI program builder and its ' +
+          'deterministic starter fallback, and the approval that turns a draft program into a ' +
+          'plan version, routines and scheduled sessions. Every route is per-user; a foreign id ' +
+          'answers 404.',
+      },
+    ],
+  },
+  {
     name: 'Storage',
     tags: [
       {
