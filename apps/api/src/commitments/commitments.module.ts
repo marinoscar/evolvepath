@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
+import { BehaviourLintModule } from '../family/behaviour-lint.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { UserProfileModule } from '../user-profile/user-profile.module';
 import { CommitmentActionsController } from './actions/commitment-actions.controller';
@@ -32,7 +33,13 @@ import { ReflectionsService } from './reflections/reflections.service';
   // rather than injected globally so that the coupling is visible — this module
   // does exactly one thing that can fail because a provider is down, and PRD
   // §120 requires every other route in it to keep working when that happens.
-  imports: [PrismaModule, AiModule, UserProfileModule],
+  // `BehaviourLintModule` provides one pure check: a FAMILY commitment must
+  // describe the user's own behaviour (PRD §32). It is a module of its own
+  // rather than an export of `FamilyModule` because `FamilyModule` imports
+  // THIS one — it cancels ritual occurrences through the transition matrix —
+  // and two modules importing each other is a cycle Nest cannot resolve
+  // without `forwardRef`, which hides the coupling rather than removing it.
+  imports: [PrismaModule, AiModule, UserProfileModule, BehaviourLintModule],
   controllers: [
     CommitmentsController,
     CommitmentActionsController,

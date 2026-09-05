@@ -42,6 +42,8 @@ function row(over: Partial<Commitment> = {}): Commitment {
     minutesSpent: null,
     steps: null,
     decomposedFromId: null,
+    ritualId: null,
+    familyMemberId: null,
     createdAt: new Date('2026-03-01T00:00:00.000Z'),
     updatedAt: new Date('2026-03-01T00:00:00.000Z'),
     ...over,

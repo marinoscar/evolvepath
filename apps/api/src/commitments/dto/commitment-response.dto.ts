@@ -22,6 +22,14 @@ export class CommitmentResponseDto {
   @ApiPropertyOptional({ description: 'The routine this instantiates' })
   routineId!: string | null;
 
+  @ApiPropertyOptional({
+    description: 'The family ritual that materialized this occurrence (epic E08)',
+  })
+  ritualId!: string | null;
+
+  @ApiPropertyOptional({ description: 'Who the commitment is with (epic E08)' })
+  familyMemberId!: string | null;
+
   @ApiProperty({ description: 'ISO 8601 scheduled start' })
   scheduledStart!: string;
 

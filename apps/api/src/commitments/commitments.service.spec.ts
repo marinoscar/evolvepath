@@ -5,6 +5,7 @@ import { CommitmentsService } from './commitments.service';
 import { createCommitmentSchema } from './dto/create-commitment.dto';
 import { updateCommitmentSchema } from './dto/update-commitment.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { BehaviourLintService } from '../family/behaviour-lint.service';
 import { createMockPrismaService, MockPrismaService } from '../../test/mocks/prisma.mock';
 
 describe('CommitmentsService', () => {
@@ -54,7 +55,14 @@ describe('CommitmentsService', () => {
     prisma = createMockPrismaService();
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [CommitmentsService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        CommitmentsService,
+        { provide: PrismaService, useValue: prisma },
+        // The REAL lint, not a stub: it is pure and synchronous, and the point
+        // of the hook is that a FAMILY commitment is held to PRD §32. A stub
+        // here would make these specs pass against a rule that never ran.
+        { provide: BehaviourLintService, useValue: new BehaviourLintService(null as never, null as never) },
+      ],
     }).compile();
 
     service = module.get<CommitmentsService>(CommitmentsService);

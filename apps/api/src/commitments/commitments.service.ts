@@ -3,6 +3,11 @@ import { Prisma, type CommitmentStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { findOwnedOrThrow } from '../path/owned-resource';
+import {
+  BEHAVIOUR_LINT_CODE,
+  BEHAVIOUR_LINT_MESSAGE,
+} from '../family/behaviour-lint';
+import { BehaviourLintService } from '../family/behaviour-lint.service';
 import { canTransition, TERMINAL_STATUSES } from './commitment-transitions';
 import { CreateCommitmentDto } from './dto/create-commitment.dto';
 import { UpdateCommitmentDto } from './dto/update-commitment.dto';
@@ -26,7 +31,10 @@ const LIST_INCLUDE = {
 export class CommitmentsService {
   private readonly logger = new Logger(CommitmentsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly behaviourLint: BehaviourLintService,
+  ) {}
 
   async list(userId: string, query: CommitmentQueryDto): Promise<CommitmentResponseDto[]> {
     const where: Prisma.CommitmentWhereInput = {
@@ -49,6 +57,7 @@ export class CommitmentsService {
   }
 
   async create(userId: string, dto: CreateCommitmentDto): Promise<CommitmentResponseDto> {
+    this.assertFamilyBehaviour(dto.domain, dto.title);
     await this.assertLinksOwnedAndConsistent(userId, dto);
 
     const row = await this.prisma.commitment.create({
@@ -119,6 +128,8 @@ export class CommitmentsService {
     if (TERMINAL_STATUSES.has(existing.status)) {
       throw new ConflictException(`A ${existing.status} commitment cannot be edited`);
     }
+
+    this.assertFamilyBehaviour(existing.domain, dto.title);
 
     const data: Prisma.CommitmentUpdateInput = {};
     if (dto.title !== undefined) data.title = dto.title;
@@ -357,6 +368,29 @@ export class CommitmentsService {
     if (version && version.status !== 'ACTIVE' && version.status !== 'DRAFT') {
       throw new ConflictException(`Plan version is ${version.status} and cannot take commitments`);
     }
+  }
+
+  /**
+   * PRD §32, applied to quick add as well as to rituals (issue #41, epic E08).
+   *
+   * FAMILY ONLY, and that restriction is the whole design. "Fix the deployment
+   * pipeline" is a perfectly good work commitment and the same sentence shape;
+   * the rule exists because the product cannot control another PERSON's
+   * behaviour, so it belongs to the domain where the other party is a person.
+   *
+   * Runs here rather than in the DTO because the domain of a PATCH is the
+   * stored row's, not the body's — Zod sees only the body.
+   */
+  private assertFamilyBehaviour(domain: string, title: string | undefined): void {
+    if (domain !== 'FAMILY' || title === undefined) return;
+
+    const verdict = this.behaviourLint.check(title);
+    if (verdict.ok) return;
+
+    throw new BadRequestException({
+      message: BEHAVIOUR_LINT_MESSAGE,
+      details: { reason: BEHAVIOUR_LINT_CODE, match: verdict.match, rule: verdict.rule },
+    });
   }
 
   private async audit(

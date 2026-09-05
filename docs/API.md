@@ -2442,6 +2442,191 @@ would make "how many times did you reflect?" meaningless.
 
 ---
 
+### Family
+
+The Family domain (epic E08). Every route here is a per-user resource: plain
+bearer auth, ownership resolved by the caller's id, and **404 — never 403 — for
+an id that belongs to somebody else**.
+
+Two rules run through the whole section and are worth reading before the tables.
+
+**The member record is deliberately poor.** It holds a nickname, a
+relationship and an optional date-only birthday, and there is nothing else to
+return. PRD §33 fixes the list; VISION §50 explains it — the people in it never
+consented to being modeled, so a free-text field about them would become a
+hidden assessment the moment the coach read it back. `audit_events.meta` for a
+member write carries only the relationship, because an audit row outlives the
+record it describes.
+
+**A ritual is a rule, and commitments are what the product acts on.**
+`GET /today`, the Path, the summary and momentum all read `Commitment` rows, so
+a ritual is materialized into real commitments seven days ahead. Completing,
+moving and skipping an occurrence are the ordinary commitment actions — there
+are no family-specific lifecycle endpoints.
+
+#### Family members
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/family/members` | List, oldest first |
+| POST | `/api/family/members` | Add a member |
+| PATCH | `/api/family/members/{id}` | Update |
+| DELETE | `/api/family/members/{id}` | Remove (204) |
+
+```json
+POST /api/family/members
+{ "nickname": "Mia", "relationship": "CHILD", "birthday": "1900-09-09" }
+```
+
+```json
+{
+  "data": {
+    "id": "0f2c…",
+    "nickname": "Mia",
+    "relationship": "CHILD",
+    "birthday": "1900-09-09",
+    "createdAt": "2026-09-05T12:00:00.000Z"
+  }
+}
+```
+
+`relationship` is one of `PARTNER`, `CHILD`, `PARENT`, `SIBLING`, `FRIEND`,
+`OTHER`. `birthday` is a **calendar date**, never resolved through a timezone;
+send `1900` as the year when it is unknown, and no consumer reads the year.
+Deleting a member sets `family_member_id` to null on their rituals and
+commitments — the history stays.
+
+#### Rituals
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/family/rituals?active=` | List; active first, then by title |
+| GET | `/api/family/rituals/{id}` | One ritual plus `upcoming` (the next 7 days as commitment cards) |
+| POST | `/api/family/rituals` | Create, and materialize synchronously |
+| PATCH | `/api/family/rituals/{id}` | Update; may cancel and rebuild future occurrences |
+| DELETE | `/api/family/rituals/{id}` | Delete (204); cancels future occurrences |
+| POST | `/api/family/rituals/{id}/materialize` | Create any missing occurrences now (200) |
+
+```json
+POST /api/family/rituals
+{
+  "title": "Phone-free dinner",
+  "purpose": "Be present at the table",
+  "familyMemberId": "0f2c…",
+  "recurrence": { "weekdays": [2, 4, 0], "time": "18:30", "everyNWeeks": 1 },
+  "idealMinutes": 45,
+  "minimumMinutes": 10,
+  "fallbackBehavior": "Sit down phone-free for the first 10 minutes",
+  "outcomeId": null
+}
+```
+
+`weekdays` is `0 = Sunday … 6 = Saturday` (JavaScript's `Date#getDay()`); a UI
+that renders Monday-first changes only the display order. `time` is `HH:mm` in
+`user_profiles.timezone`. `everyNWeeks` is `1`, `2` or `4` and is anchored to
+the **Monday-start week the ritual was created in** — ISO week numbers wrap at
+the year boundary, so they are not used. `minimumMinutes` may not exceed
+`idealMinutes`, on create and on the merged result of a patch.
+
+Passing `outcomeId` also creates a `Routine` under that outcome's active plan
+version, so the ritual appears on the Path; its id comes back as `routineId`.
+An outcome with no active plan version is a 409.
+
+#### The materialization contract
+
+- **Horizon**: `MATERIALIZE_HORIZON_DAYS = 7` local days, ending at the end of
+  the seventh day. `lastMaterializedThrough` records how far the ritual is
+  covered.
+- **When**: synchronously on create, on demand through
+  `POST …/materialize`, and nightly at 01:00 for every active ritual.
+- **Idempotency**: the unique index `(ritual_id, scheduled_start)`. A repeat
+  raises `P2002`, which is counted as `skipped` — never a duplicate row, and
+  never an overwrite of an occurrence the user has already touched.
+- **DST**: a wall time inside a spring-forward gap is shifted forward by the
+  length of the gap; an ambiguous wall time in a fall-back overlap takes the
+  first (still-DST) instant.
+- **Each occurrence** is a `PLANNED` FAMILY commitment with `importance: 4`,
+  `ritualId`, `familyMemberId`, the ideal duration as `fullMinutes`, the
+  fallback text as `minimumVersion`, and a short version only when
+  `idealMinutes − minimumMinutes ≥ 10`.
+- **Editing** the title, recurrence, durations or fallback CANCELS the future
+  `PLANNED` and `READY` occurrences **through the transition matrix** and
+  materializes the new ones. Rows the user has started, moved, completed or
+  skipped are never rewritten, and nothing is deleted. `active: false` cancels
+  the future occurrences and stops the nightly run; `active: true` rebuilds
+  them.
+- **Deleting** a ritual cancels its future occurrences and sets `ritual_id` to
+  null on the rest. A linked routine stays on the Path — it is what the plan
+  used to say.
+
+```json
+POST /api/family/rituals/{id}/materialize
+{ "data": { "created": 0, "skipped": 3, "through": "2026-09-12" } }
+```
+
+#### The behaviour lint
+
+PRD §32: a family commitment describes the user's own behaviour. "Put phone
+away during dinner" is a commitment; "Make spouse happier" is not, because the
+system cannot control another person's behaviour and recording it would set the
+user up to fail at something that was never theirs to do.
+
+The check is **deterministic** and runs on `POST`/`PATCH /api/family/rituals`
+and on `POST`/`PATCH /api/commitments` **when `domain` is `FAMILY`** — quick add
+is held to the same rule. A WORK commitment with the same words is not linted.
+
+```json
+400 Bad Request
+{
+  "message": "Describe what you will do, not how someone else should feel or behave.",
+  "details": {
+    "reason": "BEHAVIOUR_TARGETS_OTHER_PERSON",
+    "match": "Make Mia happier",
+    "rule": "A"
+  }
+}
+```
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/family/lint` | Check a title and, optionally, get a rewrite (always 200) |
+
+```json
+POST /api/family/lint
+{ "title": "Make Mia happier" }
+```
+
+```json
+{
+  "data": {
+    "ok": false,
+    "code": "TARGETS_OTHER_PERSON",
+    "match": "Make Mia happier",
+    "suggestion": "Read with Mia for 15 minutes",
+    "source": "ai"
+  }
+}
+```
+
+Always 200 — this is a check, not a refusal. The **verdict never depends on
+AI**: `suggestion` is `null` with `source: "none"` whenever the provider is
+unavailable, the per-user window (10/min) is spent, or the model's own rewrite
+fails the same lint. A suggestion is offered, never applied.
+
+#### Error codes
+
+| Status | Code / reason | When |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | Zod: a bad recurrence, a nickname over 40 characters, a key the member record may not hold |
+| 400 | `details.reason = "BEHAVIOUR_TARGETS_OTHER_PERSON"` | The title describes another person's feelings or conduct |
+| 400 | `details.reason = "MINIMUM_EXCEEDS_IDEAL"` | A patch whose merged result has a minimum longer than the ideal |
+| 401 | `UNAUTHORIZED` | No bearer token, or an expired one |
+| 404 | `NOT_FOUND` | The id is unknown **or** belongs to another user — deliberately indistinguishable |
+| 409 | `details.reason = "OUTCOME_HAS_NO_ACTIVE_PLAN"` | `outcomeId` names an outcome with no active plan version to hold a routine |
+
+
+---
+
 ### Storage Objects
 
 The storage system provides file upload and management capabilities with support for large files (GB scale) through resumable multipart uploads.

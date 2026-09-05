@@ -53,6 +53,8 @@ describe('CommitmentActionsService (#40)', () => {
       minutesSpent: null,
       steps: null,
       decomposedFromId: null,
+    ritualId: null,
+    familyMemberId: null,
       createdAt: start,
       updatedAt: start,
       ...over,

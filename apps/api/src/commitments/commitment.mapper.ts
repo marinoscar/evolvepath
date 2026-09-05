@@ -23,6 +23,8 @@ export function toCommitmentDto(row: CommitmentRow): CommitmentResponseDto {
     outcomeId: row.outcomeId,
     planVersionId: row.planVersionId,
     routineId: row.routineId,
+    ritualId: row.ritualId,
+    familyMemberId: row.familyMemberId,
     scheduledStart: row.scheduledStart.toISOString(),
     scheduledEnd: row.scheduledEnd ? row.scheduledEnd.toISOString() : null,
     importance: row.importance,
