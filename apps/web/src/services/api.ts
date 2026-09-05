@@ -1568,3 +1568,70 @@ export async function archiveWorkoutProgram(id: string): Promise<WorkoutProgram>
 export async function deleteWorkoutProgram(id: string): Promise<void> {
   await api.delete<void>(`/workouts/programs/${id}`);
 }
+
+// -----------------------------------------------------------------------------
+// The workout runner (epic E09)
+// -----------------------------------------------------------------------------
+
+import type {
+  FinishSessionResult,
+  LogSetBatchResult,
+  LogSetBody,
+  LogSetResult,
+  WorkoutSessionView,
+  WorkoutVariant,
+} from '../types';
+
+export async function startWorkoutSession(body: {
+  commitmentId?: string;
+  templateId?: string;
+  variant?: WorkoutVariant;
+}): Promise<WorkoutSessionView> {
+  return api.post<WorkoutSessionView>('/workouts/sessions', body);
+}
+
+export async function getWorkoutSession(id: string): Promise<WorkoutSessionView> {
+  return api.get<WorkoutSessionView>(`/workouts/sessions/${id}`);
+}
+
+/** Idempotent server-side on `clientId`: a replay returns the existing row. */
+export async function logWorkoutSet(
+  sessionId: string,
+  body: LogSetBody,
+): Promise<LogSetResult> {
+  return api.post<LogSetResult>(`/workouts/sessions/${sessionId}/sets`, body);
+}
+
+/** The offline queue's replay. Per item, never all-or-nothing. */
+export async function logWorkoutSetsBatch(
+  sessionId: string,
+  sets: LogSetBody[],
+): Promise<LogSetBatchResult> {
+  return api.post<LogSetBatchResult>(`/workouts/sessions/${sessionId}/sets/batch`, { sets });
+}
+
+export async function switchWorkoutVariant(
+  sessionId: string,
+  variant: WorkoutVariant,
+): Promise<WorkoutSessionView> {
+  return api.post<WorkoutSessionView>(`/workouts/sessions/${sessionId}/switch-variant`, {
+    variant,
+  });
+}
+
+export async function finishWorkoutSession(
+  sessionId: string,
+  body: { status: 'COMPLETED' | 'ABANDONED'; notes?: string | null },
+): Promise<FinishSessionResult> {
+  return api.post<FinishSessionResult>(`/workouts/sessions/${sessionId}/finish`, body);
+}
+
+/** One sentence about the suggestion. Always answers; `source` says how. */
+export async function explainProgression(
+  sessionId: string,
+  exerciseId: string,
+): Promise<{ sentence: string; source: string }> {
+  return api.get<{ sentence: string; source: string }>(
+    `/workouts/sessions/${sessionId}/exercises/${exerciseId}/explain`,
+  );
+}
