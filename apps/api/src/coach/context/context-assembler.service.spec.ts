@@ -247,6 +247,56 @@ describe('ContextAssemblerService (#63)', () => {
       );
     });
 
+    it('names the ids a reply is allowed to reference', async () => {
+      prisma.planVersion.findMany.mockResolvedValue([
+        {
+          id: 'version-1',
+          version: 1,
+          rationale: null,
+          expectedWeeklyLoad: 120,
+          planId: 'plan-1',
+          plan: { outcome: { title: 'Get strong again', domain: 'HEALTH' } },
+          routines: [
+            {
+              id: 'routine-1',
+              title: 'Strength workout',
+              frequency: 'WEEKLY',
+              daysOfWeek: [3],
+              preferredTime: '18:30',
+              estimatedDurationMin: 40,
+              minimumDurationMin: 10,
+              fallbackBehavior: null,
+              active: true,
+            },
+          ],
+        },
+      ] as never);
+      prisma.commitment.findMany.mockResolvedValue([
+        {
+          id: 'commitment-1',
+          title: 'Strength workout',
+          domain: 'HEALTH',
+          status: 'PLANNED',
+          scheduledStart: NOW,
+          fullMinutes: 40,
+          minimumMinutes: 10,
+          rescheduleCount: 0,
+          skipReason: null,
+        },
+      ] as never);
+
+      const rendered = assembler.renderForPrompt(
+        await assembler.assemble(USER, 'coach', NOW),
+      );
+
+      // `coach-output-guard.ts` rejects any id that is not in the context, so a
+      // context with no ids makes a proposal and a `Start 10 min` action
+      // impossible to produce at all.
+      expect(rendered).toContain('planId=plan-1');
+      expect(rendered).toContain('routineId=routine-1');
+      expect(rendered).toContain('commitmentId=commitment-1');
+    });
+
     it('never carries the user’s email or display name', async () => {
       prisma.bestSelfProfile.findUnique.mockResolvedValue({
         identityStatement: 'Someone who trains three times a week.',

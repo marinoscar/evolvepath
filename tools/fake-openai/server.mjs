@@ -36,11 +36,21 @@
 //      no edit here, which is what stops this file becoming a second place every
 //      later epic has to update.
 //
+//   4. IT ANSWERS SOME PERSONAS IN CHARACTER (`scenarios/index.mjs`, #93). A
+//      schema-shaped placeholder is enough to prove a call happened; it is not
+//      enough to prove the coach's loop works, because a proposal full of
+//      "placeholder" strings and made-up uuids is rejected by the hallucination
+//      guard before it reaches anybody. Scenarios are keyed on the SCHEMA NAME
+//      and a keyword in the input — never on a header, because the API calls
+//      this server and the browser does not.
+//
 // `x-fake-behaviour` selects a failure mode: `rate_limit`, `timeout`, `refusal`,
 // `invalid_json`. Anything else is the happy path.
 // =============================================================================
 
 import { createServer } from 'node:http';
+
+import { matchScenario } from './scenarios/index.mjs';
 
 const PORT = Number(process.env.PORT || 8089);
 
@@ -285,8 +295,12 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    // A named scenario first (#93), the generic builder otherwise. The
+    // fallback is what keeps this file from becoming a second place every
+    // later epic has to update: a persona with no scenario still gets a
+    // conforming answer built from its own schema.
     const schema = body?.text?.format?.schema;
-    const answer = buildFromSchema(schema);
+    const answer = matchScenario(body) ?? buildFromSchema(schema);
 
     send(
       res,
