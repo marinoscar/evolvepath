@@ -4,7 +4,7 @@ import {
   createTestApp,
   closeTestApp,
 } from '../helpers/test-app.helper';
-import { resetPrismaMock } from '../mocks/prisma.mock';
+import { prismaMock, resetPrismaMock } from '../mocks/prisma.mock';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import {
   createMockTestUser,
@@ -83,6 +83,34 @@ describe('Auth Controller (Integration)', () => {
         .get('/api/auth/me')
         .set(authHeader(inactiveUser.accessToken))
         .expect(401);
+    });
+
+    // #100: the shell chooses between onboarding and the app on this flag, so
+    // it has to be on the boot response and it has to be false by default.
+    it('reports onboarding.completed false for a user with no profile row', async () => {
+      const user = await createMockTestUser(context);
+      prismaMock.userProfile.findUnique.mockResolvedValue(null);
+
+      const response = await request(context.app.getHttpServer())
+        .get('/api/auth/me')
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(response.body.data.onboarding).toEqual({ completed: false });
+    });
+
+    it('reports onboarding.completed true once the profile carries a timestamp', async () => {
+      const user = await createMockTestUser(context);
+      prismaMock.userProfile.findUnique.mockResolvedValue({
+        onboardingCompletedAt: new Date('2026-02-01T12:00:00.000Z'),
+      });
+
+      const response = await request(context.app.getHttpServer())
+        .get('/api/auth/me')
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(response.body.data.onboarding).toEqual({ completed: true });
     });
 
     it('should include permissions in response', async () => {
