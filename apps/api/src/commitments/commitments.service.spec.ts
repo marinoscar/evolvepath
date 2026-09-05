@@ -87,6 +87,10 @@ describe('CommitmentsService', () => {
       expect(created.allowedTransitions).toEqual([
         'READY',
         'STARTED',
+        // COMPLETED / PARTIALLY_COMPLETED reachable from PLANNED since #40:
+        // most of what a user does happens away from the app.
+        'COMPLETED',
+        'PARTIALLY_COMPLETED',
         'RESCHEDULED',
         'SKIPPED',
         'MISSED',

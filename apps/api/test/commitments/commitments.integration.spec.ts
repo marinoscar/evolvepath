@@ -101,6 +101,9 @@ describe('Commitments (integration)', () => {
       expect(res.body.data.allowedTransitions).toEqual([
         'READY',
         'STARTED',
+        // COMPLETED / PARTIALLY_COMPLETED reachable from PLANNED since #40.
+        'COMPLETED',
+        'PARTIALLY_COMPLETED',
         'RESCHEDULED',
         'SKIPPED',
         'MISSED',

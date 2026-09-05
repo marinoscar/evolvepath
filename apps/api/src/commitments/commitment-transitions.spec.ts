@@ -9,8 +9,26 @@ const ALL = Object.values(CommitmentStatus);
  * test is a second statement of the rule rather than a restatement of the code.
  */
 const EXPECTED: Record<string, string[]> = {
-  PLANNED: ['READY', 'STARTED', 'RESCHEDULED', 'SKIPPED', 'MISSED', 'CANCELLED'],
-  READY: ['PLANNED', 'STARTED', 'RESCHEDULED', 'SKIPPED', 'MISSED', 'CANCELLED'],
+  PLANNED: [
+    'READY',
+    'STARTED',
+    'COMPLETED',
+    'PARTIALLY_COMPLETED',
+    'RESCHEDULED',
+    'SKIPPED',
+    'MISSED',
+    'CANCELLED',
+  ],
+  READY: [
+    'PLANNED',
+    'STARTED',
+    'COMPLETED',
+    'PARTIALLY_COMPLETED',
+    'RESCHEDULED',
+    'SKIPPED',
+    'MISSED',
+    'CANCELLED',
+  ],
   STARTED: ['COMPLETED', 'PARTIALLY_COMPLETED', 'RESCHEDULED', 'SKIPPED', 'CANCELLED'],
   COMPLETED: [],
   PARTIALLY_COMPLETED: [],
@@ -65,6 +83,15 @@ describe('commitment transition matrix', () => {
 
   // PRD P4: the start is worth recording whenever it happens, so it must not
   // be gated behind a READY step the product would otherwise have to invent.
+  // #40: most of what a user does happens away from the app. The alternative
+  // to allowing this jump is manufacturing a start the product never observed.
+  it('lets a commitment be completed without ever being started', () => {
+    expect(canTransition('PLANNED', 'COMPLETED')).toBe(true);
+    expect(canTransition('PLANNED', 'PARTIALLY_COMPLETED')).toBe(true);
+    expect(canTransition('READY', 'COMPLETED')).toBe(true);
+    expect(canTransition('READY', 'PARTIALLY_COMPLETED')).toBe(true);
+  });
+
   it('lets a PLANNED commitment be started directly', () => {
     expect(canTransition('PLANNED', 'STARTED')).toBe(true);
   });

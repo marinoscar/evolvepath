@@ -35,8 +35,29 @@ export const TERMINAL_STATUSES: ReadonlySet<CommitmentStatus> = new Set<Commitme
 ]);
 
 const ALLOWED: Record<CommitmentStatus, readonly CommitmentStatus[]> = {
-  PLANNED: ['READY', 'STARTED', 'RESCHEDULED', 'SKIPPED', 'MISSED', 'CANCELLED'],
-  READY: ['PLANNED', 'STARTED', 'RESCHEDULED', 'SKIPPED', 'MISSED', 'CANCELLED'],
+  // COMPLETED / PARTIALLY_COMPLETED are reachable from PLANNED and READY since
+  // #40: most of what a user does happens away from the app, and the
+  // alternative is manufacturing a start the product never observed.
+  PLANNED: [
+    'READY',
+    'STARTED',
+    'COMPLETED',
+    'PARTIALLY_COMPLETED',
+    'RESCHEDULED',
+    'SKIPPED',
+    'MISSED',
+    'CANCELLED',
+  ],
+  READY: [
+    'PLANNED',
+    'STARTED',
+    'COMPLETED',
+    'PARTIALLY_COMPLETED',
+    'RESCHEDULED',
+    'SKIPPED',
+    'MISSED',
+    'CANCELLED',
+  ],
   STARTED: ['COMPLETED', 'PARTIALLY_COMPLETED', 'RESCHEDULED', 'SKIPPED', 'CANCELLED'],
   COMPLETED: [],
   PARTIALLY_COMPLETED: [],

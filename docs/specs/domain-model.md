@@ -157,8 +157,8 @@ file points at the other.
 
 | From | May move to |
 |---|---|
-| `PLANNED` | `READY`, `STARTED`, `RESCHEDULED`, `SKIPPED`, `MISSED`, `CANCELLED` |
-| `READY` | `PLANNED`, `STARTED`, `RESCHEDULED`, `SKIPPED`, `MISSED`, `CANCELLED` |
+| `PLANNED` | `READY`, `STARTED`, `COMPLETED`, `PARTIALLY_COMPLETED`, `RESCHEDULED`, `SKIPPED`, `MISSED`, `CANCELLED` |
+| `READY` | `PLANNED`, `STARTED`, `COMPLETED`, `PARTIALLY_COMPLETED`, `RESCHEDULED`, `SKIPPED`, `MISSED`, `CANCELLED` |
 | `STARTED` | `COMPLETED`, `PARTIALLY_COMPLETED`, `RESCHEDULED`, `SKIPPED`, `CANCELLED` |
 | `COMPLETED`, `PARTIALLY_COMPLETED`, `RESCHEDULED`, `SKIPPED`, `MISSED`, `CANCELLED` | *nothing — terminal* |
 
@@ -166,11 +166,19 @@ A status never transitions to itself: re-applying one is not a transition, and
 treating it as one would make a double-tapped button write a second audit row
 and move `startedAt`.
 
-**Three edges are decisions, not omissions:**
+**Four edges are decisions, not omissions:**
 
 - **`PLANNED → STARTED` is direct.** PRD P4 ("start matters") wants the start
   recorded whenever it happens; a mandatory `READY` step would make the product
   either invent one or lose the fact that the user started.
+- **`PLANNED → COMPLETED` is legal** (widened by E05-02, #40). Most of what a
+  user does happens away from the app: they went for the run and then opened
+  their phone. Requiring a start first would force the product to choose between
+  refusing an honest "I did it" and *manufacturing* a start — a `startedAt` and
+  an `APP_FLOW started` row for something it never observed, which §7 forbids.
+  So the matrix allows the jump and the action layer writes no start evidence:
+  `startedAt` stays null, and that null is itself the honest record that the
+  timer was never used.
 - **Everything past `STARTED` is terminal.** An honest record of a day is what
   the user did; an undo would make evidence untrustworthy. To change your mind,
   create a new commitment — the old one stays as history.
@@ -178,8 +186,21 @@ and move `startedAt`.
   `PARTIALLY_COMPLETED` or `SKIPPED`, both of which the user chooses. `MISSED`
   is for a commitment whose time passed untouched; E11's comeback loop sets it.
 
-`STARTED → READY` is deliberately absent: "pause and resume" is E05's
-decomposition flow, not a status change.
+`STARTED → READY` is deliberately absent, and pausing is why. **Paused is
+`STARTED` with `activeSince: null`** — the timer is a pair of columns
+(`activeSeconds` banked at the last pause, `activeSince` for the current run),
+not a status. Elapsed time is derived at read time rather than stored, so a
+reloaded page, a second device and a phone that slept all agree, and a client
+clock cannot inflate the record. Adding a `PAUSED` member would give one fact
+two sources of truth.
+
+**Intent-named actions** (`POST /commitments/:id/actions/*`, E05-02) sit on top
+of this matrix rather than replacing it. They exist because the matrix answers
+"which status may follow" and a screen asks "which button do I show" — and those
+differ: `pause`/`continue` change no status, `fallback` and `decompose` change
+none either, and `start`/`continue` are one button to a user and two operations
+to the server. Each action owns the timer columns, the evidence row and the
+audit action for one intent; the matrix stays the single owner of the statuses.
 
 **Rescheduling** closes the original (terminal, keeping its evidence) and opens
 a **new** `PLANNED` commitment at the new time, copying the title, importance,
@@ -291,7 +312,8 @@ live rows, by audit history, and by the specs above.
 
 | Epic | Adds | Must not touch |
 |---|---|---|
-| E04 Onboarding | `user_profiles` (timezone, locale, onboarding state) | Writes outcomes/plans through the same services, with `createdBy: USER` after approval |
+| E04 Onboarding | `user_profiles` (timezone, locale, onboarding state) — **landed**, #100 | Writes outcomes/plans through the same services, with `createdBy: USER` after approval |
+| E05 Today | Execution columns on `commitments` (`activeSince`, `activeSeconds`, `timerMinutes`, `versionUsed`, `minutesSpent`, `steps`, `decomposedFromId`, `skipNote`, per-version minutes) and the `CommitmentVersion` enum — **landed**, #40 | Widened the matrix (both copies, both tests); writes `APP_FLOW` evidence via `createFromFlow`'s rules |
 | E06 AI Coach | `coach_conversations`, `plan_change_proposals`, `memory_insights`, `obstacles` | Creates plan versions via `createDraft(…, 'AI')`; never writes `plan_versions` directly |
 | E07 Work/Focus | `focus_sessions` | Writes `TIMER` evidence via `createFromFlow`; reads `rescheduleCount` |
 | E08 Family | `family_members`, `rituals`, ritual links on commitments | May add a nullable column to `commitments`; may not change its status matrix without a test |
