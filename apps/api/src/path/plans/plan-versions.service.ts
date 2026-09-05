@@ -277,6 +277,101 @@ export class PlanVersionsService {
     return toPlanVersionDto(rejected);
   }
 
+  /**
+   * Create the next version, already ACTIVE, inside a caller's transaction.
+   *
+   * THE ONE WAY E06'S MUTATION PROTOCOL WRITES A PLAN (issue #76). It lives
+   * here rather than in `ProposalsService` so that version numbering, the
+   * lineage pointer, supersede-before-activate and the P2002-means-409 rule
+   * stay in the single service that owns them — a second implementation of
+   * "what is the next version number" is how histories develop gaps.
+   *
+   * IT NEVER PASSES THROUGH DRAFT. `createDraft` + `activate` would be two
+   * status writes and a "one draft at a time" check that has nothing to say
+   * here: this version was never a proposal the user might still edit — the
+   * accept call IS the approval, which is why `userApproved` is true from the
+   * first write.
+   *
+   * The caller's `tx` is required, not optional. Accepting a proposal changes
+   * a plan, its routines, its future commitments and the proposal itself, and
+   * a half-applied acceptance is a plan the user never agreed to.
+   */
+  async createAndActivateInTx(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    planId: string,
+    input: {
+      rationale: string;
+      expectedWeeklyLoad: number | null;
+      fallbackStrategy: string | null;
+      author: PlanAuthor;
+      routines: Array<Omit<Prisma.RoutineCreateManyInput, 'userId' | 'planVersionId'>>;
+    },
+  ): Promise<{
+    id: string;
+    version: number;
+    previousVersionId: string | null;
+    supersededVersion: number | null;
+  }> {
+    const versions = await tx.planVersion.findMany({
+      where: { planId, userId },
+      orderBy: { version: 'desc' },
+    });
+
+    const current = versions.find((v) => v.status === 'ACTIVE') ?? null;
+    const previous = current ?? versions[0] ?? null;
+    const nextNumber = (versions[0]?.version ?? 0) + 1;
+    const now = new Date();
+
+    if (current) {
+      // Before the insert, not after: the partial unique index allows one
+      // ACTIVE row per plan and would reject the pair in the other order.
+      await tx.planVersion.update({
+        where: { id: current.id },
+        data: { status: 'SUPERSEDED', activeUntil: now },
+      });
+    }
+
+    const created = await tx.planVersion.create({
+      data: {
+        userId,
+        planId,
+        version: nextNumber,
+        status: 'ACTIVE',
+        rationale: input.rationale,
+        expectedWeeklyLoad: input.expectedWeeklyLoad,
+        fallbackStrategy: input.fallbackStrategy,
+        createdBy: input.author,
+        userApproved: true,
+        activeFrom: now,
+        previousVersionId: previous?.id ?? null,
+      },
+    });
+
+    if (input.routines.length > 0) {
+      await tx.routine.createMany({
+        data: input.routines.map((routine) => ({
+          ...routine,
+          userId,
+          planVersionId: created.id,
+        })),
+      });
+    }
+
+    this.logger.log(
+      `plan_version.create_and_activate planId=${planId} from=${
+        current ? `v${current.version}` : 'none'
+      } to=v${nextNumber} author=${input.author} user=${userId}`,
+    );
+
+    return {
+      id: created.id,
+      version: created.version,
+      previousVersionId: created.previousVersionId,
+      supersededVersion: current?.version ?? null,
+    };
+  }
+
   async findOwned(userId: string, planId: string, version: number): Promise<VersionRow> {
     await this.plans.findOwned(userId, planId);
 

@@ -209,6 +209,13 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'Family members (minimal records), rituals, recurrence materialization, the ' +
           'behaviour lint and the planned-versus-kept summary. Own data only.',
       },
+      {
+        name: 'Plan Proposals',
+        description:
+          'PRD §15\u2019s mutation protocol: a proposed plan change waiting on a human. ' +
+          'Accepting one is the only path in the product that turns AI output into a plan ' +
+          'version; editing one re-attributes it to the user; rejecting one touches nothing.',
+      },
     ],
   },
   {
