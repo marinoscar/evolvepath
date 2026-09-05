@@ -45,6 +45,7 @@ function row(overrides: Partial<Commitment> = {}): Commitment {
     minutesSpent: null,
     steps: null,
     decomposedFromId: null,
+    workoutTemplateId: null,
     ritualId: null,
     familyMemberId: null,
     createdAt: new Date('2026-02-28T00:00:00.000Z'),

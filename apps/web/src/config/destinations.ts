@@ -120,6 +120,10 @@ export const UNOWNED_ROUTES: readonly string[] = [
   // parameter and all, because the ownership test compares these strings to
   // that file's `path` props verbatim.
   '/start/:commitmentId',
+  // The workout runner (#109, epic E09). PRD §11 again: the runner replaces
+  // the navigation while a workout is happening, and "replace" is achieved by
+  // never mounting it rather than by a gate that remembers to turn it off.
+  '/workout/:sessionId',
 ];
 
 /**

@@ -1177,6 +1177,8 @@ export interface Commitment {
   /** The family ritual that materialized this occurrence, and who it is with. */
   ritualId: string | null;
   familyMemberId: string | null;
+  /** The workout this commitment runs, when it is one (epic E09). */
+  workoutTemplateId?: string | null;
   scheduledStart: string;
   scheduledEnd: string | null;
   importance: number;
@@ -1370,6 +1372,15 @@ export interface CommitmentCard {
    */
   ritualId: string | null;
   familyMemberId: string | null;
+  /**
+   * The workout this commitment runs, when it is one (epic E09).
+   *
+   * Read for the same kind of reason as `ritualId`: the row's primary action
+   * comes from it. With a template, "Start workout" opens the runner; without
+   * one, "Start" opens the generic timer. Inferring it from the domain would be
+   * wrong the moment somebody schedules a walk.
+   */
+  workoutTemplateId: string | null;
   decomposedFromId: string | null;
   steps: CommitmentVersionView[] | null;
   timer: CommitmentTimer | null;
@@ -2166,4 +2177,118 @@ export interface ApproveProgramResult {
   program: WorkoutProgram;
   planVersionId: string;
   commitmentIds: string[];
+}
+
+// -----------------------------------------------------------------------------
+// The workout runner (epic E09)
+// -----------------------------------------------------------------------------
+
+export type Discomfort = 'NONE' | 'MILD' | 'SHARP_PAIN';
+
+export type WorkoutSessionStatus = 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED';
+
+export interface SetLog {
+  id: string;
+  /** Minted by THIS client. The whole of the offline-replay guarantee. */
+  clientId: string;
+  exerciseId: string;
+  setNumber: number;
+  weightKg: number | null;
+  reps: number;
+  rpe: number | null;
+  discomfort: Discomfort;
+  loggedAt: string;
+}
+
+export type ProgressionAction = 'increase' | 'hold' | 'reduce';
+
+export interface ProgressionSuggestion {
+  action: ProgressionAction;
+  currentWeightKg: number | null;
+  suggestedWeightKg: number | null;
+  deltaKg: number | null;
+  reason:
+    | 'top_of_range_twice'
+    | 'below_min_twice'
+    | 'first_session'
+    | 'building'
+    | 'discomfort'
+    | 'insufficient_history';
+  basis: { sessions: number; lastReps: number[]; lastRpe: Array<number | null> };
+}
+
+export interface SessionExercise {
+  order: number;
+  exerciseId: string;
+  name: string;
+  equipment: string[];
+  instructions: string;
+  sets: number;
+  repMin: number;
+  repMax: number;
+  restSeconds: number;
+  notes: string | null;
+  lastTime: { sessionDate: string; sets: SetLog[] } | null;
+  progression: ProgressionSuggestion | null;
+  logged: SetLog[];
+}
+
+export interface WorkoutSessionSummary {
+  id: string;
+  status: WorkoutSessionStatus;
+  variant: WorkoutVariant;
+  templateId: string;
+  templateName: string;
+  startedAt: string;
+  finishedAt: string | null;
+  discomfortFlag: boolean;
+  commitmentId: string | null;
+  setCount: number;
+}
+
+export interface WorkoutSessionView extends WorkoutSessionSummary {
+  program: { id: string; name: string };
+  template: { id: string; name: string; variant: WorkoutVariant; targetMinutes: number };
+  header: { title: string; sessionIndex: number; sessionTotal: number };
+  availableVariants: WorkoutVariant[];
+  exercises: SessionExercise[];
+  /** Sets for movements the current variant does not include. They happened. */
+  alsoLogged: SetLog[];
+  safety: { copy: string } | null;
+}
+
+export interface LogSetBody {
+  clientId: string;
+  exerciseId: string;
+  setNumber: number;
+  weightKg?: number | null;
+  reps: number;
+  rpe?: number | null;
+  discomfort: Discomfort;
+  loggedAt?: string;
+}
+
+export interface LogSetResult {
+  set: SetLog;
+  safety: { copy: string; action: string } | null;
+}
+
+export interface LogSetBatchResult {
+  accepted: SetLog[];
+  duplicates: string[];
+  rejected: Array<{ clientId: string; reason: string }>;
+}
+
+export interface FinishSummary {
+  sets: number;
+  volumeKg: number;
+  minutes: number;
+  exercisesCompleted: number;
+  exercisesPlanned: number;
+}
+
+export interface FinishSessionResult {
+  session: WorkoutSessionSummary;
+  summary: FinishSummary;
+  commitmentStatus: string | null;
 }

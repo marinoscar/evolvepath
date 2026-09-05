@@ -869,6 +869,32 @@ npm run test:ui
 **Issue:** Async state not updating in tests
 - **Solution:** Use `await waitFor()` to wait for async updates
 
+**Issue:** A timer-driven component asserts one second off
+
+Anything in this product that shows elapsed or remaining time READS A CLOCK
+rather than counting — the commitment timer, the workout rest timer, the
+runner's "N min in". A counter that decrements on an interval is wrong the
+moment a tab is backgrounded, and that is every real workout.
+
+Testing one therefore means moving the clock, not advancing a counter:
+
+```ts
+vi.useFakeTimers({ shouldAdvanceTime: true });
+const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+vi.setSystemTime(start);
+// … interact …
+act(() => {
+  vi.setSystemTime(new Date(start.getTime() + 60_000));
+  document.dispatchEvent(new Event('visibilitychange'));
+});
+```
+
+`shouldAdvanceTime` is required for `userEvent`, and it means the interaction
+itself consumes real milliseconds — so assert a small range (`/Rest (31|30|29) s/`)
+rather than an exact second. An exact assertion here is a flake waiting for a
+slow CI runner. `apps/web/src/__tests__/pages/WorkoutRunnerPage.test.tsx` is the
+worked example.
+
 ## E2E Testing with Playwright
 
 ### Overview

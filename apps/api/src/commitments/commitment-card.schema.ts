@@ -79,6 +79,15 @@ export const commitmentCardSchema = z.object({
    */
   ritualId: z.string().uuid().nullable(),
   familyMemberId: z.string().uuid().nullable(),
+  /**
+   * The workout this commitment runs, when it is one (epic E09).
+   *
+   * On the CARD for the same reason `ritualId` is: the client decides its
+   * ACTION from it. A Health commitment with a template offers "Start workout"
+   * and opens the runner; one without offers the generic timer. Inferring it
+   * from the domain would be wrong the moment somebody schedules a walk.
+   */
+  workoutTemplateId: z.string().uuid().nullable(),
   /** Set when this commitment is the small version of a bigger one. */
   decomposedFromId: z.string().uuid().nullable(),
   steps: z.array(commitmentVersionSchema).nullable(),

@@ -20,6 +20,7 @@ import {
   getOutcomes,
   postDayReflection,
   recordNotificationInteraction,
+  startWorkoutSession,
   transitionCommitment,
   updateCommitment,
 } from '../services/api';
@@ -189,6 +190,21 @@ export default function TodayPage() {
           // The Start screen owns the timer; starting from here means going
           // there, not flipping a status in place.
           navigate(`/start/${commitment.id}`);
+          return;
+        // A workout opens the runner instead (epic E09). The session is created
+        // here rather than on the runner so a 409 — a workout already open —
+        // can send the user to THAT one rather than to a screen that would
+        // immediately fail.
+        case 'start_workout':
+          try {
+            const session = await startWorkoutSession({ commitmentId: commitment.id });
+            navigate(`/workout/${session.id}`);
+          } catch (err) {
+            const openId = (err as { details?: { sessionId?: string } }).details?.sessionId;
+
+            if (openId) navigate(`/workout/${openId}`);
+            else setToast(err instanceof Error ? err.message : 'Could not start that workout');
+          }
           return;
         case 'pause':
           await actions.pause(commitment.id).catch(() => undefined);
