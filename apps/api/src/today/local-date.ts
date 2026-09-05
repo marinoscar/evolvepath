@@ -101,17 +101,23 @@ function resolveLocalMidnight(
   timeZone: string,
 ): Date {
   const naive = Date.UTC(year, month - 1, day, 0, 0, 0);
-  let instant = naive - offsetMillis(new Date(naive), timeZone);
+  let instant = naive - zoneOffsetMillis(new Date(naive), timeZone);
 
   // Second pass: the offset at the provisional instant may differ from the one
   // at naive-UTC across a DST boundary.
-  instant = naive - offsetMillis(new Date(instant), timeZone);
+  instant = naive - zoneOffsetMillis(new Date(instant), timeZone);
 
   return new Date(instant);
 }
 
-/** How far ahead of UTC this zone is, in milliseconds, at this instant. */
-function offsetMillis(at: Date, timeZone: string): number {
+/**
+ * How far ahead of UTC this zone is, in milliseconds, at this instant.
+ *
+ * Exported for E10's `localTimeToInstant`, which resolves a wall-clock time on
+ * a local date the same two-pass way `resolveLocalMidnight` below does. Two
+ * copies of this measurement would be two chances to get a DST week wrong.
+ */
+export function zoneOffsetMillis(at: Date, timeZone: string): number {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',

@@ -26,6 +26,7 @@ import { TodayModule } from './today/today.module';
 import { CoachModule } from './coach/coach.module';
 import { SafetyModule } from './coach/safety/safety.module';
 import { FamilyModule } from './family/family.module';
+import { WeeklyModule } from './weekly/weekly.module';
 import { LoggerModule } from './common/logger/logger.module';
 import { TestAuthModule } from './test-auth/test-auth.module';
 
@@ -105,6 +106,13 @@ import configuration from './config/configuration';
     // occurrences. Separate from PathModule because a ritual is a rule the
     // materializer reads, not a layer of the outcome hierarchy.
     FamilyModule,
+
+    // The weekly loop (epic E10): planned-versus-actual aggregation, the
+    // reviewer persona, the hourly sweep and next week's plan. Registered here
+    // rather than under PathModule because a review is a ritual over the
+    // domain, not another layer of it — and because the module deliberately
+    // cannot reach `PlanVersionsService`.
+    WeeklyModule,
 
     // The AI coach (epic E06). Registered here from its first child so a
     // broken provider graph fails at boot rather than at the first chat turn;

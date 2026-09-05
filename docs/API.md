@@ -3623,6 +3623,141 @@ the coach to read back.
 
 ---
 
+### Weekly Review
+
+The PRD §135 weekly loop's first half: what was planned against what actually
+happened, for one Monday-start week, plus the coach's reading of it.
+
+**Two things are stored, and they are deliberately separate.** `aggregates` is
+computed by a pure function with no model in it. `aiSummary` is the coach's
+six-part reading of those numbers — and when the provider is unreachable, or the
+user has brought no key, it becomes the numbers read back with
+`source: "template"` and an empty `proposedChanges`. A review is therefore
+**always** produced (PRD §120): a weekly ritual that only happens when an API is
+up is not a ritual.
+
+**Generation never writes a plan version.** Any change the reviewer proposes
+becomes a `plan_change_proposals` row with `sourceKind: "WEEKLY_REVIEW"` and
+stops there; the plan changes only when the user calls
+`POST /proposals/{id}/accept` (PRD §15, §89). A proposal naming a plan or
+routine the user does not have is dropped before it is written and counted in
+the audit row's `droppedProposals`.
+
+Weeks are addressed by their **local Monday** as a `'YYYY-MM-DD'` string.
+
+#### Generate a review
+
+```http
+POST /api/weekly/reviews/generate
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{ "weekStart": "2026-08-31" }
+```
+
+`weekStart` is optional. Omitting it reviews **last week on Monday and Tuesday**
+and **the week in progress from Wednesday onward** — a Monday-morning review of
+"this week" would be a review of nothing.
+
+```json
+{
+  "id": "b71c…",
+  "weekStart": "2026-08-31",
+  "status": "READY",
+  "counts": {
+    "WORK": { "planned": 5, "completed": 4 },
+    "FAMILY": { "planned": 3, "completed": 2 },
+    "HEALTH": { "planned": 3, "completed": 2 }
+  },
+  "aggregates": {
+    "coverage": { "from": "…", "to": "…", "partial": false },
+    "domains": { "WORK": { "planned": 5, "completed": 4, "skipped": 1, "…": 0 } },
+    "timeWindows": [{ "window": "morning", "planned": 5, "completed": 4, "successRate": 0.8 }],
+    "rescheduleLeaders": [{ "title": "Strength workout", "rescheduleCount": 2 }]
+  },
+  "aiSummary": {
+    "whatWorked": ["Morning focus blocks: 4 of 5 done"],
+    "whatDidNot": ["Evening workouts were moved twice"],
+    "patterns": [{
+      "observation": "4 of 5 morning commitments were done; 1 of 3 in the evening",
+      "inference": "Plans after 18:00 are less reliable than mornings",
+      "recommendation": "Move the Wednesday workout to Saturday morning",
+      "confidence": 0.8,
+      "domain": "HEALTH"
+    }],
+    "proposedChanges": [{ "planId": "0a44…", "summary": "Move Wednesday workout to Saturday" }],
+    "keepUnchanged": ["Morning focus block routine"],
+    "doNotAddYet": [],
+    "source": "ai",
+    "promptVersion": "weekly_reviewer.v1",
+    "generatedAt": "2026-09-06T22:00:00.000Z"
+  },
+  "proposals": [ /* resolved ProposalDetail rows — see Plan Proposals */ ],
+  "plan": null
+}
+```
+
+A **pattern is three separate claims** (PRD §14.4) and the screen labels each:
+`observation` is what the numbers say, `inference` is a guess, `recommendation`
+is what to do. `inference` and `recommendation` are null on a template summary,
+because a template is not allowed to guess.
+
+`invocationId` is deliberately **not** on the wire. It is an internal telemetry
+pointer, written to the review row and the audit meta and nowhere a client can
+read it.
+
+| Status | Code | Meaning |
+|---|---|---|
+| 400 | `INVALID_WEEK_START` | Not a Monday, or not `YYYY-MM-DD` |
+| 409 | `WEEKLY_REVIEW_APPROVED` | The week was closed by an approved plan |
+| 409 | `WEEKLY_REVIEW_IN_PROGRESS` | A generation started less than 15 minutes ago |
+| 429 | `RATE_LIMITED` | Five generations per hour per user |
+
+#### List, read and skip
+
+```http
+GET  /api/weekly/reviews?weekStart=2026-08-31&limit=12
+GET  /api/weekly/reviews/current
+GET  /api/weekly/reviews/{id}
+POST /api/weekly/reviews/{id}/skip
+```
+
+`current` answers **`null`, not 404**, for a user who has never had a review —
+an empty screen is a state, not an error. Another user's review id answers
+**404, never 403**. Skipping a review that is not `READY` answers 409
+`WEEKLY_REVIEW_NOT_SKIPPABLE`.
+
+#### Weekly rhythm
+
+```http
+GET /api/weekly/settings
+PUT /api/weekly/settings
+Content-Type: application/json
+
+{ "weeklyReviewWeekday": 5, "weeklyReviewTime": "16:00" }
+```
+
+```json
+{
+  "weeklyReviewWeekday": 5,
+  "weeklyReviewTime": "16:00",
+  "timezone": "America/Costa_Rica",
+  "nextReviewAt": "2026-09-11T22:00:00.000Z"
+}
+```
+
+Weekday is 0 (Sunday) to 6 (Saturday); a value outside that range is rejected by
+Zod **and** by a database check constraint. **The sweep runs hourly**, so a
+review set for `16:30` is prepared in the 16:00 pass — the minutes are stored
+faithfully but are not a promise.
+
+"Your week is ready to review" (PRD §60's N8) is raised by the coaching
+notification engine reading `weekly_reviews`, not by generation itself, so it
+passes through quiet hours and the caps like every other coaching message. See
+[Coaching Notification Policy](#coaching-notification-policy-current-user).
+
+---
+
 ## HTTP Status Codes
 
 | Code | Description |
@@ -3680,7 +3815,7 @@ token; a 403 would tell them they lack a permission they hold.
 
 ### Implemented throttles
 
-Three endpoints are throttled today, because each one puts a request on
+Five endpoints are throttled today, because each one puts a request on
 OpenAI's network under somebody's key on a click. A refused attempt is a real
 **429** with `Retry-After` — the request was refused rather than attempted, so
 there is no diagnosis to return and nothing is audited.
@@ -3690,6 +3825,8 @@ there is no diagnosis to return and nothing is audited.
 | `POST /ai-settings/test` | 5 / minute / user | `admin_test` |
 | `GET /ai-settings/models?refresh=true` | 10 / minute / user | `models_refresh` |
 | `POST /me/ai-key/test` | 5 / minute / user | `user_test` |
+| `POST /memory-insights/propose` | 1 / 10 minutes / user | `memory_propose` |
+| `POST /weekly/reviews/generate` | 5 / hour / user | `weekly_review` |
 
 `GET /ai-settings/models` **without** `refresh` is deliberately not throttled: a
 cached read costs nothing, and a throttled administrator must still be able to

@@ -72,6 +72,16 @@ const CELEBRATION_WINDOW_MS = 15 * 60_000;
 const DAY_END_HOUR = 22;
 
 /**
+ * N8: how long after generation a review is still news.
+ *
+ * Twenty-four hours, with a dedupe key that carries the local date, so a review
+ * prepared on Sunday evening can be mentioned once that evening and once the
+ * next day — and then never again. A weekly review nobody opened is not a
+ * reason to keep asking; the next week's review will be along shortly.
+ */
+const REVIEW_READY_WINDOW_MS = 24 * 60 * 60_000;
+
+/**
  * Every status a commitment in the window may hold — including the terminal
  * ones, and that is the point.
  *
@@ -111,6 +121,15 @@ export class CandidateScannerService {
   constructor(private readonly prisma: PrismaService) {}
 
   async scan(now: Date): Promise<NotificationCandidate[]> {
+    const [fromCommitments, fromReviews] = await Promise.all([
+      this.scanCommitments(now),
+      this.scanWeeklyReviews(now),
+    ]);
+
+    return this.withoutDecided([...fromCommitments, ...fromReviews]);
+  }
+
+  private async scanCommitments(now: Date): Promise<NotificationCandidate[]> {
     const rows = await this.prisma.commitment.findMany({
       where: {
         OR: [
@@ -154,7 +173,50 @@ export class CandidateScannerService {
       }
     }
 
-    return this.withoutDecided(candidates);
+    return candidates;
+  }
+
+  /**
+   * N8 — "your week is ready to review" (PRD §60, epic E10).
+   *
+   * The source is E10's `weekly_reviews`, and it is read here rather than
+   * announced by E10 itself on purpose. A review that called `notify()` at the
+   * moment it finished would reach the user at whatever hour their sweep ran,
+   * bypassing quiet hours, the daily cap and the fatigue reduction — which are
+   * the whole point of routing coaching messages through `decide()`.
+   */
+  private async scanWeeklyReviews(now: Date): Promise<NotificationCandidate[]> {
+    const rows = await this.prisma.weeklyReview.findMany({
+      where: {
+        status: 'READY',
+        generatedAt: { gte: new Date(now.getTime() - REVIEW_READY_WINDOW_MS), lte: now },
+      },
+      select: { id: true, userId: true, weekStart: true, generatedAt: true },
+    });
+
+    if (rows.length === 0) return [];
+
+    const contexts = await this.loadContexts(
+      [...new Set(rows.map((row) => row.userId))],
+      now,
+    );
+
+    return rows.flatMap((row) => {
+      const context = contexts.get(row.userId);
+      if (!context || !row.generatedAt) return [];
+
+      return [
+        {
+          userId: row.userId,
+          eventKey: 'coach.weekly_review_ready' as const,
+          category: COACHING_CATEGORY['coach.weekly_review_ready'],
+          dueAt: row.generatedAt,
+          // Daily, not once-ever: see `NotificationCandidate.dedupeKey`.
+          dedupeKey: `${row.id}:${context.dateLocal}`,
+          payload: { reviewId: row.id, weekStart: row.weekStart },
+        },
+      ];
+    });
   }
 
   /**
@@ -523,14 +585,15 @@ export class CandidateScannerService {
   }
 
   // ---------------------------------------------------------------------------
-  // N6, N8, N9 — sources that arrive with later epics
+  // N6 and N9 — sources that arrive with later epics
   // ---------------------------------------------------------------------------
   //
-  // Recovery reads E11-02's comeback record, the weekly review reads E10's
-  // `WeeklyReview`, and the plan issue reads E06-01's `PlanChangeProposal`.
-  // None of those tables exists yet. There is deliberately NO placeholder
-  // source: inventing one would mean sending real users messages about
-  // artefacts they cannot open.
+  // Recovery reads E11-02's comeback record and the plan issue reads E06-01's
+  // `PlanChangeProposal` at a moment E07 decides. Neither source exists yet,
+  // and there is deliberately NO placeholder for either: inventing one would
+  // mean sending real users messages about artefacts they cannot open.
+  //
+  // N8 landed with E10 (#73) and is `scanWeeklyReviews` above.
   //
   // Everything downstream of the source is finished and tested — registry
   // entries, payload schemas, deep links, deterministic copy, the N8 email

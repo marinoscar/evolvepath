@@ -210,6 +210,13 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'behaviour lint and the planned-versus-kept summary. Own data only.',
       },
       {
+        name: 'Weekly Review',
+        description:
+          'Planned-versus-actual aggregates for one Monday-start week, the coach\u2019s six-part ' +
+          'summary, and the plan-change proposals it raised. Generated on the user\u2019s chosen ' +
+          'day and time or on demand; the numbers never depend on the model.',
+      },
+      {
         name: 'Plan Proposals',
         description:
           'PRD §15\u2019s mutation protocol: a proposed plan change waiting on a human. ' +
