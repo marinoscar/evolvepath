@@ -542,3 +542,84 @@ export const todayHandlers = [
     },
   ),
 ];
+
+// ===========================================================================
+// Writes that `pathHandlers` already owns globally
+// ===========================================================================
+//
+// `POST /commitments`, `PATCH /commitments/:id` and `POST
+// /commitments/:id/transition` are implemented by `pathHandlers`, against the
+// Path store, and the Path screen's own tests depend on that. MSW resolves the
+// first matching handler, so these cannot simply be added to `todayHandlers`
+// without taking those endpoints away from the suite that got there first.
+//
+// So they are exported separately and installed with `server.use(...)` by the
+// tests that need a write to show up on TODAY's board. Same rules as the API:
+// a create lands as PLANNED with the versions it was given, a patch changes
+// only what it names, and CANCELLED is terminal.
+// ===========================================================================
+
+export const todayWriteHandlers = [
+  http.post(`${API_BASE}/commitments`, async ({ request }) => {
+    const body = (await request.json()) as Record<string, unknown>;
+
+    const card = makeCard({
+      id: nextId('commitment'),
+      title: String(body.title),
+      domain: (body.domain as Domain) ?? 'WORK',
+      scheduledStart: String(body.scheduledStart),
+      importance: Number(body.importance ?? 3),
+      outcomeId: (body.outcomeId as string | null) ?? null,
+      durationMinutes: Number(body.fullMinutes ?? 25),
+      versions: {
+        full: {
+          title: String(body.fullVersion ?? body.title),
+          minutes: Number(body.fullMinutes ?? 25),
+        },
+        short: body.shortVersion
+          ? { title: String(body.shortVersion), minutes: Number(body.shortMinutes ?? 10) }
+          : null,
+        minimum: body.minimumVersion
+          ? { title: String(body.minimumVersion), minutes: Number(body.minimumMinutes ?? 5) }
+          : null,
+      },
+      availableActions: undefined,
+    });
+
+    state.commitments = [...state.commitments, card];
+
+    return HttpResponse.json({ data: card }, { status: 201 });
+  }),
+
+  http.patch(`${API_BASE}/commitments/:id`, async ({ params, request }) => {
+    const card = find(String(params.id));
+    if (!card) return HttpResponse.json({ message: 'Not found' }, { status: 404 });
+    if (card.availableActions.length === 0) {
+      return conflict(`A ${card.status} commitment cannot be edited`);
+    }
+
+    const body = (await request.json()) as Record<string, unknown>;
+
+    return ok(
+      replace({
+        ...card,
+        title: body.title !== undefined ? String(body.title) : card.title,
+        scheduledStart:
+          body.scheduledStart !== undefined ? String(body.scheduledStart) : card.scheduledStart,
+        importance: body.importance !== undefined ? Number(body.importance) : card.importance,
+        durationMinutes:
+          body.fullMinutes !== undefined ? Number(body.fullMinutes) : card.durationMinutes,
+      }),
+    );
+  }),
+
+  http.post(`${API_BASE}/commitments/:id/transition`, async ({ params, request }) => {
+    const card = find(String(params.id));
+    if (!card) return HttpResponse.json({ message: 'Not found' }, { status: 404 });
+
+    const body = (await request.json()) as { to: string };
+    const updated = replace({ ...card, status: body.to as CommitmentCard['status'] });
+
+    return ok({ commitment: updated, rescheduledTo: null, evidence: null });
+  }),
+];

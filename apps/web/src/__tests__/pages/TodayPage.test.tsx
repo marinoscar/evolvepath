@@ -1,16 +1,20 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { axe } from 'vitest-axe';
 import 'vitest-axe/extend-expect';
 
+import { http, HttpResponse } from 'msw';
+
 import { render, mockAdminUser } from '../utils/test-utils';
+import { server } from '../mocks/server';
 import {
   getTodayState,
   makeCard,
   seedCommitments,
   seedTodayState,
+  todayWriteHandlers,
 } from '../mocks/todayHandlers';
 import TodayPage from '../../pages/TodayPage';
 
@@ -246,7 +250,7 @@ describe('TodayPage', () => {
   });
 
   describe('actions', () => {
-    it('offers exactly the actions the API listed, and no others', async () => {
+    it('offers exactly the actions the API listed, plus the client-side Edit', async () => {
       const user = userEvent.setup();
       seedCommitments(makeCard({ id: 'work-1', domain: 'WORK', title: 'Draft it' }));
       renderToday();
@@ -256,6 +260,8 @@ describe('TodayPage', () => {
 
       const menu = await screen.findByRole('menu');
       // `start` is the row's primary button, so the menu holds the rest.
+      // `Edit` is a PATCH rather than an action endpoint, appended by the row
+      // only where the API would accept the patch.
       expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
         'Complete',
         'Partly done',
@@ -263,7 +269,35 @@ describe('TodayPage', () => {
         'Reschedule',
         'Skip',
         'Make it smaller',
+        'Edit',
       ]);
+    });
+
+    it('does not offer Edit on a started commitment', async () => {
+      const user = userEvent.setup();
+      seedCommitments(
+        makeCard({
+          id: 'work-1',
+          domain: 'WORK',
+          title: 'Draft it',
+          status: 'STARTED',
+          startedAt: '2026-03-02T09:00:00.000Z',
+          timer: {
+            activeSince: '2026-03-02T09:00:00.000Z',
+            activeSeconds: 0,
+            elapsedSeconds: 0,
+            timerMinutes: 25,
+            remainingSeconds: 1500,
+          },
+        }),
+      );
+      renderToday();
+
+      await screen.findByTestId('commitment-row-work-1');
+      await user.click(screen.getByRole('button', { name: 'Actions for Draft it' }));
+
+      const menu = await screen.findByRole('menu');
+      expect(within(menu).queryByRole('menuitem', { name: 'Edit' })).not.toBeInTheDocument();
     });
 
     it('offers nothing at all on a finished commitment', async () => {
@@ -422,6 +456,101 @@ describe('TodayPage', () => {
       await waitFor(() =>
         expect(screen.queryByTestId('reflection-prompt')).not.toBeInTheDocument(),
       );
+    });
+  });
+
+  describe('quick add', () => {
+    // `POST /commitments` and `PATCH /commitments/:id` are owned globally by
+    // `pathHandlers`, against the Path store. These tests need the write to show
+    // up on TODAY's board, so they install the Today-store versions.
+    beforeEach(() => server.use(...todayWriteHandlers));
+
+    it('creates a commitment and shows it on the right domain card', async () => {
+      const user = userEvent.setup();
+      seedThreeDomains();
+      renderToday();
+
+      await screen.findByTestId('next-best-action');
+      await user.click(screen.getByTestId('quick-add-fab'));
+
+      await user.click(await screen.findByRole('button', { name: /Family intention/ }));
+      await user.type(screen.getByLabelText(/What are you committing to/), 'Read with Mia');
+      await user.click(screen.getByRole('button', { name: '20 min' }));
+      await user.click(screen.getByRole('button', { name: 'Add it' }));
+
+      await waitFor(() =>
+        expect(
+          within(screen.getByTestId('domain-card-FAMILY')).getByText('Read with Mia'),
+        ).toBeInTheDocument(),
+      );
+      expect(getTodayState().commitments.at(-1)).toMatchObject({
+        title: 'Read with Mia',
+        domain: 'FAMILY',
+      });
+    });
+
+    // CANCELLED rather than deleted: PRD §103 keeps the record of a day, and a
+    // cancelled commitment offers no actions, so it leaves today's board.
+    it('undoes an add by cancelling it', async () => {
+      const user = userEvent.setup();
+      seedThreeDomains();
+      renderToday();
+
+      await screen.findByTestId('next-best-action');
+      await user.click(screen.getByTestId('quick-add-fab'));
+      await user.click(await screen.findByRole('button', { name: /^Commitment/ }));
+      await user.type(screen.getByLabelText(/What are you committing to/), 'A quick thing');
+      await user.click(screen.getByRole('button', { name: 'Add it' }));
+
+      await screen.findByText('Added to today');
+      await user.click(await screen.findByRole('button', { name: 'Undo' }));
+
+      await waitFor(() =>
+        expect(getTodayState().commitments.at(-1)?.status).toBe('CANCELLED'),
+      );
+    });
+
+    it('keeps the sheet open with the values intact when the server refuses', async () => {
+      const user = userEvent.setup();
+      seedThreeDomains();
+      server.use(
+        http.post('*/api/commitments', () =>
+          HttpResponse.json({ message: 'Nope' }, { status: 400 }),
+        ),
+      );
+      renderToday();
+
+      await screen.findByTestId('next-best-action');
+      await user.click(screen.getByTestId('quick-add-fab'));
+      await user.click(await screen.findByRole('button', { name: /^Commitment/ }));
+      await user.type(screen.getByLabelText(/What are you committing to/), 'Worth keeping');
+      await user.click(screen.getByRole('button', { name: 'Add it' }));
+
+      expect(await screen.findByText('Nope')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Worth keeping')).toBeInTheDocument();
+    });
+  });
+
+  describe('editing a commitment', () => {
+    beforeEach(() => server.use(...todayWriteHandlers));
+
+    it('opens the same form prefilled and saves through PATCH', async () => {
+      const user = userEvent.setup();
+      seedCommitments(makeCard({ id: 'work-1', domain: 'WORK', title: 'Draft it' }));
+      renderToday();
+
+      await screen.findByTestId('commitment-row-work-1');
+      await user.click(screen.getByRole('button', { name: 'Actions for Draft it' }));
+      await user.click(await screen.findByRole('menuitem', { name: 'Edit' }));
+
+      const field = await screen.findByLabelText(/What are you committing to/);
+      expect(field).toHaveValue('Draft it');
+
+      await user.clear(field);
+      await user.type(field, 'Draft the storyline properly');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect(await screen.findByText('Saved')).toBeInTheDocument();
     });
   });
 
