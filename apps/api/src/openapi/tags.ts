@@ -217,6 +217,14 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'day and time or on demand; the numbers never depend on the model.',
       },
       {
+        name: 'Weekly Planning',
+        description:
+          'A draft for the coming week: fixed constraints, one primary focus, domain modes, ' +
+          'the commitments EvolvePath proposes from active routines, the cross-domain load ' +
+          'check, and the approve step that writes next week\u2019s commitments. Deterministic ' +
+          '\u2014 no model call.',
+      },
+      {
         name: 'Plan Proposals',
         description:
           'PRD §15\u2019s mutation protocol: a proposed plan change waiting on a human. ' +
