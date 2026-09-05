@@ -5,6 +5,7 @@ import { familyHandlers } from './familyHandlers';
 import { memoryHandlers } from './memoryHandlers';
 import { pathHandlers } from './pathHandlers';
 import { todayHandlers } from './todayHandlers';
+import { weeklyHandlers } from './weeklyHandlers';
 
 // Use wildcard pattern to match relative URLs
 const API_BASE = '*/api';
@@ -632,4 +633,5 @@ export const handlers = [
   ...familyHandlers,
   ...coachHandlers,
   ...memoryHandlers,
+  ...weeklyHandlers,
 ];
