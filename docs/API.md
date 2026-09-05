@@ -4105,6 +4105,44 @@ movements the new variant does not include are kept and returned under
 to lose work the user watched it save. **400 `VARIANT_NOT_DEFINED`** when the
 sibling does not exist.
 
+#### Why this weight?
+
+```http
+GET /api/workouts/sessions/{id}/exercises/{exerciseId}/explain
+Authorization: Bearer <token>
+```
+
+```json
+{ "data": { "sentence": "Two sessions at the top of the range and comfortable — a small increase to 22.5 kg.", "source": "template" } }
+```
+
+PRD §42: **the rule decides, the coach explains.** `exercises[].progression` on
+the session view is produced by a pure function over the last two COMPLETED
+sessions for that movement — two, not one, because one good day is a good day
+and two is a trend:
+
+| Situation | Action | Reason |
+|---|---|---|
+| No history | `hold` | `first_session` |
+| Sharp pain in the last session | `hold` | `discomfort` |
+| Both of the last two sessions: every prescribed set at `repMax`, RPE ≤ 8 or absent | `increase` | `top_of_range_twice` |
+| Both of the last two sessions: any set below `repMin` | `reduce` (95%) | `below_min_twice` |
+| Only one session so far | `hold` | `insufficient_history` |
+| Anything else | `hold` | `building` |
+
+Increments are equipment facts, not tuning parameters: dumbbell 2.5 kg, barbell
+5 kg, machine 5 kg, kettlebell 4 kg, cable 2.5 kg. Bodyweight and band work
+still reports `increase` with a null weight — the client says "add a rep or make
+it harder" — because reporting `hold` would tell somebody who is plainly
+progressing that they are not. Every weight is rounded to 0.25 kg.
+
+This endpoint adds a sentence and nothing else. **Any number in the model's
+reply that the suggestion does not contain discards the sentence** in favour of
+the template — a fluent "go to 25 kg" is indistinguishable from a true one to a
+reader and puts weight on a bar. `source` is `template` whenever the provider is
+down, the user has no key, or the guard fired, and the answer is cached per
+`(session, exercise)` so tapping the chip twice does not spend the key twice.
+
 #### Finish
 
 ```http

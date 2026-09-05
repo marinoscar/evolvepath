@@ -776,6 +776,7 @@ Structured training. **Nothing writes a plan until the user approves** — `gene
 - `POST /api/workouts/sessions/{id}/sets` - Idempotent on the client-minted `clientId`: a replay returns the existing row, a new `clientId` on the same `(exercise, setNumber)` is a correction. `SHARP_PAIN` flags the session and answers with the PRD §45 constant — **no model call, no programming advice**
 - `POST /api/workouts/sessions/{id}/sets/batch` - The offline replay. Per item, never all-or-nothing: `accepted` / `duplicates` / `rejected`
 - `POST /api/workouts/sessions/{id}/switch-variant` - Drop to SHORT or MINIMUM. Sets for dropped movements survive under `alsoLogged`
+- `GET /api/workouts/sessions/{id}/exercises/{exerciseId}/explain` - One sentence about the progression suggestion. **The rule decides, the coach explains** (PRD §42): a reply naming any load the deterministic rule did not is discarded for the template, and `source: 'template'` is a complete answer, not a degraded one
 - `POST /api/workouts/sessions/{id}/finish` - One `WORKOUT_LOG` evidence row, then the commitment through E05's actions. Abandoning with nothing logged leaves the commitment open, on purpose
 - `POST /api/workouts/programs/{id}/archive` - Retire it; future `PLANNED` days cancelled, history untouched
 - `DELETE /api/workouts/programs/{id}` - Drafts only (204). A live program is archived, never deleted
