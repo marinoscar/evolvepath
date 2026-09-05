@@ -2,8 +2,13 @@ import { Module } from '@nestjs/common';
 
 import { EmailModule } from '../email/email.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { CoachingNotificationsModule } from '../coaching-notifications/coaching-notifications.module';
 import { BrowserNotificationChannel } from './channels/browser-notification.channel';
 import { EmailNotificationChannel } from './channels/email-notification.channel';
+import { PushNotificationChannel } from './channels/push-notification.channel';
+import { PushSubscriptionsController } from './push/push-subscriptions.controller';
+import { PushSubscriptionsService } from './push/push-subscriptions.service';
+import { WebPushProvider } from './push/web-push.provider';
 import { NotificationDeliveryService } from './notification-delivery.service';
 import { NotificationStoreService } from './notification-store.service';
 import { NotificationStreamService } from './notification-stream.service';
@@ -84,7 +89,7 @@ import {
     // shows up in a diff.
     EmailModule,
   ],
-  controllers: [NotificationsController],
+  controllers: [NotificationsController, PushSubscriptionsController],
   providers: [
     NotificationsService,
     NotificationDeliveryService,
@@ -92,13 +97,21 @@ import {
     NotificationStreamService,
     EmailNotificationChannel,
     BrowserNotificationChannel,
+    PushNotificationChannel,
+    WebPushProvider,
+    PushSubscriptionsService,
     {
       provide: NOTIFICATION_CHANNEL_SENDERS,
       useFactory: (
         email: EmailNotificationChannel,
         browser: BrowserNotificationChannel,
-      ): NotificationChannelSender[] => [email, browser],
-      inject: [EmailNotificationChannel, BrowserNotificationChannel],
+        push: PushNotificationChannel,
+      ): NotificationChannelSender[] => [email, browser, push],
+      inject: [
+        EmailNotificationChannel,
+        BrowserNotificationChannel,
+        PushNotificationChannel,
+      ],
     },
   ],
   // ONLY the dispatcher is exported. `NotificationDeliveryService`, the store,

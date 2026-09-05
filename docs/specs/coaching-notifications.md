@@ -371,6 +371,69 @@ proves the pipeline still works while the cron is parked.
 
 ---
 
+## 7a. Push
+
+PRD §123: the moment of action is rarely one with the app open. The browser
+channel reaches an open tab over SSE and otherwise leaves an inbox row for the
+next visit — and a "starts in 20 minutes" cue that waits for the next visit is
+not a cue.
+
+**One template, two transports.** `PushNotificationChannel` renders through
+`renderBrowserContent`, the same function the inbox row uses. A user holding a
+phone and looking at an open tab must not read two different sentences about the
+same moment, and the way to guarantee that is not "keep two templates in sync"
+but "there is one". Declaring `'push'` in an event's `channels` is the whole of
+adding it.
+
+**The fallback is `resolveTo` returning null, and that is all.** A user with no
+subscription, or a deployment with no VAPID keys, gets `null`; the dispatcher
+logs, skips, and writes no delivery row, while the browser channel still writes
+the inbox row and pushes it down the stream. There is deliberately no fallback
+branch inside the push channel — one would create a second answer to "was this
+delivered?".
+
+**Partial success is success.** Someone with a laptop and a phone has two
+subscriptions. If one endpoint is dead and the other works, the user *was*
+notified; reporting a delivery failure would make the failure metric measure
+stale browser profiles rather than undelivered messages. A 404 or 410 deletes the
+row; anything else is treated as transient and the row survives.
+
+**TTL is 30 minutes, not the protocol's days.** A phone that comes back online
+tomorrow morning and buzzes "Upper A starts in 20 minutes" is worse than one that
+never buzzes, because the user cannot tell from the banner that it is stale.
+`urgency: 'high'` only for N2 and N5 — the two categories worth waking a sleeping
+device for.
+
+**`tag` is the SENT row's id**, so a re-send about the same moment replaces the
+banner rather than stacking beside it. At most two actions travel, because that
+is how many a browser renders.
+
+**A push endpoint is a bearer capability.** It is never returned by any endpoint
+(the list gives the host), never logged in full, and required to be `https`.
+
+**The dismissal route is public**, and it is the only one in this epic. See
+`docs/API.md` for the full argument; the short version is that
+`notificationclose` fires with no page, no session and no token, and the
+alternatives are losing the signal entirely or keeping a credential in a service
+worker.
+
+**The service worker is the app-shell worker from E02-07**, extended with three
+handlers — *not* a switch to `vite-plugin-pwa`'s `injectManifest`. That plugin's
+header explains why the local plugin exists (it derives the precache list from
+the finished bundle), and replacing a working build for three event listeners
+would have been a large change bought for nothing. The worker re-validates every
+link as root-relative before opening it: the server validates on the way in, and
+a push payload arrives over a channel this application does not control end to
+end.
+
+**A subscribed device raises no SSE toast.** Push and SSE are independent
+transports for the same message and a subscribed device with the tab open gets
+both; the OS notification is the better one (it survives a backgrounded tab and
+carries the buttons), so the SSE side stands down. The inbox row and the badge
+still update live.
+
+---
+
 ## 8. Rejected alternatives
 
 **Report every applicable suppress reason.** Rejected: it makes the metrics

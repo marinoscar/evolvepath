@@ -1181,6 +1181,58 @@ Two things about it are worth knowing before relying on it:
 The `link` on every row is root-relative and validated at write time
 (`sanitizeLink`); a client may hand it straight to its router.
 
+#### Web push
+
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/notifications/push/public-key` | `@Auth()` |
+| GET | `/notifications/push-subscriptions` | `@Auth()` |
+| POST | `/notifications/push-subscriptions` | `@Auth()` |
+| DELETE | `/notifications/push-subscriptions` | `@Auth()` |
+| POST | `/notifications/interactions/dismissed` | **public** |
+
+`GET /notifications/push/public-key` returns `{ "publicKey": null }` when the
+deployment has no `WEB_PUSH_*` configuration. **That is a valid state, not an
+error**: the push channel is inactive, and every user still gets the inbox row
+and the live SSE update. Only the public half of the VAPID pair is ever
+returned.
+
+`POST /notifications/push-subscriptions` takes the browser's own
+`PushSubscription.toJSON()` plus an optional user agent, and **upserts on the
+endpoint** — including re-owning one that belonged to another account. One
+browser profile signed out and signed in as somebody else is a real case, and
+the endpoint is a property of the browser rather than of the account.
+
+`GET /notifications/push-subscriptions` returns the endpoint **host**, never the
+endpoint and never the keys. A full push endpoint is a bearer capability for that
+device: anyone holding it can push to it.
+
+`DELETE` takes the endpoint in the **body**, not in a query string — for the same
+reason: a 2 KB capability URL in a query string lands in access logs and browser
+history.
+
+##### POST /notifications/interactions/dismissed — the one public route
+
+```json
+{ "sentInteractionId": "<uuid>" }
+```
+
+**204 always**, including for an id that does not exist — a different answer for
+a real id would turn this into an oracle for guessing them. Throttled per
+address.
+
+It is public because a dismissal happens with **no page open**:
+`notificationclose` fires in a service worker that may be the only thing running,
+so there is no session and no bearer token. The two alternatives are both worse
+— never recording dismissals loses the clearest signal a user gives about
+unwanted messages, and keeping a credential inside a service worker puts one in
+the least protected place in the browser.
+
+The UUID is the entire capability, and what it can do is deliberately almost
+nothing: it marks one already-sent notification as dismissed. It reads nothing
+back, cannot be enumerated (a v4 UUID), and replaying it writes one more row
+saying the same thing.
+
 #### SSE `GET /notifications/stream`
 
 The same shape, live, carrying the same `actions` field so a newly arrived row

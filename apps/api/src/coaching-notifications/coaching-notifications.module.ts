@@ -8,6 +8,7 @@ import { UserProfileModule } from '../user-profile/user-profile.module';
 import { CandidateScannerService } from './candidates/candidate-scanner.service';
 import { CoachingNotificationsService } from './coaching-notifications.service';
 import { NotificationCopywriterService } from './copy/notification-copywriter.service';
+import { NotificationInteractionsController } from './interactions/notification-interactions.controller';
 import { NotificationInteractionsService } from './interactions/notification-interactions.service';
 import { NotificationPolicyController } from './policy/notification-policy.controller';
 import { NotificationPolicyService } from './policy/notification-policy.service';
@@ -35,7 +36,7 @@ import { CoachingNotificationTask } from './tasks/coaching-notification.task';
     AiModule,
     EmailModule,
   ],
-  controllers: [NotificationPolicyController],
+  controllers: [NotificationPolicyController, NotificationInteractionsController],
   providers: [
     NotificationPolicyService,
     NotificationInteractionsService,

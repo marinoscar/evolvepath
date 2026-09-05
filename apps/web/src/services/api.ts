@@ -263,6 +263,7 @@ export const api = new ApiService();
 
 // Import types
 import type {
+  PushSubscriptionSummary,
   FamilyMember,
   FamilyMemberInput,
   FamilySummary,
@@ -729,6 +730,51 @@ export async function markNotificationRead(id: string): Promise<UnreadCountRespo
  */
 export async function markAllNotificationsRead(): Promise<UnreadCountResponse> {
   return api.post<UnreadCountResponse>('/notifications/read-all');
+}
+
+// -----------------------------------------------------------------------------
+// Web push (#64, epic E12)
+// -----------------------------------------------------------------------------
+
+/**
+ * The VAPID public key, or `null` when this deployment has no push configured.
+ *
+ * `null` is a VALID ANSWER, not an error: the push channel is simply inactive
+ * and the user still gets the inbox row and the live SSE update. The settings
+ * page renders a different sentence for it (`unconfigured`), because "turn this
+ * on" would be advice the user cannot act on.
+ */
+export async function getPushPublicKey(): Promise<{ publicKey: string | null }> {
+  return api.get<{ publicKey: string | null }>('/notifications/push/public-key');
+}
+
+export async function getPushSubscriptions(): Promise<{
+  items: PushSubscriptionSummary[];
+}> {
+  return api.get<{ items: PushSubscriptionSummary[] }>('/notifications/push-subscriptions');
+}
+
+/**
+ * Register this browser. The body is `PushSubscription.toJSON()` plus a UA
+ * string, and the server upserts on the endpoint.
+ */
+export async function createPushSubscription(body: {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  userAgent?: string;
+}): Promise<{ id: string }> {
+  return api.post<{ id: string }>('/notifications/push-subscriptions', body);
+}
+
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+  // A DELETE with a body, which is unusual but correct here: the endpoint is a
+  // 2 KB opaque URL, and putting one in a query string would land it in access
+  // logs and browser history — the two places a bearer capability for somebody's
+  // device should never be.
+  await api.delete<void>('/notifications/push-subscriptions', {
+    body: JSON.stringify({ endpoint }),
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 /** Re-exported for consumers that only import from this module. */

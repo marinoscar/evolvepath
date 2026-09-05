@@ -62,6 +62,7 @@ import { NotificationSettings } from '../components/settings/NotificationSetting
 import { useBrowserNotificationPermission } from '../hooks/useBrowserNotificationPermission';
 import { useIsMounted } from '../hooks/useIsMounted';
 import { useNotificationEvents } from '../hooks/useNotificationEvents';
+import { usePushSubscription } from '../hooks/usePushSubscription';
 import { requestBrowserNotificationPermission } from '../services/browserNotifications';
 import type { NotificationPreferencesPatch } from '../types';
 import { UserSettingsSection } from './UserSettingsSection';
@@ -70,7 +71,8 @@ import { UserSettingsSection } from './UserSettingsSection';
  *  hub card, the compact AppBar title (#95) and this page's `h1` all agree. */
 const PAGE_TITLE = 'Notifications';
 const PAGE_DESCRIPTION =
-  'Choose which events notify you, and whether they arrive by email or in your browser.';
+  'Choose which events notify you, and whether they arrive by email, in your browser, ' +
+  'or as a push notification on this device.';
 
 export default function UserNotificationsPage() {
   // Both hooks at the top level of the component, NOT inside the render prop
@@ -82,6 +84,15 @@ export default function UserNotificationsPage() {
   // still never prompts — it runs on mount, and a prompt on mount is the exact
   // mistake its own header documents at length.
   const { permission, refresh: refreshPermission } = useBrowserNotificationPermission();
+
+  // Same rule as the permission hook above: `usePushSubscription` OBSERVES on
+  // mount and prompts only from `subscribe`, which is reachable from a click.
+  const {
+    state: pushState,
+    subscribe: subscribeToPushDevice,
+    unsubscribe: unsubscribeFromPushDevice,
+    isBusy: isChangingPush,
+  } = usePushSubscription();
 
   const isMounted = useIsMounted();
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
@@ -158,6 +169,13 @@ export default function UserNotificationsPage() {
             // driven by `isRequestingPermission`.
             onRequestPermission={() => void handleRequestPermission()}
             isRequestingPermission={isRequestingPermission}
+            // Push, on this device (#64). The promises are dropped for the same
+            // reason as the permission one above: the hook owns its failure and
+            // the switch's own busy state is what the user sees.
+            pushState={pushState}
+            onSubscribePush={() => void subscribeToPushDevice()}
+            onUnsubscribePush={() => void unsubscribeFromPushDevice()}
+            isChangingPush={isChangingPush}
             onToggle={(channel, event, value) => {
               // The single-key patch. Built with a computed key so the channel
               // comes from the control that was clicked rather than from a

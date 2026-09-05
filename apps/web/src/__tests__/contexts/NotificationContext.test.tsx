@@ -291,6 +291,46 @@ describe('NotificationContext', () => {
       expect(showNativeNotificationMock).toHaveBeenCalledTimes(1);
     });
 
+    // Push and SSE are two independent transports for the same message, and a
+    // subscribed device with the tab open receives BOTH. The OS notification is
+    // the better one — it survives a backgrounded tab and carries the action
+    // buttons — so this side stands down (#64, epic E12).
+    it('raises no toast on a device that already receives push', async () => {
+      localStorage.setItem('push.subscribed', '1');
+
+      const { result } = renderHook(() => useNotifications(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current?.isLoading).toBe(false));
+
+      act(() => {
+        capturedHandlers!.onNotification(makeAppNotification({ id: 'push-device-1' }));
+      });
+
+      expect(showNativeNotificationMock).not.toHaveBeenCalled();
+      // The parts SSE is uniquely good at still happen.
+      expect(result.current?.notifications.some((n) => n.id === 'push-device-1')).toBe(true);
+
+      localStorage.removeItem('push.subscribed');
+    });
+
+    it('raises the toast again once push is turned off on this device', async () => {
+      const { result } = renderHook(() => useNotifications(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current?.isLoading).toBe(false));
+
+      // Read per arrival, not captured once: a user can subscribe on the
+      // settings page without reloading.
+      localStorage.setItem('push.subscribed', '1');
+      act(() => {
+        capturedHandlers!.onNotification(makeAppNotification({ id: 'flag-on' }));
+      });
+      expect(showNativeNotificationMock).not.toHaveBeenCalled();
+
+      localStorage.removeItem('push.subscribed');
+      act(() => {
+        capturedHandlers!.onNotification(makeAppNotification({ id: 'flag-off' }));
+      });
+      expect(showNativeNotificationMock).toHaveBeenCalledTimes(1);
+    });
+
     it('logout clears the id memory, so the same id arriving again after a re-login counts as new', async () => {
       const { result, rerender } = renderHook(() => useNotifications(), {
         wrapper: createWrapper(),

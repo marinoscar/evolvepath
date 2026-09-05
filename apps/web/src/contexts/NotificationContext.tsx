@@ -71,6 +71,7 @@ import {
 } from '../services/api';
 import { connectNotificationStream, type SseState } from '../services/notificationStream';
 import { showNativeNotification } from '../services/browserNotifications';
+import { isPushSubscribedOnThisDevice } from '../services/pushSubscriptions';
 import { isInternalLink } from '../utils/internalLink';
 import type { AppNotification } from '../types';
 
@@ -383,6 +384,19 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       // count. The user has already been interrupted about this notification;
       // a second OS-level popup for one event is the badge lie in audible form.
       if (!isNew) return;
+
+      // A DEVICE THAT ALREADY GETS PUSH RAISES NO TOAST (#64, epic E12).
+      //
+      // Push and SSE are two independent transports for the same message, and a
+      // subscribed device with the tab open receives BOTH. The OS notification
+      // is the better one — it survives the tab being backgrounded and carries
+      // the action buttons — so this side stands down. The inbox row and the
+      // badge still update live, which is the part SSE is uniquely good at.
+      //
+      // Read per arrival rather than captured once: a user can subscribe on the
+      // settings page without reloading, and the very next notification should
+      // already respect it.
+      if (isPushSubscribedOnThisDevice()) return;
 
       // THIRD IN THE ORDERING, and deliberately last: the centre is already
       // correct by this point, so everything below is free to fail.

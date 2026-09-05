@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '../../utils/test-utils';
@@ -7,6 +7,7 @@ import {
   isEventChannelEnabled,
   preferenceWriteFor,
   browserChannelState,
+  pushChannelState,
 } from '../../../components/settings/NotificationSettings';
 import type { NotificationEventDef, NotificationPreferences } from '../../../types';
 
@@ -404,5 +405,217 @@ describe('NotificationSettings component', () => {
     expect(
       screen.getByRole('switch', { name: /email notifications for weekly digest/i }),
     ).toBeDisabled();
+  });
+});
+
+// =============================================================================
+// Push (#64, epic E12)
+// =============================================================================
+
+const COACHING: NotificationEventDef = {
+  key: 'coach.commitment_upcoming',
+  label: 'Upcoming commitment',
+  description: 'A commitment on your path starts in about 20 minutes.',
+  channels: ['browser', 'push'],
+  defaultEnabled: true,
+  mandatory: false,
+};
+
+describe('pushChannelState', () => {
+  // Four "no" cases, three different owners. Collapsing them to one disabled
+  // switch is how a settings page ends up telling somebody to turn on a thing
+  // that cannot be turned on.
+  it.each([
+    ['unsupported', 'This browser cannot receive push notifications.'],
+    ['unconfigured', 'Push is not configured on this server.'],
+    ['denied', 'Notifications are blocked for this site'],
+  ] as const)('%s disables the switch and says why', (state, helper) => {
+    const result = pushChannelState(state, false);
+
+    expect(result.switchDisabled).toBe(true);
+    expect(result.disabled).toBe(true);
+    expect(result.helper).toContain(helper);
+  });
+
+  it('lets an unsubscribed device turn it on', () => {
+    const result = pushChannelState('unsubscribed', false);
+
+    expect(result.switchDisabled).toBe(false);
+    expect(result.disabled).toBe(false);
+  });
+
+  it('says nothing is wrong once subscribed', () => {
+    expect(pushChannelState('subscribed', false)).toMatchObject({
+      switchDisabled: false,
+      note: null,
+    });
+  });
+
+  // The single most confusing state for a developer: everything looks right and
+  // nothing arrives, because `npm run dev` registers no service worker at all.
+  it('explains the dev server, where there is no service worker to push to', () => {
+    const result = pushChannelState('unsubscribed', true);
+
+    expect(result.switchDisabled).toBe(true);
+    expect(result.helper).toContain('production build');
+  });
+
+  it('still reports a real blocker ahead of the dev-server note', () => {
+    expect(pushChannelState('denied', true).helper).toContain('blocked');
+  });
+});
+
+describe('NotificationSettings push column', () => {
+  const onToggle = vi.fn();
+
+  beforeEach(() => {
+    vi.stubEnv('DEV', false);
+    onToggle.mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const renderWith = (props: Record<string, unknown> = {}) =>
+    render(
+      <NotificationSettings
+        events={[COACHING]}
+        preferences={undefined}
+        onToggle={onToggle}
+        browserPermission="granted"
+        pushState="subscribed"
+        {...props}
+      />,
+    );
+
+  // The whole "one registry entry" promise: the column exists because the event
+  // declares the channel, with no column logic changed anywhere.
+  it('renders a push switch for an event that declares the channel', () => {
+    renderWith();
+
+    expect(
+      screen.getByRole('switch', { name: /push notifications for upcoming commitment/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders no push switch for an event that does not', () => {
+    render(
+      <NotificationSettings
+        events={[WELCOME]}
+        preferences={undefined}
+        onToggle={onToggle}
+        browserPermission="granted"
+        pushState="subscribed"
+      />,
+    );
+
+    expect(
+      screen.queryByRole('switch', { name: /push notifications for welcome/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('disables the push cells when the device cannot receive push', () => {
+    renderWith({ pushState: 'unconfigured' });
+
+    expect(
+      screen.getByRole('switch', { name: /push notifications for upcoming commitment/i }),
+    ).toBeDisabled();
+  });
+
+  // Push is disabled by a state of its own, independent of whether the browser
+  // granted notification permission.
+  it('leaves the browser cells alone when only push is unavailable', () => {
+    renderWith({ pushState: 'unconfigured' });
+
+    expect(
+      screen.getByRole('switch', { name: /browser notifications for upcoming commitment/i }),
+    ).toBeEnabled();
+  });
+});
+
+describe('NotificationSettings push switch', () => {
+  const onToggle = vi.fn();
+  const onSubscribePush = vi.fn();
+  const onUnsubscribePush = vi.fn();
+
+  beforeEach(() => {
+    // Vitest runs with `DEV` true, which is exactly the state that disables the
+    // switch and shows the "needs the production build" note. These tests are
+    // about the switch's ordinary behaviour, so they run as a production build;
+    // the dev note has its own case in `pushChannelState` above.
+    vi.stubEnv('DEV', false);
+    onToggle.mockClear();
+    onSubscribePush.mockClear();
+    onUnsubscribePush.mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const renderWith = (props: Record<string, unknown> = {}) =>
+    render(
+      <NotificationSettings
+        events={[COACHING]}
+        preferences={undefined}
+        onToggle={onToggle}
+        browserPermission="granted"
+        pushState="unsubscribed"
+        onSubscribePush={onSubscribePush}
+        onUnsubscribePush={onUnsubscribePush}
+        {...props}
+      />,
+    );
+
+  // Per DEVICE, not per account — a user with a laptop and a phone turns it on
+  // twice, and the label has to say so.
+  it('names the device, not the account', () => {
+    renderWith();
+
+    expect(screen.getByLabelText(/push on this device/i)).toBeInTheDocument();
+  });
+
+  it('subscribes on a click, and never on mount', async () => {
+    const user = userEvent.setup();
+    renderWith();
+
+    expect(onSubscribePush).not.toHaveBeenCalled();
+
+    await user.click(screen.getByLabelText(/push on this device/i));
+
+    expect(onSubscribePush).toHaveBeenCalledTimes(1);
+    expect(onUnsubscribePush).not.toHaveBeenCalled();
+  });
+
+  it('unsubscribes when it is already on', async () => {
+    const user = userEvent.setup();
+    renderWith({ pushState: 'subscribed' });
+
+    await user.click(screen.getByLabelText(/push on this device/i));
+
+    expect(onUnsubscribePush).toHaveBeenCalledTimes(1);
+  });
+
+  it('is disabled while a change is in flight', () => {
+    renderWith({ isChangingPush: true });
+
+    expect(screen.getByLabelText(/push on this device/i)).toBeDisabled();
+    expect(screen.getByText(/waiting for your browser/i)).toBeInTheDocument();
+  });
+
+  it('is absent entirely when no event declares the channel', () => {
+    render(
+      <NotificationSettings
+        events={[WELCOME]}
+        preferences={undefined}
+        onToggle={onToggle}
+        browserPermission="granted"
+        pushState="unsubscribed"
+        onSubscribePush={onSubscribePush}
+      />,
+    );
+
+    expect(screen.queryByLabelText(/push on this device/i)).not.toBeInTheDocument();
   });
 });

@@ -120,7 +120,7 @@ describe('UserNotificationsPage', () => {
 
     expect(screen.getByRole('heading', { name: /notifications/i, level: 1 })).toBeInTheDocument();
     expect(
-      screen.getByText(/choose which events notify you, and whether they arrive by email or in your browser/i),
+      screen.getByText(/choose which events notify you, and whether they arrive by email/i),
     ).toBeInTheDocument();
   });
 

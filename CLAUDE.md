@@ -524,6 +524,13 @@ above. Don't restate any of that here; extend those three instead.
 - `GET /api/pat` - List current user's tokens
 - `DELETE /api/pat/{id}` - Revoke a token
 
+### Notifications (current user)
+- `GET /api/notifications/push/public-key` - The VAPID public key, or `null` when push is not configured
+- `GET /api/notifications/push-subscriptions` - This user's devices, by endpoint **host** — never the endpoint, never the keys
+- `POST /api/notifications/push-subscriptions` - Register this browser; upserts on the endpoint and re-owns one held by another account
+- `DELETE /api/notifications/push-subscriptions` - Stop pushing to this browser (204, idempotent)
+- `POST /api/notifications/interactions/dismissed` - **Public.** The service worker's dismissal report; the UUID is the whole capability and the answer is always 204
+
 ### Coaching Notifications (current user)
 - `GET /api/me/notification-policy` - Quiet hours, the three caps, muted categories and the current fatigue reduction
 - `PATCH /api/me/notification-policy` - Merge patch; `quietHours: null` clears. Audited as `notification_policy:update`
@@ -777,6 +784,7 @@ Note: `DATABASE_URL` is constructed automatically from these variables at runtim
 
 **Coaching notifications (epic E12):**
 - `COACHING_NOTIFICATIONS_ENABLED` - The decision engine's five-minute cron (default: `true`). An off switch rather than a feature flag: the engine's failure mode is sending people messages, so it must be stoppable in one restart. The on-demand `POST /api/auth/test/run-job` route (non-production) is deliberately not gated by it.
+- `WEB_PUSH_PUBLIC_KEY` / `WEB_PUSH_PRIVATE_KEY` / `WEB_PUSH_SUBJECT` - VAPID credentials for web push, generated once per deployment with `npx web-push generate-vapid-keys`. All three optional: without them the push channel is inactive and every user still gets the inbox row and the live update. `WEB_PUSH_PRIVATE_KEY` is a secret and is never logged or returned. **Rotating them invalidates every existing subscription** — each browser signed up against the old public key.
 
 Note: `SECRETS_ENCRYPTION_KEY` now also protects the platform OpenAI key and every user's own key. Without it, saving either fails.
 
@@ -826,6 +834,12 @@ settings hub makes on its own axis (epic #109, wired end to end by #128).
      template name in `EVENT_EMAIL_TEMPLATES`
      (`notifications/channels/email-notification.channel.ts`). A missing entry
      is a recorded delivery failure, not a silent skip.
+   - *Push*: **nothing to write.** The push channel renders the browser
+     template (`renderBrowserContent`), because a user holding a phone and
+     looking at an open tab must not read two different sentences about the same
+     moment — and the way to guarantee that is not "keep two templates in sync"
+     but "there is one". Declaring `'push'` in the event's `channels` is the
+     whole of it.
    - *Browser*: an entry in `EVENT_BROWSER_TEMPLATES`
      (`notifications/channels/browser-notification.channel.ts`) returning
      `{ title, body, link? }`. Optional — a miss falls back to the registry's

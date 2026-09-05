@@ -97,7 +97,7 @@
  * live user preferences, which is the one shape of change this registry
  * exists to avoid.
  */
-export const NOTIFICATION_CHANNELS = ['email', 'browser'] as const;
+export const NOTIFICATION_CHANNELS = ['email', 'browser', 'push'] as const;
 
 /** A delivery channel. See {@link NOTIFICATION_CHANNELS}. */
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
@@ -250,14 +250,14 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     key: 'coach.commitment_upcoming',
     label: 'Upcoming commitment',
     description: 'A commitment on your path starts in about 20 minutes.',
-    channels: ['browser'],
+    channels: ['browser', 'push'],
     defaultEnabled: true,
   },
   {
     key: 'coach.start_cue',
     label: 'Start cue',
     description: 'A commitment is due now and ready to start.',
-    channels: ['browser'],
+    channels: ['browser', 'push'],
     defaultEnabled: true,
   },
   {
@@ -265,42 +265,42 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     label: 'Start rescue',
     description:
       'Something you have moved more than once is due today — a smaller start is offered.',
-    channels: ['browser'],
+    channels: ['browser', 'push'],
     defaultEnabled: true,
   },
   {
     key: 'coach.fallback_offer',
     label: 'Fallback offer',
     description: 'The full version no longer fits the time left, but a shorter one does.',
-    channels: ['browser'],
+    channels: ['browser', 'push'],
     defaultEnabled: true,
   },
   {
     key: 'coach.family_presence',
     label: 'Family presence cue',
     description: 'A family ritual starts soon.',
-    channels: ['browser'],
+    channels: ['browser', 'push'],
     defaultEnabled: true,
   },
   {
     key: 'coach.recovery',
     label: 'Recovery',
     description: 'After a few days away, one small restart action is ready.',
-    channels: ['browser'],
+    channels: ['browser', 'push'],
     defaultEnabled: true,
   },
   {
     key: 'coach.evidence',
     label: 'Evidence celebration',
     description: 'You reached a consistency milestone worth noticing.',
-    channels: ['browser'],
+    channels: ['browser', 'push'],
     defaultEnabled: true,
   },
   {
     key: 'coach.weekly_review_ready',
     label: 'Weekly review ready',
     description: 'Your weekly review has been prepared.',
-    channels: ['email', 'browser'],
+    channels: ['email', 'browser', 'push'],
     defaultEnabled: true,
   },
   {
@@ -308,7 +308,7 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     label: 'Plan issue',
     description:
       'The coach proposes a plan change because the current schedule keeps failing.',
-    channels: ['browser'],
+    channels: ['browser', 'push'],
     defaultEnabled: true,
   },
 ];

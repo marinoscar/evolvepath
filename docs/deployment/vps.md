@@ -153,6 +153,37 @@ runs **on the VPS**.
 Full flag reference and exit codes: [`apps/cli/README.md`, "Deploying to a
 server"](../../apps/cli/README.md#deploying-to-a-server).
 
+## 2a. Web push (optional)
+
+Coaching notifications reach a phone with the app closed only when this
+deployment has VAPID keys. Generate a pair **once**, on the VPS:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+and set three variables in the environment file:
+
+```
+WEB_PUSH_PUBLIC_KEY=<the public key>
+WEB_PUSH_PRIVATE_KEY=<the private key>
+WEB_PUSH_SUBJECT=mailto:you@example.com
+```
+
+`WEB_PUSH_SUBJECT` is how a push service contacts whoever operates this
+deployment; a `mailto:` address or an https URL.
+
+**Leaving them unset is a supported configuration.** The push channel is simply
+inactive: the switch on `/settings/notifications` reads "Push is not configured
+on this server", and every user still gets their notifications in the app's own
+inbox and live in an open tab.
+
+**Rotating these keys invalidates every existing subscription**, because each
+browser signed up against the old public key. Every user has to turn push back
+on, on every device. Treat it as a deliberate migration rather than as routine
+secret rotation — unlike `SECRETS_ENCRYPTION_KEY`, which has a runbook for
+exactly that.
+
 ## 3. After install: the first login (do this before anything else)
 
 **A successful `install` does not create an admin user, or any user at
