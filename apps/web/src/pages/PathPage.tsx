@@ -21,6 +21,9 @@ import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { BestSelfCard } from '../components/path/BestSelfCard';
 import { BestSelfDialog } from '../components/path/BestSelfDialog';
 import { DomainSection } from '../components/path/DomainSection';
+import { PathFamilySection } from '../components/family/PathFamilySection';
+import { useRituals } from '../hooks/useRituals';
+import { useFamilyUpcoming } from '../hooks/useFamilyUpcoming';
 import { OutcomeFormDialog } from '../components/path/OutcomeFormDialog';
 
 /** A domain the user has never set reports GROW with no stored row. */
@@ -44,6 +47,8 @@ const DEFAULT_MODE = (domain: Domain): DomainMode => ({
  */
 export default function PathPage() {
   const navigate = useNavigate();
+  const rituals = useRituals();
+  const familyUpcoming = useFamilyUpcoming();
   const [showArchived, setShowArchived] = useState(false);
   const [bestSelfOpen, setBestSelfOpen] = useState(false);
   const [outcomeDialogDomain, setOutcomeDialogDomain] = useState<Domain | null>(null);
@@ -129,6 +134,8 @@ export default function PathPage() {
             ))}
           </Grid>
         )}
+
+        <PathFamilySection rituals={rituals.rituals} upcoming={familyUpcoming.commitments} />
       </Box>
 
       <BestSelfDialog

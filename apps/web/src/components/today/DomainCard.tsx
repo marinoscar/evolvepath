@@ -1,12 +1,13 @@
+import type { ReactNode } from 'react';
 import { Card, CardContent, Chip, List, Typography, Box } from '@mui/material';
 
 import type { CommitmentCard, Domain, DomainModeKind } from '../../types';
+import type { FamilyRowAction } from '../family/familyLabels';
 import { CommitmentRow } from './CommitmentRow';
 import {
   DOMAIN_EMPTY_COPY,
   DOMAIN_LABELS,
   DOMAIN_MODE_LABELS,
-  type RowAction,
 } from './todayLabels';
 
 interface DomainCardProps {
@@ -14,7 +15,13 @@ interface DomainCardProps {
   mode: DomainModeKind;
   commitments: CommitmentCard[];
   pendingId?: string | null;
-  onAction: (action: RowAction, commitment: CommitmentCard) => void;
+  /**
+   * Rendered beside the heading. The Family card puts a birthday cue here
+   * (epic E08); an optional slot rather than a domain-specific branch, so the
+   * card stays one component that knows nothing about any particular domain.
+   */
+  headerExtra?: ReactNode;
+  onAction: (action: FamilyRowAction, commitment: CommitmentCard) => void;
 }
 
 /**
@@ -30,6 +37,7 @@ export function DomainCard({
   mode,
   commitments,
   pendingId,
+  headerExtra,
   onAction,
 }: DomainCardProps) {
   const modeLabel = DOMAIN_MODE_LABELS[mode];
@@ -54,6 +62,7 @@ export function DomainCard({
               color={mode === 'PAUSE' ? 'default' : 'info'}
             />
           )}
+          {headerExtra}
         </Box>
 
         {commitments.length === 0 ? (

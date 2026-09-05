@@ -17,13 +17,20 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import HistoryIcon from '@mui/icons-material/History';
 
 import type { CommitmentCard, CommitmentStatus } from '../../types';
+import type { FamilyRowAction } from '../family/familyLabels';
 import { ACTION_LABELS, formatTime, type RowAction } from './todayLabels';
+import {
+  familyActionLabel,
+  familyRowActions,
+  familyStatusLabel,
+  isFamilyOccurrence,
+} from './familyActions';
 import { CommitmentActionsMenu } from './CommitmentActionsMenu';
 
 interface CommitmentRowProps {
   commitment: CommitmentCard;
   disabled?: boolean;
-  onAction: (action: RowAction, commitment: CommitmentCard) => void;
+  onAction: (action: FamilyRowAction, commitment: CommitmentCard) => void;
 }
 
 function StatusIcon({ status }: { status: CommitmentStatus }) {
@@ -58,18 +65,25 @@ function StatusIcon({ status }: { status: CommitmentStatus }) {
 export function CommitmentRow({ commitment, disabled = false, onAction }: CommitmentRowProps) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
+  const isFamily = isFamilyOccurrence(commitment);
+
   // `edit` is a client-side action (PATCH, not an action endpoint), so it is
   // appended here rather than expected back from the server — and only where
-  // the API would accept the patch.
-  const actions: RowAction[] = [
-    ...commitment.availableActions,
+  // the API would accept the patch. `ready` (epic E08) is the same shape: a
+  // transition rather than an action endpoint, offered only on a family row.
+  const actions: FamilyRowAction[] = [
+    ...familyRowActions(commitment),
     ...(commitment.status === 'PLANNED' || commitment.status === 'READY'
-      ? (['edit'] as RowAction[])
+      ? (['edit'] as FamilyRowAction[])
       : []),
   ];
 
+  const labelFor = (action: FamilyRowAction) =>
+    isFamily ? familyActionLabel(action) : ACTION_LABELS[action as RowAction];
+
   const [primary, ...rest] = actions;
   const isTerminal = commitment.availableActions.length === 0;
+  const statusLabel = familyStatusLabel(commitment);
 
   return (
     <ListItem
@@ -104,6 +118,11 @@ export function CommitmentRow({ commitment, disabled = false, onAction }: Commit
               {formatTime(commitment.scheduledStart)} · {commitment.durationMinutes} min
             </Typography>
 
+            {/* "Kept", not "Done": a family ritual is not a task ticked off. */}
+            {statusLabel && (
+              <Chip size="small" variant="outlined" color="success" label={statusLabel} />
+            )}
+
             {/* The fact PRD §101 wants visible: this was done, but smaller. */}
             {commitment.versionUsed && commitment.versionUsed !== 'FULL' && (
               <Chip
@@ -128,9 +147,14 @@ export function CommitmentRow({ commitment, disabled = false, onAction }: Commit
                 size="small"
                 variant="text"
                 disabled={disabled}
+                // Named on a FAMILY row only. Several "I'm in" buttons can sit
+                // on one screen, and "I'm in" alone does not say which dinner.
+                // On every other row the visible label already IS the
+                // accessible name, and overriding it would only add noise.
+                aria-label={isFamily ? `${labelFor(primary)}: ${commitment.title}` : undefined}
                 onClick={() => onAction(primary, commitment)}
               >
-                {ACTION_LABELS[primary]}
+                {labelFor(primary)}
               </Button>
             )}
           </Box>
@@ -140,6 +164,7 @@ export function CommitmentRow({ commitment, disabled = false, onAction }: Commit
       <CommitmentActionsMenu
         anchorEl={anchorEl}
         actions={rest}
+        labelFor={labelFor}
         onClose={() => setAnchorEl(null)}
         onSelect={(action) => onAction(action, commitment)}
       />

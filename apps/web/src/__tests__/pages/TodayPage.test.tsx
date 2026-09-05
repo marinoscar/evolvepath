@@ -16,6 +16,7 @@ import {
   seedTodayState,
   todayWriteHandlers,
 } from '../mocks/todayHandlers';
+import { makeMember, seedFamilyState } from '../mocks/familyHandlers';
 import TodayPage from '../../pages/TodayPage';
 
 // =============================================================================
@@ -551,6 +552,101 @@ describe('TodayPage', () => {
       await user.click(screen.getByRole('button', { name: 'Save' }));
 
       expect(await screen.findByText('Saved')).toBeInTheDocument();
+    });
+  });
+
+  // =========================================================================
+  // Family words over the generic lifecycle (epic E08, issue #50)
+  // =========================================================================
+  //
+  // LABELS ONLY. Every family action posts to the endpoint the generic row
+  // posts to, and the API's matrix decides what is allowed — so these tests
+  // assert the WORDS and the request, never a second set of rules.
+  describe('family rows', () => {
+    const familyCard = (overrides = {}) =>
+      makeCard({
+        title: 'Phone-free dinner',
+        domain: 'FAMILY',
+        status: 'PLANNED',
+        ritualId: 'ritual-1',
+        ...overrides,
+      });
+
+    it('speaks in family words on a family row', async () => {
+      seedCommitments(familyCard());
+      renderToday();
+
+      expect(
+        await screen.findByRole('button', { name: /I'm in: Phone-free dinner/ }),
+      ).toBeInTheDocument();
+
+      await userEvent.click(screen.getByLabelText('Actions for Phone-free dinner'));
+
+      expect(screen.getByRole('menuitem', { name: 'Move it' })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: 'Skip today' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'Reschedule' })).not.toBeInTheDocument();
+    });
+
+    it('leaves a work row’s words alone', async () => {
+      seedCommitments(makeCard({ title: 'Draft the proposal', domain: 'WORK', status: 'PLANNED' }));
+      renderToday();
+
+      expect(await screen.findByRole('button', { name: 'Start' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /I'm in/ })).not.toBeInTheDocument();
+    });
+
+    it('moves the row to READY when the user says “I’m in”', async () => {
+      // The transition endpoint lives in `todayWriteHandlers` so the Path
+      // suite keeps the Path store's version; this test needs the write to
+      // land on TODAY's board.
+      server.use(...todayWriteHandlers);
+
+      const card = familyCard();
+      seedCommitments(card);
+      renderToday();
+
+      await userEvent.click(
+        await screen.findByRole('button', { name: /I'm in: Phone-free dinner/ }),
+      );
+
+      // The row now offers E05's Start, from the API's own availableActions.
+      // Family primaries carry the title in their accessible name, because
+      // several rows on one card would otherwise all be called "Start".
+      expect(
+        await screen.findByRole('button', { name: 'Start: Phone-free dinner' }),
+      ).toBeInTheDocument();
+      expect(getTodayState().commitments.find((row) => row.id === card.id)?.status).toBe('READY');
+    });
+
+    it('says "Kept" rather than "Done" on a finished family commitment', async () => {
+      seedCommitments(familyCard({ status: 'COMPLETED' }));
+      renderToday();
+
+      expect(await screen.findByText('Kept')).toBeInTheDocument();
+    });
+
+    it('shows a birthday cue on the Family card when one is close', async () => {
+      const soon = new Date(Date.now() + 3 * 24 * 3600_000);
+      const birthday = `1900-${String(soon.getMonth() + 1).padStart(2, '0')}-${String(
+        soon.getDate(),
+      ).padStart(2, '0')}`;
+
+      seedFamilyState({ members: [makeMember({ nickname: 'Mia', birthday })] });
+      seedCommitments(familyCard());
+      renderToday();
+
+      expect(await screen.findByTestId('today-birthday-cue')).toHaveTextContent(
+        /Mia.s birthday in 3 days/,
+      );
+    });
+
+    it('shows no cue when no birthday is close', async () => {
+      seedFamilyState({ members: [makeMember({ nickname: 'Mia', birthday: null })] });
+      seedCommitments(familyCard());
+      renderToday();
+
+      await screen.findByText('Phone-free dinner');
+      expect(screen.queryByTestId('today-birthday-cue')).not.toBeInTheDocument();
     });
   });
 

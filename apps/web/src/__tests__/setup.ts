@@ -2,6 +2,7 @@ import '@testing-library/jest-dom';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { server } from './mocks/server';
+import { resetFamilyState } from './mocks/familyHandlers';
 import { resetPathState } from './mocks/pathHandlers';
 import { resetTodayState } from './mocks/todayHandlers';
 
@@ -226,6 +227,7 @@ afterEach(() => {
   // stateless handlers `resetHandlers` alone is not enough: without this a
   // test would inherit the previous one's outcomes and plans.
   resetPathState();
+  resetFamilyState();
   resetTodayState();
   resetViewportWidth();
   mediaQueryListRegistry.clear();

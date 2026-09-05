@@ -263,6 +263,14 @@ export const api = new ApiService();
 
 // Import types
 import type {
+  FamilyMember,
+  FamilyMemberInput,
+  FamilySummary,
+  LintResult,
+  MaterializeResult,
+  Ritual,
+  RitualInput,
+  RitualWithUpcoming,
   AllowlistResponse,
   AllowedEmailEntry,
   UsersResponse,
@@ -1036,4 +1044,78 @@ export async function applyDecomposition(
   proposal: DecompositionProposal,
 ): Promise<CommitmentCard> {
   return api.post<CommitmentCard>(`/commitments/${id}/actions/decompose/apply`, proposal);
+}
+
+// --- Family (epic E08) ------------------------------------------------------
+
+export async function getFamilyMembers(): Promise<FamilyMember[]> {
+  return api.get<FamilyMember[]>('/family/members');
+}
+
+export async function createFamilyMember(body: FamilyMemberInput): Promise<FamilyMember> {
+  return api.post<FamilyMember>('/family/members', body);
+}
+
+export async function updateFamilyMember(
+  id: string,
+  body: Partial<FamilyMemberInput>,
+): Promise<FamilyMember> {
+  return api.patch<FamilyMember>(`/family/members/${id}`, body);
+}
+
+export async function deleteFamilyMember(id: string): Promise<void> {
+  await api.delete(`/family/members/${id}`);
+}
+
+export async function getRituals(params?: { active?: boolean }): Promise<Ritual[]> {
+  const suffix = params?.active === undefined ? '' : `?active=${params.active}`;
+  return api.get<Ritual[]>(`/family/rituals${suffix}`);
+}
+
+/** The ritual plus the next seven days of its occurrences, as commitment cards. */
+export async function getRitual(id: string): Promise<RitualWithUpcoming> {
+  return api.get<RitualWithUpcoming>(`/family/rituals/${id}`);
+}
+
+/**
+ * 400 `BEHAVIOUR_TARGETS_OTHER_PERSON` when the title describes another
+ * person's feelings or conduct. The `ApiError`'s `details` carries `match`.
+ */
+export async function createRitual(body: RitualInput): Promise<Ritual> {
+  return api.post<Ritual>('/family/rituals', body);
+}
+
+export async function updateRitual(id: string, body: RitualInput): Promise<Ritual> {
+  return api.patch<Ritual>(`/family/rituals/${id}`, body);
+}
+
+export async function deleteRitual(id: string): Promise<void> {
+  await api.delete(`/family/rituals/${id}`);
+}
+
+/** Idempotent: a repeat is `skipped`, never a duplicate occurrence. */
+export async function materializeRitual(id: string): Promise<MaterializeResult> {
+  return api.post<MaterializeResult>(`/family/rituals/${id}/materialize`, {});
+}
+
+/**
+ * Always 200 — a check, not a refusal.
+ *
+ * The verdict is deterministic; `suggestion` is `null` with `source: 'none'`
+ * whenever the coach is unavailable, so the caller renders the error with or
+ * without the rewrite button and never branches on a status code.
+ */
+export async function lintFamilyTitle(title: string): Promise<LintResult> {
+  return api.post<LintResult>('/family/lint', { title });
+}
+
+export async function getFamilySummary(params?: {
+  weekStart?: string;
+  weeks?: number;
+}): Promise<FamilySummary> {
+  const query = new URLSearchParams();
+  if (params?.weekStart) query.set('weekStart', params.weekStart);
+  if (params?.weeks !== undefined) query.set('weeks', String(params.weeks));
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return api.get<FamilySummary>(`/family/summary${suffix}`);
 }
