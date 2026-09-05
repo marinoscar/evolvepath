@@ -462,6 +462,34 @@ Three rules that are easy to break and expensive to rediscover:
   PRD §105. `apps/api/src/family/no-score.guard.spec.ts` fails the build if one
   reaches a family schema, DTO or `/api/family` OpenAPI path.
 
+## The workout runner and its offline outbox
+
+`/workout/:sessionId` (`apps/web/src/pages/WorkoutRunnerPage.tsx`) is full
+screen **by route placement and nothing else** — it sits outside `Layout`,
+exactly like `/start/:commitmentId`, so there is no rail and no bottom bar to
+hide and **none of the five coupled breakpoint gates is touched**. PRD §11 asks
+the runner to replace the navigation while a workout runs; "replace" is achieved
+by never mounting it rather than by a gate that remembers to turn it off.
+
+Three rules that are easy to break:
+
+- **Every timer reads a clock; nothing counts.** The rest timer, the elapsed
+  header and the commitment timer all compute from a timestamp on each render.
+  A counter that decrements on an interval is wrong the moment the tab is
+  backgrounded, the phone sleeps or the browser throttles timers — which is
+  every set of a real workout, because people put the phone down.
+- **A completed set is written to `localStorage` before it is sent**
+  (`useSetLogOutbox.ts`, key `workout.outbox.<sessionId>`). The user did the set;
+  a failed request must not be able to take it off the screen. The retry can be
+  dumb because the server is idempotent on the client-minted `clientId` — a
+  replay comes back in `duplicates`, never as a second row. A **4xx is not
+  retried**: the server said no, and a set that never leaves the queue is a badge
+  that never clears.
+- **Sharp pain replaces the set inputs and offers only stop.** The copy comes
+  from the server's own constant (`workout-safety-copy.ts`), quoted identically
+  by the runner and the progression explanation, and it contains no programming
+  advice — not "try it lighter", not "use the machine version" (PRD §45).
+
 ## Architecture Principles
 
 1. **Separation of Concerns**: UI handles presentation only; API handles all business logic and authorization
