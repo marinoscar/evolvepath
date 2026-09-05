@@ -2,6 +2,7 @@ import '@testing-library/jest-dom';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { server } from './mocks/server';
+import { resetCoachState } from './mocks/coachHandlers';
 import { resetFamilyState } from './mocks/familyHandlers';
 import { resetPathState } from './mocks/pathHandlers';
 import { resetTodayState } from './mocks/todayHandlers';
@@ -228,6 +229,7 @@ afterEach(() => {
   // test would inherit the previous one's outcomes and plans.
   resetPathState();
   resetFamilyState();
+  resetCoachState();
   resetTodayState();
   resetViewportWidth();
   mediaQueryListRegistry.clear();

@@ -162,6 +162,11 @@ function AppRoutes() {
                   <Route path="/path/outcomes/:id" element={<OutcomeDetailPage />} />
                   <Route path="/path/family" element={<FamilyPage />} />
                   <Route path="/coach" element={<CoachPage />} />
+                {/* One thread, its own URL. `/coach/:id` is what the narrow
+                    layout navigates to and what a link to a conversation is;
+                    `DESTINATION_ROUTES.coach` already owns the prefix, so the
+                    rail lights up on both without a registry change. */}
+                <Route path="/coach/:conversationId" element={<CoachPage />} />
                   <Route path="/progress" element={<ProgressPage />} />
                   {/* The per-user settings surface (#96, epic #90) — the same
                       hub component `/admin/settings` renders, over

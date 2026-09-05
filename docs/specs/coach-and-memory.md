@@ -539,3 +539,92 @@ rewritten around a fifth that wanted a different one.
   text; this persona must not have any.
 - **A cron proposer.** E10's weekly review calls `proposeInsights`; a schedule
   that generates claims about people unprompted is a larger thing to own.
+
+---
+
+## 6. The Coach screen
+
+*(E06-07, issue #86 — `apps/web/src/pages/CoachPage.tsx`,
+`apps/web/src/components/coach/`)*
+
+### Layout at the `sm` boundary
+
+`CoachPage` uses `useMediaQuery(theme.breakpoints.down('sm'))`. **This is a
+page-local layout choice, NOT one of the five coupled breakpoint gates** listed
+in `CLAUDE.md` (`Layout`'s `showRail`, `BottomNav`'s self-gate, `<main>`'s
+padding, `SettingsHub`'s and `AppBar`'s compact checks). Nothing here mounts or
+unmounts navigation, changes `<main>`'s padding, or touches the rail — it only
+decides whether the list and the conversation are one screen or two. The same
+is true of `ProposalCard`'s `dense` flag.
+
+Below `sm` the two are separate **screens**, not a drawer: a 280 px panel over a
+375 px window leaves less room for the thing the user came to read than the
+panel takes. `/coach` is the list, `/coach/:conversationId` is one thread with a
+back arrow. Above `sm` they sit side by side.
+
+`DESTINATION_ROUTES.coach` already owns the `/coach` prefix, so the
+per-conversation route needed no registry change — and that prefix ownership is
+what stops the rail going blank the moment a user opens a conversation.
+
+### The optimistic bubble
+
+A coaching turn takes seconds, and a user who types a sentence into an empty
+screen assumes it did not send. `useCoachChat` inserts the USER message
+immediately with `status: 'pending'`, replaces it with the server's pair when
+the reply arrives, and on failure leaves it `status: 'failed'` **with the text
+intact** — a retry that lost what the user wrote is not a retry.
+
+Temp ids are prefixed `tmp-` and are never sent to the API. They are a React key
+and the row `send` replaces, and nothing else.
+
+### The proposal card
+
+PRD §15's three buttons, and nothing that could be mistaken for a fourth:
+**Accept**, **Edit**, **Keep current plan**. The last is worded that way on
+purpose — the user is choosing between two plans, one of which is already
+theirs, and a dismissive verb would make declining feel like a failure to
+comply.
+
+After a decision the buttons are replaced by a chip carrying **text**, not
+colour alone: "Plan updated (v2)" (linking to `/path`) or "Kept current plan".
+
+`EditProposalDialog` edits time, day and duration — deliberately not a JSON
+editor. The point of Edit is "yes, but at ten", not "let me author a change
+set"; anything the dialog cannot express is a conversation with the coach.
+
+`PlanChangeDiff` is exported because E10's Weekly Review renders the same
+`DiffEntry[]` from the same protocol — one component, so a plan change looks
+identical wherever the user is asked about it.
+
+### "Why this?", safety and degradation
+
+`WhyThisExpander` shows `reasoning_summary` and nothing else, and is **absent
+when `structured` is null** — which is exactly when the reply was a template,
+so there is no reasoning to explain. That is the client-side consequence of §4's
+"a fallback is indistinguishable from no model output".
+
+`SafetyNote` renders `userFacingNote` as `severity="info"`, not `warning`: the
+message is "this belongs with someone qualified", and an alarming banner would
+read as the app being broken rather than as the app being careful.
+
+### Accessibility
+
+- The message area is `role="log" aria-live="polite" aria-relevant="additions"`:
+  a screen reader hears the reply arrive, not the whole conversation re-read.
+- New messages **scroll, never focus**. Moving focus on every arriving message
+  would yank a keyboard user out of whatever they were reading or typing.
+- The conversation list is `ListItem` + `secondaryAction`, not a delete button
+  inside the row button. The nested form traps keyboard users (tabbing to
+  Delete also selects the conversation) and is what `axe`'s
+  `nested-interactive` rule exists for.
+- Status is never colour alone; every chip carries its own words.
+
+### Not built here
+
+- **Attachments.** The composer has no attach button, because
+  `MediaAttachmentPicker` and the `MediaAttachment` model (E03) do not exist
+  yet. `sendCoachMessage` already takes `attachmentIds` and the API validates
+  them against the caller's own ready `storage_objects`, so the picker is the
+  only missing piece.
+- Editing or deleting individual messages, renaming a conversation, markdown in
+  replies, conversation search.

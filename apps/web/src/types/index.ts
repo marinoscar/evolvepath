@@ -1621,3 +1621,160 @@ export interface FamilySummary {
   weeks: FamilySummaryWeek[];
   coachNote: { text: string; source: 'ai' | 'template' } | null;
 }
+
+// =============================================================================
+// The AI coach (epic E06)
+// =============================================================================
+//
+// Hand-maintained mirrors of `apps/api/src/coach/`. They are hand-maintained
+// deliberately — generating them would put the API's build output on the web
+// app's critical path for values that change about once an epic — and this
+// block plus the EvolvePath section of `services/api.ts` is the entire
+// reconciliation surface if a field moves.
+
+export const INTERVENTION_TYPES = [
+  'NORMAL_REMINDER',
+  'ACTIVATION_REDUCTION',
+  'DECOMPOSITION',
+  'FRICTION_DIAGNOSIS',
+  'ENVIRONMENT_CHANGE',
+  'PLAN_CHALLENGE',
+  'GOAL_CHALLENGE',
+  'REINFORCE',
+  'CLARIFY',
+  'REDUCE_SCOPE',
+  'RECONNECT_REASON',
+  'RECOVER',
+] as const;
+
+export type InterventionType = (typeof INTERVENTION_TYPES)[number];
+
+export interface CoachConversation {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  lastMessageAt: string;
+}
+
+export type PlanChangeOp = 'move' | 'reduce' | 'replace' | 'add' | 'remove' | 'pause';
+
+export interface RoutineSnapshot {
+  title?: string;
+  triggerType?: 'TIME' | 'EVENT';
+  triggerValue?: string | null;
+  frequency?: string;
+  daysOfWeek?: number[];
+  preferredTime?: string | null;
+  estimatedDurationMin?: number;
+  minimumDurationMin?: number;
+  fallbackBehavior?: string | null;
+  active?: boolean;
+}
+
+export interface PlanChange {
+  op: PlanChangeOp;
+  target: { type: 'routine' | 'commitment'; id: string | null };
+  before: RoutineSnapshot | null;
+  after: RoutineSnapshot | null;
+  reason: string;
+}
+
+/** One row of the diff the user reads before deciding. */
+export interface DiffEntry {
+  op: PlanChangeOp;
+  target: { type: 'routine' | 'commitment'; id: string; title: string };
+  reason: string;
+  fields: Array<{ field: string; before: unknown; after: unknown }>;
+}
+
+export interface CoachReply {
+  intervention_type: InterventionType;
+  /** Shown under "Why this?". A summary, never chain of thought (PRD §16). */
+  reasoning_summary: string;
+  user_message: string;
+  recommended_action: {
+    title: string;
+    duration_minutes: number;
+    commitmentId: string | null;
+  } | null;
+  fallback_action: { title: string; duration_minutes: number } | null;
+  proposal: {
+    kind: 'plan_change';
+    planId: string;
+    summary: string;
+    changes: PlanChange[];
+    /** Present once the turn created the row. */
+    proposalId?: string;
+  } | null;
+  friction_question: { prompt: string; options: string[] } | null;
+}
+
+export interface SafetyInfo {
+  decision: 'allow' | 'conservative' | 'redirect';
+  category: string;
+  userFacingNote?: string;
+}
+
+export interface CoachMessage {
+  id: string;
+  role: 'USER' | 'COACH' | 'SYSTEM';
+  content: string;
+  /** Null on USER/SYSTEM rows AND on template fallbacks — see `degraded`. */
+  structured: CoachReply | null;
+  attachmentIds: string[];
+  safety: SafetyInfo | null;
+  createdAt: string;
+  /**
+   * Client-only, on the optimistic USER bubble. Never sent to the API, and
+   * absent on every row that came back from it.
+   */
+  status?: 'pending' | 'sent' | 'failed';
+}
+
+export type ProposalStatus =
+  | 'PROPOSED'
+  | 'ACCEPTED'
+  | 'EDITED'
+  | 'REJECTED'
+  | 'EXPIRED';
+
+export interface ProposalSummary {
+  id: string;
+  planId: string;
+  sourceKind: string;
+  status: ProposalStatus;
+  summary: string;
+  changeCount: number;
+  edited: boolean;
+  expiresAt: string;
+  decidedAt: string | null;
+  decisionReason: string | null;
+  appliedPlanVersionId: string | null;
+  createdAt: string;
+  plan: { id: string; outcomeTitle: string; domain: Domain };
+}
+
+export interface ProposalDetail extends ProposalSummary {
+  changes: PlanChange[];
+  originalChanges: PlanChange[] | null;
+  preview: {
+    diff: DiffEntry[];
+    errors: Array<{ index: number; code: string; message: string }>;
+  };
+  activeVersion: { id: string; version: number } | null;
+}
+
+export interface SendCoachMessageResult {
+  conversationId: string;
+  userMessage: CoachMessage;
+  coachMessage: CoachMessage;
+  proposal?: ProposalSummary;
+  /** The reply is a template, not model output. Still a 201. */
+  degraded: boolean;
+}
+
+export interface SuggestedPrompt {
+  key: string;
+  label: string;
+  text: string;
+}

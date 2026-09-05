@@ -263,6 +263,15 @@ export const api = new ApiService();
 
 // Import types
 import type {
+  // The AI coach (epic E06)
+  CoachConversation,
+  CoachMessage,
+  PlanChange,
+  ProposalDetail,
+  ProposalStatus,
+  ProposalSummary,
+  SendCoachMessageResult,
+  SuggestedPrompt,
   NotificationInteractionInput,
   NotificationPolicy,
   NotificationPolicyPatch,
@@ -1195,4 +1204,103 @@ export async function getFamilySummary(params?: {
   if (params?.weeks !== undefined) query.set('weeks', String(params.weeks));
   const suffix = query.toString() ? `?${query.toString()}` : '';
   return api.get<FamilySummary>(`/family/summary${suffix}`);
+}
+
+
+// =============================================================================
+// The AI coach (epic E06)
+// =============================================================================
+//
+// The ONLY place the web app names these endpoints. If a route or a field
+// moves, this block plus the coach types are the whole reconciliation surface.
+
+export async function getCoachConversations(params?: {
+  limit?: number;
+  cursor?: string;
+}): Promise<{ items: CoachConversation[]; nextCursor: string | null }> {
+  const query = new URLSearchParams();
+  if (params?.limit !== undefined) query.set('limit', String(params.limit));
+  if (params?.cursor) query.set('cursor', params.cursor);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return api.get(`/coach/conversations${suffix}`);
+}
+
+export async function createCoachConversation(
+  title?: string,
+): Promise<CoachConversation> {
+  return api.post<CoachConversation>('/coach/conversations', { title });
+}
+
+export async function getCoachMessages(
+  conversationId: string,
+  params?: { limit?: number; before?: string },
+): Promise<{ items: CoachMessage[] }> {
+  const query = new URLSearchParams();
+  if (params?.limit !== undefined) query.set('limit', String(params.limit));
+  if (params?.before) query.set('before', params.before);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return api.get(`/coach/conversations/${conversationId}/messages${suffix}`);
+}
+
+export async function deleteCoachConversation(id: string): Promise<void> {
+  await api.delete(`/coach/conversations/${id}`);
+}
+
+/**
+ * Always resolves for a provider problem.
+ *
+ * The API answers 201 with `degraded: true` and template copy for a timeout, a
+ * missing key or output it refused (PRD §120), so a caller branches on
+ * `degraded` rather than catching. A rejection here means a real HTTP error —
+ * a bad body, or a conversation that is not yours.
+ */
+export async function sendCoachMessage(body: {
+  conversationId?: string;
+  text: string;
+  attachmentIds?: string[];
+}): Promise<SendCoachMessageResult> {
+  return api.post<SendCoachMessageResult>('/coach/messages', body);
+}
+
+export async function getSuggestedPrompts(): Promise<{
+  prompts: SuggestedPrompt[];
+}> {
+  return api.get('/coach/suggested-prompts');
+}
+
+export async function getProposals(params?: {
+  status?: ProposalStatus;
+  planId?: string;
+}): Promise<ProposalSummary[]> {
+  const query = new URLSearchParams();
+  if (params?.status) query.set('status', params.status);
+  if (params?.planId) query.set('planId', params.planId);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return api.get<ProposalSummary[]>(`/proposals${suffix}`);
+}
+
+export async function getProposal(id: string): Promise<ProposalDetail> {
+  return api.get<ProposalDetail>(`/proposals/${id}`);
+}
+
+/** The only call in the product that turns coach output into a plan version. */
+export async function acceptProposal(id: string): Promise<{
+  proposal: ProposalDetail;
+  planVersion: { id: string; version: number; status: string };
+}> {
+  return api.post(`/proposals/${id}/accept`, {});
+}
+
+export async function editProposal(
+  id: string,
+  changes: PlanChange[],
+): Promise<ProposalDetail> {
+  return api.post<ProposalDetail>(`/proposals/${id}/edit`, { changes });
+}
+
+export async function rejectProposal(
+  id: string,
+  reason?: string,
+): Promise<ProposalSummary> {
+  return api.post<ProposalSummary>(`/proposals/${id}/reject`, { reason });
 }

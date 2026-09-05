@@ -173,14 +173,27 @@ describe('App', () => {
       });
     });
 
-    it.each([
-      ['/coach', 'coach-placeholder'],
-      ['/progress', 'progress-placeholder'],
-    ])('renders the placeholder at %s', async (route, testId) => {
-      // The destinations PRD §11 fixes but E06/E11 fill. Routed now so every
-      // later child lands on a destination that already exists — and so
+    it('renders the placeholder at /progress', async () => {
+      // The last destination PRD §11 fixes and a later epic fills. Routed now
+      // so E11 lands on a destination that already exists — and so
       // `destinations.test.ts` can assert every route is owned. `/path` is a
-      // real page since #56 and is covered by `PathPage.test.tsx`.
+      // real page since #56 and `/coach` since E06 (#86); both have their own
+      // page specs.
+      signInAs(['user_settings:read']);
+
+      render(
+        <MemoryRouter initialEntries={['/progress']}>
+          <App />
+        </MemoryRouter>,
+      );
+
+      await waitFor(
+        () => expect(screen.getByTestId('progress-placeholder')).toBeInTheDocument(),
+        { timeout: 5000 },
+      );
+    });
+
+    it.each(['/coach', '/coach/abc'])('renders the Coach screen at %s', async (route) => {
       signInAs(['user_settings:read']);
 
       render(
@@ -189,9 +202,12 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(() => expect(screen.getByTestId(testId)).toBeInTheDocument(), {
-        timeout: 5000,
-      });
+      // Both spellings mount the same page: the bare route is the list and the
+      // per-conversation route is one thread, and neither is a redirect.
+      await waitFor(
+        () => expect(screen.getByTestId('conversation-list')).toBeInTheDocument(),
+        { timeout: 5000 },
+      );
     });
 
     it('redirects a user without system_settings:read away from /admin/settings', async () => {

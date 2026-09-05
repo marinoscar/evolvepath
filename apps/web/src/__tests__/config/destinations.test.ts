@@ -169,6 +169,21 @@ describe('destinations — segment-boundary matching', () => {
     expect(owners).toEqual(['today']);
   });
 
+  // `/coach/:conversationId` (epic E06) is one thread's own URL, not a second
+  // destination. Prefix ownership means the Coach screen's per-conversation
+  // route needed no registry entry — and it is what stops the rail going blank
+  // the moment a user opens a conversation.
+  it('lets Coach own a conversation URL, and nothing else claim it', () => {
+    expect(resolveActiveDestination('/coach/abc')).toBe('coach');
+
+    const owners = Object.keys(DESTINATION_ROUTES).filter((key) =>
+      DESTINATION_ROUTES[key as keyof typeof DESTINATION_ROUTES].some((prefix) =>
+        owns(prefix, '/coach/abc'),
+      ),
+    );
+    expect(owners).toEqual(['coach']);
+  });
+
   // `/path/family` (epic E08) is a PRODUCT SURFACE under Path, not a sixth
   // destination: PRD §11 fixes the five, and prefix ownership means the Family
   // page needed no registry entry and no navigation change to be reachable.
