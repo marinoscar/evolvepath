@@ -445,6 +445,24 @@ app can gate its shell without a second request on boot.
 - `GET /api/me/domain-modes` - Always three entries; an unset domain reports GROW
 - `PUT /api/me/domain-modes/{domain}` - Set one domain's posture
 
+### Plans (versioned)
+- `POST /api/outcomes/{id}/plans` - Create the plan + v1 (ACTIVE, approved) + routines, atomically
+- `GET /api/outcomes/{id}/plans` - List an outcome's plans (0 or 1 today)
+- `GET /api/plans/{id}` - Plan with its active version
+- `GET /api/plans/{id}/versions` - Full history, newest first
+- `GET /api/plans/{id}/versions/{version}` - One version in full, with routines
+- `POST /api/plans/{id}/versions` - Draft the next version (`rationale` required; routines cloned)
+- `PATCH /api/plans/{id}/versions/{version}` - Edit a draft (409 otherwise)
+- `POST /api/plans/{id}/versions/{version}/activate` - Supersede + activate atomically
+- `POST /api/plans/{id}/versions/{version}/reject` - Draft → REJECTED (rationale kept)
+
+### Routines
+- `GET /api/routines?planVersionId=` - Routines of one version (`planVersionId` required)
+- `POST /api/routines` - Add a routine (409 if the version is read-only)
+- `GET /api/routines/{id}` - Get one
+- `PATCH /api/routines/{id}` - Update (rules re-checked against the merged routine)
+- `DELETE /api/routines/{id}` - Delete (204)
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)

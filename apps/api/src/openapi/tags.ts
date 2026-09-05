@@ -156,6 +156,19 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'Per-domain posture — GROW, MAINTAIN, RECOVER or PAUSE — that later epics use to ' +
           'size the week.',
       },
+      {
+        name: 'Plans',
+        description:
+          'Versioned strategies for an outcome. Versions are append-only: activating a draft ' +
+          'supersedes the current version and both stay readable, with the rationale that ' +
+          'explains the change (PRD §80).',
+      },
+      {
+        name: 'Routines',
+        description:
+          'Repeatable behaviours belonging to one plan version — trigger, frequency, ideal and ' +
+          'minimum duration, and a fallback.',
+      },
     ],
   },
   {
