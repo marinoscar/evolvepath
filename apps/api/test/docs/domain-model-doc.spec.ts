@@ -102,7 +102,18 @@ describe('docs/specs/domain-model.md', () => {
       '=\n// EvolvePath core domain (epic E02)\n// =',
     );
     expect(blockStart).toBeGreaterThan(0);
-    const block = schema.slice(blockStart);
+    // Bounded at the NEXT top-level section divider, not at end-of-file. Later
+    // epics append their own sections below this one (E08's `family_members`
+    // and `rituals` were the first), and each documents its tables in its own
+    // spec — `docs/specs/family-domain.md` for that pair. Slicing to the end of
+    // the file would make this assertion fail for every future epic while
+    // proving nothing about E02's nine.
+    const DIVIDER =
+      '// =============================================================================';
+    const headerEnd = schema.indexOf(`${DIVIDER}\n\n`, blockStart);
+    expect(headerEnd).toBeGreaterThan(blockStart);
+    const nextSection = schema.indexOf(DIVIDER, headerEnd + DIVIDER.length);
+    const block = schema.slice(blockStart, nextSection === -1 ? undefined : nextSection);
     const mapped = [...block.matchAll(/@@map\("([^"]+)"\)/g)].map((match) => match[1]);
 
     expect(mapped.sort()).toEqual([...DOMAIN_TABLES].sort());
