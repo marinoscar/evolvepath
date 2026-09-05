@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { loginAsTestUser } from '../helpers/auth.helper';
-import { accessToken, apiGet, uniqueEmail } from '../helpers/path.helper';
+import { apiGet, uniqueEmail, withToken } from '../helpers/path.helper';
 import {
   createCommitment,
   createOutcome,
@@ -331,18 +331,42 @@ test.describe('E05 — Today, commitments and the Start flow', () => {
 test.describe('E05 — with the coach unreachable', () => {
   const UNREACHABLE = 'http://fake-openai:1/v1';
 
-  /** Reads the current settings for their ETag, then writes `baseUrl`. */
+  /**
+   * Point the provider somewhere, and CHECK THAT IT TOOK.
+   *
+   * Two things this has to get right, and it used to get both wrong (#157).
+   *
+   * `PUT /ai-settings` is a FULL REPLACE — it validates `provider`, `enabled`,
+   * `defaultModel` and `personaModels` as well — so `{ baseUrl }` alone is a
+   * 400 and the base URL never moves. The whole object goes back, minus the
+   * read-only `platformKey` status block the GET adds and the PUT refuses.
+   *
+   * And the write is ASSERTED rather than fired and forgotten. A rejected write
+   * leaves the coach perfectly reachable, which is the one condition this whole
+   * block exists to rule out — so the test would pass or fail on whether some
+   * earlier spec happened to configure a persona model, not on PRD §120.
+   */
   async function setBaseUrl(page: Page, baseUrl: string | null) {
-    const token = await accessToken(page);
-    const current = await page.request.get('/api/ai-settings', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const etag = current.headers()['etag'];
+    const current = await withToken(page, (token) =>
+      page.request.get('/api/ai-settings', { headers: { Authorization: `Bearer ${token}` } }),
+    );
+    expect(current.ok(), 'reading the AI settings').toBe(true);
 
-    await page.request.put('/api/ai-settings', {
-      headers: { Authorization: `Bearer ${token}`, ...(etag ? { 'If-Match': etag } : {}) },
-      data: { baseUrl },
-    });
+    const etag = current.headers()['etag'];
+    const settings = ((await current.json()) as { data: Record<string, unknown> }).data;
+    const { platformKey: _status, ...writable } = settings;
+
+    const written = await withToken(page, (token) =>
+      page.request.put('/api/ai-settings', {
+        headers: { Authorization: `Bearer ${token}`, ...(etag ? { 'If-Match': etag } : {}) },
+        data: { ...writable, baseUrl },
+      }),
+    );
+
+    expect(
+      written.ok(),
+      `writing baseUrl=${baseUrl} → ${written.status()}: ${await written.text()}`,
+    ).toBe(true);
   }
 
   test('Today renders completely and the fallbacks are real offers', async ({ page }) => {
@@ -379,7 +403,11 @@ test.describe('E05 — with the coach unreachable', () => {
     } finally {
       // Restored here rather than in `afterEach` so it runs with this test's own
       // signed-in admin, whoever else is running in parallel.
-      await setBaseUrl(page, null).catch(() => undefined);
+      //
+      // NOT swallowed. `setBaseUrl` now asserts its own write, and a `.catch`
+      // here would hide a failed restore — leaving the next spec pointed at an
+      // unreachable provider with nothing to say why.
+      await setBaseUrl(page, null);
     }
   });
 });
