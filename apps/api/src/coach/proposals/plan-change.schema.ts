@@ -67,6 +67,31 @@ export const planChangeSchema = z
     before: routineSnapshotSchema.nullable(),
     after: routineSnapshotSchema.nullable(),
     reason: z.string().trim().min(1).max(200),
+    /**
+     * The Health domain's additive extension (issue #88, epic E09).
+     *
+     * OPTIONAL, AND `applyChanges` IGNORES IT. A workout proposal is still an
+     * ordinary routine-targeted change — that is what makes it renderable by
+     * E06-07's proposal card with no workout-specific code — but a swapped
+     * exercise is a fact about a template that no routine snapshot can carry.
+     * It travels here and is applied by `WorkoutProposalEffect` inside the same
+     * accept transaction.
+     *
+     * Kept out of the routine snapshot deliberately: putting template ids in
+     * `after` would make E06's pure diff depend on tables it knows nothing
+     * about.
+     */
+    workout: z
+      .object({
+        templateId: z.string().uuid(),
+        replaceExercise: z
+          .object({
+            templateExerciseId: z.string().uuid(),
+            alternativeExerciseId: z.string().uuid(),
+          })
+          .optional(),
+      })
+      .optional(),
   })
   .superRefine((change, ctx) => {
     const fail = (message: string, path: (string | number)[] = []) =>
