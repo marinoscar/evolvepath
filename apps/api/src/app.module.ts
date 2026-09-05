@@ -23,6 +23,7 @@ import { AiModule } from './ai/ai.module';
 import { PathModule } from './path/path.module';
 import { CommitmentsModule } from './commitments/commitments.module';
 import { TodayModule } from './today/today.module';
+import { CoachModule } from './coach/coach.module';
 import { FamilyModule } from './family/family.module';
 import { LoggerModule } from './common/logger/logger.module';
 import { TestAuthModule } from './test-auth/test-auth.module';
@@ -103,6 +104,12 @@ import configuration from './config/configuration';
     // occurrences. Separate from PathModule because a ritual is a rule the
     // materializer reads, not a layer of the outcome hierarchy.
     FamilyModule,
+
+    // The AI coach (epic E06). Registered here from its first child so a
+    // broken provider graph fails at boot rather than at the first chat turn;
+    // the context assembler it currently holds calls no model and costs
+    // nothing until something asks it for a context.
+    CoachModule,
 
     // Test modules (non-production only)
     ...(process.env.NODE_ENV !== 'production' ? [TestAuthModule] : []),
