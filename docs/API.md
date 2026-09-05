@@ -1759,6 +1759,279 @@ routines are the record of what the plan used to say.
 
 ---
 
+#### Commitments
+
+A commitment is one intended action at one time, in three sizes (PRD §57 /
+VISION Part III §15): the full version, a shorter one for a tight day, and the
+minimum that still counts.
+
+**The transition matrix.** A commitment's status changes *only* through
+`POST /commitments/{id}/transition`, and only along these edges:
+
+| From | May move to |
+|------|-------------|
+| `PLANNED` | `READY`, `STARTED`, `RESCHEDULED`, `SKIPPED`, `MISSED`, `CANCELLED` |
+| `READY` | `PLANNED`, `STARTED`, `RESCHEDULED`, `SKIPPED`, `MISSED`, `CANCELLED` |
+| `STARTED` | `COMPLETED`, `PARTIALLY_COMPLETED`, `RESCHEDULED`, `SKIPPED`, `CANCELLED` |
+| `COMPLETED`, `PARTIALLY_COMPLETED`, `RESCHEDULED`, `SKIPPED`, `MISSED`, `CANCELLED` | *nothing — terminal* |
+
+A status never transitions to itself: re-applying one is not a transition, and
+treating it as one would make a double-tapped button write a second audit row
+and move `startedAt`.
+
+Three edges are the way they are on purpose:
+
+- **`PLANNED → STARTED` is direct.** PRD P4 ("start matters") wants the start
+  recorded whenever it happens; a mandatory `READY` step would make the product
+  either invent one or lose the fact that the user started.
+- **Everything past `STARTED` is terminal.** An honest record of a day is what
+  the user did, and an "undo" would make evidence untrustworthy. To change your
+  mind, create a new commitment — the old one stays as history (PRD §103).
+- **`STARTED` cannot become `MISSED`.** Started-and-unfinished is
+  `PARTIALLY_COMPLETED` or `SKIPPED`, both of which the user chooses. `MISSED`
+  is for a commitment whose time passed untouched.
+
+Every commitment in every response carries `allowedTransitions` computed from
+this matrix, so a UI that renders exactly what the server sent can never offer
+a move the API refuses.
+
+---
+
+#### GET /commitments
+**Requires Authentication** — commitments in a time window, ordered by
+`scheduledStart`.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `from` | ISO 8601 with offset | **Required.** |
+| `to` | ISO 8601 with offset | **Required.** At most **62 days** after `from` — two of the longest months, which covers "this month and next". Beyond that a client is exporting, not rendering. |
+| `domain` | enum | `WORK` \| `FAMILY` \| `HEALTH` |
+| `status` | CSV | e.g. `PLANNED,READY`. CSV rather than repeated keys because Fastify parses `?status=A` as a string and `?status=A&status=B` as an array; one spelling avoids a schema that breaks on the other. |
+| `outcomeId`, `planVersionId` | uuid | |
+
+---
+
+#### POST /commitments
+**Requires Authentication** — create a commitment. **201**.
+
+**Request Body:**
+```json
+{
+  "domain": "HEALTH",
+  "title": "Upper A",
+  "scheduledStart": "2026-02-10T06:30:00.000Z",
+  "scheduledEnd": "2026-02-10T07:15:00.000Z",
+  "importance": 4,
+  "commitmentType": "workout",
+  "outcomeId": "3f2a…",
+  "planVersionId": "c4d8…",
+  "routineId": "e5f6…",
+  "fullVersion": "Full upper-body session, 5 exercises",
+  "shortVersion": "Bench and rows only",
+  "minimumVersion": "10-minute circuit",
+  "userConfirmed": false
+}
+```
+
+`domain`, `title` and `scheduledStart` are required; `scheduledEnd` must be
+after `scheduledStart`; `importance` defaults to `3`.
+
+The three foreign ids must be **owned by the caller** (404 otherwise) **and
+consistent with each other** (400): the plan version must belong to the
+outcome's plan, the routine to that version, and a routine cannot be supplied
+without its version. The plan version must be `ACTIVE` or `DRAFT` (**409**
+otherwise) — a commitment derived from a superseded plan is work the user
+already decided to stop doing.
+
+**This writes no evidence.** A commitment is a plan; PRD §10.9 forbids the
+product from treating a planned item as evidence that anything happened.
+
+Audit: `commitment:create`.
+
+---
+
+#### GET /commitments/{id}
+**Requires Authentication** — one commitment plus its `evidence` and
+`reflections` arrays.
+
+---
+
+#### PATCH /commitments/{id}
+**Requires Authentication** — edit `title`, `scheduledStart`/`scheduledEnd`,
+`importance`, `commitmentType`, the three versions, or `userConfirmed`.
+
+**`status` is not a field here.** A client sending it has the key stripped, and
+the resulting empty patch is a **400**. There is exactly one way to move a
+commitment's status, and it validates the matrix.
+
+**409** when the commitment is in a terminal status — it is the record of a day
+that already happened. Also **409** if the merged schedule is invalid (moving
+only the start past an unchanged end).
+
+---
+
+#### POST /commitments/{id}/transition
+**Requires Authentication** — the only way a status changes. **200**.
+
+**Request Body:**
+```json
+{
+  "to": "COMPLETED",
+  "reason": "Travelling",
+  "rescheduleTo": "2026-02-12T06:30:00.000Z",
+  "evidence": {
+    "evidenceType": "completion",
+    "quantitativeValue": 45,
+    "quantitativeUnit": "minutes",
+    "qualitativeValue": "Finished all sets"
+  }
+}
+```
+
+| Field | When |
+|-------|------|
+| `to` | Always. Must be reachable from the current status. |
+| `reason` | Recorded as `skipReason` on a `SKIPPED` transition. |
+| `rescheduleTo` | **Required** for `RESCHEDULED`, **rejected** for anything else, and must be in the future. |
+| `evidence` | Allowed **only** with `COMPLETED` or `PARTIALLY_COMPLETED`. Attaching it to a skip would be the product asserting a fact the user never made. |
+
+**Response:**
+```json
+{
+  "data": {
+    "commitment": { "…": "the commitment after the transition" },
+    "rescheduledTo": null,
+    "evidence": { "id": "…", "source": "USER_LOG", "evidenceType": "completion" }
+  }
+}
+```
+
+Semantics:
+
+- **`STARTED`** stamps `startedAt`, but only the first time — a second start
+  would rewrite when the user actually began.
+- **`COMPLETED` / `PARTIALLY_COMPLETED`** stamp `completedAt`. **No evidence
+  row is created unless `evidence` was supplied**: completion is a *status*,
+  evidence is what the user chose to *log*. The row is always `USER_LOG`, and
+  its `evidenceType` defaults to `completion` or `partial` to match.
+- **`RESCHEDULED`** closes this commitment (terminal — it keeps its evidence)
+  and opens a **new** `PLANNED` commitment at `rescheduleTo`, copying the title,
+  importance, links and the three versions, preserving the original's duration,
+  with `rescheduledFromId` set and **`rescheduleCount` incremented**. The count
+  travels with the *intention*, not the row, so "moved twice" is readable on the
+  live commitment — which is the one E07's avoidance detection looks at.
+
+All of it happens in one transaction, so a reschedule can never leave the
+original closed with nothing opened in its place.
+
+**409 on a forbidden move.** The body's `code` is `CONFLICT` (this API derives
+`code` from the HTTP status — see the Error Codes section), and the
+machine-readable discriminator is in `details`:
+
+```json
+{
+  "statusCode": 409,
+  "code": "CONFLICT",
+  "message": "Cannot move a COMPLETED commitment to STARTED",
+  "details": { "reason": "INVALID_TRANSITION", "from": "COMPLETED", "to": "STARTED" }
+}
+```
+
+Audit: `commitment:transition` with `meta: { from, to, rescheduleCount,
+rescheduledToId, evidenceId }`.
+
+---
+
+#### Evidence
+
+What actually happened, as opposed to what was planned.
+
+#### POST /evidence
+**Requires Authentication** — log a fact. **201**.
+
+**Request Body:**
+```json
+{
+  "commitmentId": "5a2b…",
+  "evidenceType": "completion",
+  "source": "USER_LOG",
+  "occurredAt": "2026-02-10T07:15:00.000Z",
+  "quantitativeValue": 45,
+  "quantitativeUnit": "minutes",
+  "qualitativeValue": "Finished all sets",
+  "confidence": 1
+}
+```
+
+**`source` must be `USER_LOG`.** The schema declares it as a literal, not the
+full enum. `TIMER`, `WORKOUT_LOG` and `APP_FLOW` mean *"the system observed
+this"*, and a client able to claim them could manufacture observations — which
+is exactly what PRD §10.9's "the product should not pretend planned calendar
+events are completion evidence" is about. Those sources are written only by
+server-side flows (the Start flow, focus sessions, the workout runner), through
+a service method no route exposes.
+
+`commitmentId` is optional (evidence can stand alone) but must be owned when
+given (**404**).
+
+---
+
+#### GET /evidence
+**Requires Authentication** — evidence in a time window, newest first.
+
+`from` and `to` are required; the window is capped at **93 days** — wider than
+the commitment window, because evidence is what momentum is read from. Filters:
+`commitmentId`, `source`, and `domain` (which resolves through the evidence's
+commitment, so unattached rows are excluded — they have no domain to match).
+
+---
+
+#### DELETE /evidence/{id}
+**Requires Authentication** — **204**. PRD §127: the user controls their own
+record, including deleting it. Another user's row is **404**.
+
+---
+
+#### Reflections
+
+Optional, lightweight notes and scores. `relatedType` is a soft pointer rather
+than four nullable foreign keys, so reflections can attach to whatever the
+product grows next without a migration on the table.
+
+#### POST /reflections
+**Requires Authentication** — **201**.
+
+**Request Body:**
+```json
+{
+  "relatedType": "commitment",
+  "relatedId": "5a2b…",
+  "userText": "Harder than expected, but the minimum version got me there",
+  "frictionTags": ["late start", "low energy"],
+  "mood": 3,
+  "perceivedDifficulty": 4,
+  "satisfaction": 4
+}
+```
+
+`relatedType` is `commitment` \| `outcome` \| `plan_version` \| `day`.
+`relatedId` is **required for every type but `day`** and must be the caller's
+row (**404** otherwise) — nothing in the database checks a soft pointer, so the
+check is here or nowhere.
+
+A reflection with no note, no friction tag and no score is **400**: an empty row
+would make "how many times did you reflect?" meaningless.
+
+---
+
+#### GET /reflections
+**Requires Authentication** — newest first, capped at 200. Filters:
+`relatedType`, `relatedId`, `from`, `to`.
+
+---
+
 #### EvolvePath errors
 
 | Status | Code | When |
@@ -1766,7 +2039,8 @@ routines are the record of what the plan used to say.
 | 400 | `BAD_REQUEST` | Zod rejected the body, query or path parameter. `details` carries the failing paths. |
 | 401 | `UNAUTHORIZED` | No bearer token, or an expired one. |
 | 404 | `NOT_FOUND` | The id is unknown **or** belongs to another user — deliberately indistinguishable. |
-| 409 | `CONFLICT` | A state-machine violation: an edit to an archived outcome, a second plan for one outcome, a second draft, an activate/edit/reject on the wrong version status, a write to a read-only version's routines, or a losing activation race. The message names the current status. |
+| 409 | `CONFLICT` | A state-machine violation: an edit to an archived outcome, a second plan for one outcome, a second draft, an activate/edit/reject on the wrong version status, a write to a read-only version's routines, a losing activation race, an edit to a terminal commitment, or a commitment hung off a superseded plan version. The message names the current status. |
+| 409 | `CONFLICT` with `details.reason = "INVALID_TRANSITION"` | A commitment transition the matrix forbids. `details` also carries `from` and `to`. |
 
 ---
 
@@ -2114,6 +2388,13 @@ Readiness check - includes database connectivity test.
 | `NOT_AUTHORIZED` | 403 | Email not in allowlist |
 | `VERSION_MISMATCH` | 409 | Optimistic concurrency conflict (If-Match header) |
 | `AI_KEY_REQUIRED` | 412 | The caller has no OpenAI key. Complete `/setup/ai-key`. |
+
+Endpoint-specific discriminators live under `details`, not in `code`: `code` is
+a **closed enum derived from the HTTP status** (`common/dto/error.dto.ts` is the
+contract, and the filter overwrites any `code` an exception supplied). A
+commitment transition the matrix forbids is therefore a `CONFLICT` carrying
+`details.reason = "INVALID_TRANSITION"`, which is what a client branches on.
+Zod rejections put their failing field paths in the same `details` slot.
 
 `AI_KEY_REQUIRED` is the one error body in this API that is sent **verbatim**
 rather than rebuilt by the shared envelope — the filter's status-derived

@@ -463,6 +463,22 @@ app can gate its shell without a second request on boot.
 - `PATCH /api/routines/{id}` - Update (rules re-checked against the merged routine)
 - `DELETE /api/routines/{id}` - Delete (204)
 
+### Commitments
+- `GET /api/commitments?from=&to=` - Window required, capped at 62 days; `status` is CSV
+- `POST /api/commitments` - Create (writes no evidence; foreign ids must be owned and consistent)
+- `GET /api/commitments/{id}` - With its evidence and reflections
+- `PATCH /api/commitments/{id}` - Edit (no `status` here; 409 on a terminal row)
+- `POST /api/commitments/{id}/transition` - The only status change; 409 + `details.reason: INVALID_TRANSITION`
+
+### Evidence
+- `POST /api/evidence` - Log what happened (`source` must be `USER_LOG`)
+- `GET /api/evidence?from=&to=` - Window required, capped at 93 days
+- `DELETE /api/evidence/{id}` - Remove your own row (204)
+
+### Reflections
+- `POST /api/reflections` - Note/tags/scores on a commitment, outcome, plan version or day
+- `GET /api/reflections` - Newest first, capped at 200
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)

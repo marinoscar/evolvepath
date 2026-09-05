@@ -169,6 +169,25 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'Repeatable behaviours belonging to one plan version — trigger, frequency, ideal and ' +
           'minimum duration, and a fallback.',
       },
+      {
+        name: 'Commitments',
+        description:
+          'Specific future intentions with full, short and minimum versions and a nine-state ' +
+          'lifecycle. Transitions are validated by a fixed matrix; a reschedule closes the ' +
+          'original and opens a new commitment that carries the reschedule count.',
+      },
+      {
+        name: 'Evidence',
+        description:
+          'What actually happened. Written only by explicit user logs or server-side flows — ' +
+          'never derived from a planned item (PRD §10.9).',
+      },
+      {
+        name: 'Reflections',
+        description:
+          'Optional, lightweight notes and scores attached to a commitment, outcome, plan ' +
+          'version or day.',
+      },
     ],
   },
   {
