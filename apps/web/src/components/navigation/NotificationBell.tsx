@@ -48,6 +48,7 @@ import {
   List,
   ListItemButton,
   Popover,
+  Stack,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -57,9 +58,14 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { recordNotificationInteraction } from '../../services/api';
 import { isInternalLink } from '../../utils/internalLink';
 import { formatRelativeTime } from '../../utils/relativeTime';
-import type { AppNotification } from '../../types';
+import type {
+  AppNotification,
+  NotificationAction,
+  NotificationInteractionInput,
+} from '../../types';
 
 /**
  * The badge stops counting here and shows "20+".
@@ -92,6 +98,49 @@ export function NotificationBell() {
     void centre?.refresh();
   }, [centre]);
 
+  /**
+   * Record what the user did, without waiting for it.
+   *
+   * DELIBERATELY NOT AWAITED anywhere it is called. A metric must never be able
+   * to delay or block the action it is measuring — a slow write must not leave
+   * the user staring at a popover that has not closed. A failure costs one row
+   * and a console warning.
+   *
+   * Only `coach.*` rows are recorded. The foundation events have no decision
+   * behind them and nothing to attribute a click to; posting for them would
+   * produce 404s and rows that mean nothing.
+   */
+  const record = useCallback(
+    (notification: AppNotification, input: Omit<NotificationInteractionInput, 'notificationId'>) => {
+      if (!notification.eventKey.startsWith('coach.')) return;
+
+      void recordNotificationInteraction({
+        notificationId: notification.id,
+        ...input,
+      }).catch(() => {
+        // Intentionally quiet in production terms: there is nothing the user
+        // could do, and nothing about their action failed.
+        console.warn('Could not record a notification interaction');
+      });
+    },
+    [],
+  );
+
+  const handleActionClick = useCallback(
+    (notification: AppNotification, action: NotificationAction) => {
+      if (notification.readAt === null) void centre?.markRead(notification.id);
+      record(notification, { kind: 'ACTIONED', action: action.action });
+
+      setOpen(false);
+
+      // Re-checked, like the row's own link: `actions[].link` carries the same
+      // root-relative guarantee, and a client that also checks survives the day
+      // that guarantee is broken.
+      if (isInternalLink(action.link)) navigate(action.link);
+    },
+    [centre, navigate, record],
+  );
+
   const handleRowClick = useCallback(
     (notification: AppNotification) => {
       // Marked read on ANY click, including one that navigates nowhere: the
@@ -109,9 +158,13 @@ export function NotificationBell() {
       // function). A notification with no link is a perfectly ordinary
       // notification — it is an announcement, not a shortcut — so a missing
       // link is not an error state and the row simply marks itself read.
+      // Opening the row IS the open. Recorded before navigating, and not
+      // awaited, for the same reason as the action above.
+      record(notification, { kind: 'OPENED' });
+
       if (isInternalLink(notification.link)) navigate(notification.link);
     },
-    [centre, navigate],
+    [centre, navigate, record],
   );
 
   // NO PROVIDER, NO BELL. `useNotifications` returns `null` rather than
@@ -250,7 +303,20 @@ export function NotificationBell() {
                   <Box component="li" key={notification.id} sx={{ listStyle: 'none' }}>
                     {index > 0 && <Divider component="div" />}
                     <ListItemButton
+                      // `component="div"` + an explicit `role`/`tabIndex`: the
+                      // row still behaves as a button, but it is no longer a
+                      // real `<button>` element, so the action buttons inside it
+                      // are valid markup rather than nested interactive content.
+                      component="div"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => handleRowClick(notification)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleRowClick(notification);
+                        }
+                      }}
                       sx={{ alignItems: 'flex-start', gap: 1.5, py: 1.5 }}
                     >
                       {/* THE THIRD, PURELY STRUCTURAL UNREAD CUE, after the
@@ -309,6 +375,63 @@ export function NotificationBell() {
                           </Box>
                           {isUnread && ' · Unread'}
                         </Typography>
+
+                        {/*
+                          ===========================================================
+                          THE ACTION BUTTONS (#68, epic E12)
+                          ===========================================================
+                          VISION §37: minimise the steps between a reminder and the
+                          real-world behaviour. The row's own click still works and
+                          still lands on the primary link; these are the *other*
+                          answers — "move it", "skip today" — which otherwise cost a
+                          navigation, a search for the row, and a menu.
+
+                          RENDERED AS A `div`, NOT INSIDE THE `ListItemButton`'s
+                          click target semantics. A `<button>` nested inside a
+                          `<button>` is invalid HTML and produces an accessibility
+                          tree browsers disagree about, so the row is switched to
+                          `component="div"` above and both the row and these buttons
+                          carry their own handlers.
+
+                          Each click stops propagation, or the row's own handler
+                          would fire too and record a second, wrong interaction.
+
+                          `flexWrap` and no breakpoint gate: below 600px the buttons
+                          wrap onto their own line because there is no room, above it
+                          they sit inline. That is layout responding to width, not a
+                          sixth gate.
+                        */}
+                        {/* `?? []` because this row may have been fetched by a page
+                            loaded before the field existed — a deploy is not
+                            atomic across open tabs, and a blank popover is a
+                            worse failure than a missing button. */}
+                        {(notification.actions ?? []).length > 0 && (
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            useFlexGap
+                            sx={{ flexWrap: 'wrap', mt: 1 }}
+                          >
+                            {(notification.actions ?? []).map((action, actionIndex) => (
+                              <Button
+                                key={action.action}
+                                size="small"
+                                variant={actionIndex === 0 ? 'outlined' : 'text'}
+                                // The title is in the label because a screen
+                                // reader hears these out of context: three rows
+                                // each offering "Skip today" are otherwise
+                                // indistinguishable.
+                                aria-label={`${action.label} — ${notification.title}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleActionClick(notification, action);
+                                }}
+                              >
+                                {action.label}
+                              </Button>
+                            ))}
+                          </Stack>
+                        )}
                       </Box>
                     </ListItemButton>
                   </Box>

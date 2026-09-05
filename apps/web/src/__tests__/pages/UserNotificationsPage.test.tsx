@@ -326,3 +326,59 @@ describe('UserNotificationsPage', () => {
     (window as any).Notification = originalNotification;
   });
 });
+
+// =============================================================================
+// The Coaching reminders section (#68, epic E12)
+// =============================================================================
+//
+// CLAUDE.md's Settings UI rules: a destination gate is about REACHABILITY, a
+// tab gate is about CONTENT, and this is neither — it is more of the same
+// question the matrix already asks. These assertions are what stop it becoming
+// either.
+
+describe('UserNotificationsPage coaching policy', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSettings();
+    mockEvents([WELCOME, ROLE_CHANGED]);
+    mockPermission('granted');
+  });
+
+  it('renders the section under the matrix, on the same page', async () => {
+    render(<UserNotificationsPage />);
+
+    expect(
+      await screen.findByRole('region', { name: /coaching reminders/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('adds no tabs — the page stays one destination', async () => {
+    render(<UserNotificationsPage />);
+
+    await screen.findByRole('region', { name: /coaching reminders/i });
+
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('tab')).toHaveLength(0);
+  });
+
+  it('shows the caps the API reported', async () => {
+    render(<UserNotificationsPage />);
+
+    await screen.findByRole('region', { name: /coaching reminders/i });
+
+    expect(screen.getByRole('slider', { name: /daily cap/i })).toHaveValue('4');
+  });
+
+  // Its own endpoint, so its own request — not folded into the settings
+  // document's PATCH.
+  it('does not write the policy through the settings document', async () => {
+    const updateSettings = vi.fn().mockResolvedValue(undefined);
+    mockSettings({ updateSettings });
+
+    render(<UserNotificationsPage />);
+
+    await screen.findByRole('region', { name: /coaching reminders/i });
+
+    expect(updateSettings).not.toHaveBeenCalled();
+  });
+});

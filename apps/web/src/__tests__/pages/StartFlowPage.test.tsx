@@ -1,9 +1,12 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { screen, waitFor, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 
+import { http, HttpResponse } from 'msw';
+
 import { render } from '../utils/test-utils';
+import { server } from '../mocks/server';
 import {
   getTodayState,
   makeCard,
@@ -23,13 +26,13 @@ import StartFlowPage from '../../pages/StartFlowPage';
 // other test in this file and fail that one, which is exactly why it is here.
 // =============================================================================
 
-function renderStart(id: string) {
+function renderStart(id: string, query = '') {
   return render(
     <Routes>
       <Route path="/start/:commitmentId" element={<StartFlowPage />} />
       <Route path="/" element={<div data-testid="today-screen" />} />
     </Routes>,
-    { wrapperOptions: { route: `/start/${id}` } },
+    { wrapperOptions: { route: `/start/${id}${query}` } },
   );
 }
 
@@ -305,5 +308,83 @@ describe('StartFlowPage', () => {
     // Not the seconds: a polite region that changed every second would make a
     // screen reader read the clock aloud continuously.
     expect(screen.getByTestId('countdown-status')).toHaveTextContent('24 minutes left');
+  });
+});
+
+// =============================================================================
+// Notification attribution (#68, epic E12)
+// =============================================================================
+
+describe('StartFlowPage attribution', () => {
+  const N = '22222222-2222-4222-8222-222222222222';
+  let interactions: Record<string, unknown>[] = [];
+
+  beforeEach(() => {
+    interactions = [];
+    server.use(
+      http.post('*/api/notifications/interactions', async ({ request }) => {
+        interactions.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json({ data: { id: 'i1' } }, { status: 201 });
+      }),
+    );
+  });
+
+  it('records an open when a notification sent the user here', async () => {
+    seedCommitments(makeCard({ id: 'c1', domain: 'WORK', title: 'Draft it' }));
+    renderStart('c1', `?n=${N}`);
+
+    await waitFor(() =>
+      expect(interactions).toContainEqual({ sentInteractionId: N, kind: 'OPENED' }),
+    );
+  });
+
+  // Arriving at a timer is not starting one, and counting an arrival as an
+  // action would make every notification look like it worked.
+  it('does not record an action merely for arriving', async () => {
+    seedCommitments(makeCard({ id: 'c1', domain: 'WORK', title: 'Draft it' }));
+    renderStart('c1', `?n=${N}`);
+
+    await waitFor(() => expect(interactions).toHaveLength(1));
+    expect(interactions[0].kind).toBe('OPENED');
+  });
+
+  // THIS is the honest moment: the timer is running, which is the behaviour the
+  // reminder was asking for.
+  it('records the start once the timer actually begins', async () => {
+    const user = userEvent.setup();
+    seedCommitments(makeCard({ id: 'c1', domain: 'WORK', title: 'Draft it' }));
+    renderStart('c1', `?n=${N}`);
+
+    await screen.findByRole('button', { name: /begin/i });
+    await user.click(screen.getByRole('button', { name: /begin/i }));
+
+    await waitFor(() =>
+      expect(interactions).toContainEqual({
+        sentInteractionId: N,
+        kind: 'ACTIONED',
+        action: 'start',
+      }),
+    );
+  });
+
+  it('records nothing when the user arrived on their own', async () => {
+    const user = userEvent.setup();
+    seedCommitments(makeCard({ id: 'c1', domain: 'WORK', title: 'Draft it' }));
+    renderStart('c1');
+
+    await screen.findByRole('button', { name: /begin/i });
+    await user.click(screen.getByRole('button', { name: /begin/i }));
+
+    await waitFor(() => expect(getTodayState().commitments[0]?.status).toBe('STARTED'));
+    expect(interactions).toHaveLength(0);
+  });
+
+  // Otherwise a refresh records a second open for one message.
+  it('strips the attribution from the URL after recording it', async () => {
+    seedCommitments(makeCard({ id: 'c1', domain: 'WORK', title: 'Draft it' }));
+    renderStart('c1', `?n=${N}`);
+
+    await waitFor(() => expect(interactions).toHaveLength(1));
+    expect(screen.queryByText(N)).not.toBeInTheDocument();
   });
 });

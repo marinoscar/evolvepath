@@ -529,6 +529,7 @@ above. Don't restate any of that here; extend those three instead.
 - `GET /api/notifications/push-subscriptions` - This user's devices, by endpoint **host** — never the endpoint, never the keys
 - `POST /api/notifications/push-subscriptions` - Register this browser; upserts on the endpoint and re-owns one held by another account
 - `DELETE /api/notifications/push-subscriptions` - Stop pushing to this browser (204, idempotent)
+- `POST /api/notifications/interactions` - Record `OPENED` / `ACTIONED` / `DISMISSED`; name the message by inbox row or by the deep link's `?n=`
 - `POST /api/notifications/interactions/dismissed` - **Public.** The service worker's dismissal report; the UUID is the whole capability and the answer is always 204
 
 ### Coaching Notifications (current user)

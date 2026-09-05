@@ -23,6 +23,17 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
+const recordInteractionMock = vi.fn().mockResolvedValue({ id: 'r1' });
+vi.mock('../../../services/api', async () => {
+  const actual = await vi.importActual<typeof import('../../../services/api')>(
+    '../../../services/api',
+  );
+  return {
+    ...actual,
+    recordNotificationInteraction: (...args: unknown[]) => recordInteractionMock(...args),
+  };
+});
+
 const useNotificationsMock = vi.fn<() => NotificationContextValue | null>();
 vi.mock('../../../contexts/NotificationContext', async () => {
   const actual = await vi.importActual<
@@ -38,6 +49,8 @@ function makeNotification(overrides: Partial<AppNotification> = {}): AppNotifica
     title: 'Your role changed',
     body: 'You are now an Admin.',
     link: '/settings',
+    // A foundation event, so no buttons — the coaching cases below override it.
+    actions: [],
     readAt: null,
     createdAt: new Date().toISOString(),
     ...overrides,
@@ -273,5 +286,147 @@ describe('NotificationBell', () => {
         expect(screen.queryByText(/mark all read/i)).not.toBeInTheDocument();
       });
     });
+  });
+});
+
+// =============================================================================
+// Coaching actions and attribution (#68, epic E12)
+// =============================================================================
+
+const COACHING = {
+  id: 'coach-row-1',
+  eventKey: 'coach.family_presence',
+  title: 'Phone-free dinner starts in 15 minutes',
+  body: 'Phone down, people first.',
+  link: '/today?commitment=c1&action=in&n=n1',
+  actions: [
+    { action: 'in' as const, label: "I'm in", link: '/today?commitment=c1&action=in&n=n1' },
+    { action: 'move' as const, label: 'Move it', link: '/today?commitment=c1&action=move&n=n1' },
+    { action: 'skip' as const, label: 'Skip today', link: '/today?commitment=c1&action=skip&n=n1' },
+  ],
+};
+
+describe('NotificationBell coaching actions', () => {
+  beforeEach(() => {
+    mockNavigate.mockClear();
+    recordInteractionMock.mockClear();
+    recordInteractionMock.mockResolvedValue({ id: 'r1' });
+  });
+
+  const openBellWith = async (notification: AppNotification, markRead = vi.fn()) => {
+    useNotificationsMock.mockReturnValue(
+      makeFixture({ notifications: [notification], unreadCount: 1, markRead }),
+    );
+    const user = userEvent.setup();
+    render(<NotificationBell />);
+    await user.click(screen.getByRole('button', { name: /notifications/i }));
+    return user;
+  };
+
+  it('renders one button per action, in the order the API gave them', async () => {
+    await openBellWith(makeNotification(COACHING));
+
+    expect(screen.getByRole('button', { name: /I'm in —/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Move it —/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Skip today —/ })).toBeInTheDocument();
+  });
+
+  // A screen reader hears these out of context: three rows each offering "Skip
+  // today" are otherwise indistinguishable.
+  it('names the notification in each button’s accessible label', async () => {
+    await openBellWith(makeNotification(COACHING));
+
+    expect(
+      screen.getByRole('button', {
+        name: "Skip today — Phone-free dinner starts in 15 minutes",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('records the action and navigates to its own link', async () => {
+    const user = await openBellWith(makeNotification(COACHING));
+
+    await user.click(screen.getByRole('button', { name: /Move it —/ }));
+
+    await waitFor(() =>
+      expect(recordInteractionMock).toHaveBeenCalledWith({
+        notificationId: 'coach-row-1',
+        kind: 'ACTIONED',
+        action: 'move',
+      }),
+    );
+    expect(mockNavigate).toHaveBeenCalledWith('/today?commitment=c1&action=move&n=n1');
+  });
+
+  // Otherwise the row's own handler fires too and records a second, wrong
+  // interaction for the same click.
+  it('does not also record an open when a button was clicked', async () => {
+    const user = await openBellWith(makeNotification(COACHING));
+
+    await user.click(screen.getByRole('button', { name: /I'm in —/ }));
+
+    await waitFor(() => expect(recordInteractionMock).toHaveBeenCalledTimes(1));
+    expect(recordInteractionMock.mock.calls[0][0].kind).toBe('ACTIONED');
+  });
+
+  it('marks the row read when an action is used', async () => {
+    const markRead = vi.fn().mockResolvedValue(undefined);
+    const user = await openBellWith(makeNotification(COACHING), markRead);
+
+    await user.click(screen.getByRole('button', { name: /I'm in —/ }));
+
+    expect(markRead).toHaveBeenCalledWith('coach-row-1');
+  });
+
+  it('records an open when the row itself is clicked', async () => {
+    const user = await openBellWith(makeNotification(COACHING));
+
+    await user.click(screen.getByText('Phone-free dinner starts in 15 minutes'));
+
+    await waitFor(() =>
+      expect(recordInteractionMock).toHaveBeenCalledWith({
+        notificationId: 'coach-row-1',
+        kind: 'OPENED',
+      }),
+    );
+  });
+
+  // Foundation events have no decision behind them and nothing to attribute a
+  // click to; posting for them would produce 404s and rows that mean nothing.
+  it('renders no buttons and records nothing for a foundation event', async () => {
+    const user = await openBellWith(makeNotification({ id: 'role-1' }));
+
+    expect(screen.queryByRole('button', { name: /Skip today/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByText('Your role changed'));
+
+    expect(recordInteractionMock).not.toHaveBeenCalled();
+  });
+
+  // A metric must never be able to block the action it is measuring.
+  it('navigates even when recording fails', async () => {
+    recordInteractionMock.mockRejectedValue(new Error('offline'));
+    const user = await openBellWith(makeNotification(COACHING));
+
+    await user.click(screen.getByRole('button', { name: /Move it —/ }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/today?commitment=c1&action=move&n=n1');
+  });
+
+  // `actions[].link` carries the same root-relative guarantee as `link`, and a
+  // client that also checks survives the day that guarantee is broken.
+  it('refuses to navigate to an action link that is not root-relative', async () => {
+    const user = await openBellWith(
+      makeNotification({
+        ...COACHING,
+        actions: [
+          { action: 'move' as const, label: 'Move it', link: 'https://evil.test/steal' },
+        ],
+      }),
+    );
+
+    await user.click(screen.getByRole('button', { name: /Move it —/ }));
+
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -11,7 +11,12 @@ import {
   Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { recordNotificationInteraction } from '../services/api';
+import {
+  parseSentInteractionId,
+  stripAttributionParams,
+} from '../utils/notificationLinks';
 
 import { useStartSession } from '../hooks/useStartSession';
 import { Countdown } from '../components/start/Countdown';
@@ -41,8 +46,21 @@ const DEFAULT_MINUTES = 10;
  */
 export default function StartFlowPage() {
   const { commitmentId } = useParams<{ commitmentId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const session = useStartSession(commitmentId);
+
+  /**
+   * The coaching notification that sent the user here, if one did (#68).
+   *
+   * Read ONCE into a ref rather than from the params on every render, because
+   * the params are stripped immediately below — otherwise the value would
+   * vanish before the user pressed Begin, which is the only moment it is
+   * actually needed.
+   */
+  const sentInteractionId = useRef<string | null>(
+    parseSentInteractionId(`?${searchParams.toString()}`),
+  );
 
   const [minutes, setMinutes] = useState<number>(DEFAULT_MINUTES);
   const [note, setNote] = useState('');
@@ -67,6 +85,54 @@ export default function StartFlowPage() {
   useEffect(() => {
     if (session.error) setToast(session.error);
   }, [session.error]);
+
+  /**
+   * Landing here IS the open (#68).
+   *
+   * Recorded once, on mount, and the attribution params are stripped straight
+   * afterwards so a refresh or a back navigation does not record a second open
+   * for the same message. The ACTIONED is deliberately NOT recorded here — the
+   * user has arrived at a timer, not started one, and counting an arrival as an
+   * action would make every notification look like it worked.
+   */
+  useEffect(() => {
+    const id = sentInteractionId.current;
+    if (!id) return;
+
+    void recordNotificationInteraction({ sentInteractionId: id, kind: 'OPENED' }).catch(
+      () => {
+        console.warn('Could not record a notification interaction');
+      },
+    );
+
+    setSearchParams(stripAttributionParams(searchParams), { replace: true });
+    // Mount only: the ref is read once and the params are cleared here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * Begin, and record the action if a notification brought the user here.
+   *
+   * THIS is the honest moment for an ACTIONED on a start: the timer is running,
+   * which is the behaviour the reminder was asking for.
+   */
+  const begin = useCallback(
+    async (chosenMinutes: number) => {
+      await session.begin(chosenMinutes);
+
+      const id = sentInteractionId.current;
+      if (!id) return;
+
+      void recordNotificationInteraction({
+        sentInteractionId: id,
+        kind: 'ACTIONED',
+        action: 'start',
+      }).catch(() => {
+        console.warn('Could not record a notification interaction');
+      });
+    },
+    [session],
+  );
 
   const elapsed = useMemo(
     () => elapsedSeconds(commitment?.timer ?? null, new Date()),
@@ -164,7 +230,7 @@ export default function StartFlowPage() {
               size="large"
               fullWidth
               disabled={session.pending}
-              onClick={() => void session.begin(minutes)}
+              onClick={() => void begin(minutes)}
               sx={{ minHeight: 48 }}
             >
               Begin {formatDuration(minutes * 60)}

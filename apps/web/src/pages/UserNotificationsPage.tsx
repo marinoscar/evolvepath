@@ -58,10 +58,12 @@
 import { useCallback, useState } from 'react';
 import { Alert } from '@mui/material';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
+import { CoachingPolicySection } from '../components/settings/CoachingPolicySection';
 import { NotificationSettings } from '../components/settings/NotificationSettings';
 import { useBrowserNotificationPermission } from '../hooks/useBrowserNotificationPermission';
 import { useIsMounted } from '../hooks/useIsMounted';
 import { useNotificationEvents } from '../hooks/useNotificationEvents';
+import { useNotificationPolicy } from '../hooks/useNotificationPolicy';
 import { usePushSubscription } from '../hooks/usePushSubscription';
 import { requestBrowserNotificationPermission } from '../services/browserNotifications';
 import type { NotificationPreferencesPatch } from '../types';
@@ -93,6 +95,17 @@ export default function UserNotificationsPage() {
     unsubscribe: unsubscribeFromPushDevice,
     isBusy: isChangingPush,
   } = usePushSubscription();
+
+  // Its OWN hook and its own snackbars, not the settings document's: the
+  // coaching policy lives on `user_profiles` behind a different endpoint, with
+  // no `If-Match` and a different failure mode. `UserSettingsSection`'s `save`
+  // would be the wrong writer for it.
+  const {
+    policy,
+    isSaving: isSavingPolicy,
+    error: policyError,
+    update: updatePolicy,
+  } = useNotificationPolicy();
 
   const isMounted = useIsMounted();
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
@@ -153,54 +166,79 @@ export default function UserNotificationsPage() {
         if (!events) return null;
 
         return (
-          <NotificationSettings
-            events={events}
-            // THE RAW STORED NAMESPACE, passed straight through — `undefined`
-            // when the user has never saved a preference, which is the normal
-            // case. Deliberately NOT `?? {}`-ed into a defaulted object here:
-            // every control derives its own state from this plus the registry,
-            // and the one thing that must never exist is a filled-in local copy.
-            preferences={settings.notifications}
-            isSaving={isSaving}
-            browserPermission={permission}
-            // The promise is dropped deliberately: `handleRequestPermission`
-            // handles its own failure (there is nothing to report — the banner
-            // already says what the state is) and the button's own spinner is
-            // driven by `isRequestingPermission`.
-            onRequestPermission={() => void handleRequestPermission()}
-            isRequestingPermission={isRequestingPermission}
-            // Push, on this device (#64). The promises are dropped for the same
-            // reason as the permission one above: the hook owns its failure and
-            // the switch's own busy state is what the user sees.
-            pushState={pushState}
-            onSubscribePush={() => void subscribeToPushDevice()}
-            onUnsubscribePush={() => void unsubscribeFromPushDevice()}
-            isChangingPush={isChangingPush}
-            onToggle={(channel, event, value) => {
-              // The single-key patch. Built with a computed key so the channel
-              // comes from the control that was clicked rather than from a
-              // literal that could disagree with it, and typed explicitly so a
-              // channel the union does not know about fails to compile here
-              // rather than 400ing at the API's channel enum.
-              const notifications: NotificationPreferencesPatch = {
-                [channel]: { [event.key]: value },
-              };
+          <>
+            <NotificationSettings
+              events={events}
+              // THE RAW STORED NAMESPACE, passed straight through — `undefined`
+              // when the user has never saved a preference, which is the normal
+              // case. Deliberately NOT `?? {}`-ed into a defaulted object here:
+              // every control derives its own state from this plus the registry,
+              // and the one thing that must never exist is a filled-in local copy.
+              preferences={settings.notifications}
+              isSaving={isSaving}
+              browserPermission={permission}
+              // The promise is dropped deliberately: `handleRequestPermission`
+              // handles its own failure (there is nothing to report — the banner
+              // already says what the state is) and the button's own spinner is
+              // driven by `isRequestingPermission`.
+              onRequestPermission={() => void handleRequestPermission()}
+              isRequestingPermission={isRequestingPermission}
+              // Push, on this device (#64). The promises are dropped for the same
+              // reason as the permission one above: the hook owns its failure and
+              // the switch's own busy state is what the user sees.
+              pushState={pushState}
+              onSubscribePush={() => void subscribeToPushDevice()}
+              onUnsubscribePush={() => void unsubscribeFromPushDevice()}
+              isChangingPush={isChangingPush}
+              onToggle={(channel, event, value) => {
+                // The single-key patch. Built with a computed key so the channel
+                // comes from the control that was clicked rather than from a
+                // literal that could disagree with it, and typed explicitly so a
+                // channel the union does not know about fails to compile here
+                // rather than 400ing at the API's channel enum.
+                const notifications: NotificationPreferencesPatch = {
+                  [channel]: { [event.key]: value },
+                };
 
-              // The promise is intentionally dropped: `save` reports its own
-              // failures through the section's snackbar rather than rejecting,
-              // exactly as `UserAppearancePage` does. On success the section
-              // re-renders from the SERVER's response, so what the switch shows
-              // afterwards is what was actually stored — no optimistic overlay,
-              // and therefore no second source of truth to drift.
-              void save(
-                { notifications },
-                {
-                  success: 'Notification preferences updated',
-                  failure: 'Failed to update notification preferences',
-                },
-              );
-            }}
-          />
+                // The promise is intentionally dropped: `save` reports its own
+                // failures through the section's snackbar rather than rejecting,
+                // exactly as `UserAppearancePage` does. On success the section
+                // re-renders from the SERVER's response, so what the switch shows
+                // afterwards is what was actually stored — no optimistic overlay,
+                // and therefore no second source of truth to drift.
+                void save(
+                  { notifications },
+                  {
+                    success: 'Notification preferences updated',
+                    failure: 'Failed to update notification preferences',
+                  },
+                );
+              }}
+            />
+
+            {/*
+              A SECTION under the matrix, not a tab and not a second card
+              (CLAUDE.md's Settings UI rules). It is more of the same question
+              the matrix asks — "how should this application interrupt me?" — so
+              splitting it across two destinations would make the user answer
+              once in each place.
+
+              Its own error line, because it has its own endpoint: the settings
+              document's snackbar knows nothing about this request.
+            */}
+            {policyError && (
+              <Alert severity="error" sx={{ mt: 3 }}>
+                {policyError}
+              </Alert>
+            )}
+            {policy && (
+              <CoachingPolicySection
+                policy={policy}
+                isSaving={isSavingPolicy}
+                onChange={(patch) => void updatePolicy(patch)}
+              />
+            )}
+          </>
         );
       }}
     </UserSettingsSection>

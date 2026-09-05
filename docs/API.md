@@ -1211,6 +1211,31 @@ device: anyone holding it can push to it.
 reason: a 2 KB capability URL in a query string lands in access logs and browser
 history.
 
+##### POST /notifications/interactions
+
+```json
+{ "sentInteractionId": "<uuid>", "kind": "ACTIONED", "action": "move" }
+```
+
+Two ways to name the message, because two surfaces know different things: the
+bell holds an inbox row and sends `notificationId`; a deep link holds the `?n=`
+the sender minted and sends `sentInteractionId`. One of the two is required
+(**400** otherwise), and `action` is required when `kind` is `ACTIONED` — "they
+did something" with no record of *what* cannot answer the only question the row
+exists for.
+
+`kind` is `OPENED`, `ACTIONED` or `DISMISSED`. `action` is one of `start`, `in`,
+`move`, `short`, `skip`.
+
+The event key and the commitment are **copied from the SENT row**, never taken
+from the request, so a client cannot mislabel a response. A second `OPENED`
+returns the first: opening twice is one open, and counting re-reads would measure
+how often somebody revisits their inbox. A row belonging to another user answers
+**404**, never 403.
+
+Clients fire this and navigate without awaiting it: a metric must never be able
+to delay or block the action it is measuring.
+
 ##### POST /notifications/interactions/dismissed — the one public route
 
 ```json

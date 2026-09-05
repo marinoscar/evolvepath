@@ -434,6 +434,88 @@ still update live.
 
 ---
 
+## 7b. Actions and attribution
+
+VISION §37: minimise the steps between a reminder and the real-world behaviour.
+
+### The `?n=` contract
+
+Every coaching link carries `?n=<sentInteractionId>` — the id of the decision
+that produced the message, minted before dispatch. It is the whole attribution
+chain: without it a click on a reminder is a page view with no way back, and PRD
+§64's "which messages are acted on" has no answer.
+
+`parseSentInteractionId` (web) **validates it as a UUID** rather than passing it
+through. A link is something a user can edit in their address bar, and this value
+is posted straight back as an id.
+
+### Which surface records what
+
+| Surface | On | Records |
+|---|---|---|
+| Bell row click | any `coach.*` row | `OPENED` by `notificationId` |
+| Bell action button | click | `ACTIONED` with the action |
+| `/today?…&n=` | link followed | `OPENED` |
+| `/today?…&action=in\|short` | action completes | `ACTIONED` |
+| `/today?…&action=move\|skip` | **nothing** at open | the dialog's own confirm is the action |
+| `/start/:id?n=` | mount | `OPENED` |
+| `/start/:id?n=` | Begin pressed | `ACTIONED start` |
+| Service worker | `notificationclose` | `DISMISSED`, via the public route |
+
+Three rules behind that table:
+
+- **Foundation events are never recorded.** They have no decision behind them, so
+  a post would produce a 404 and a row that means nothing.
+- **A dialog opening is not an action.** The user has not moved or skipped
+  anything until they confirm; recording at open time would count every dialog
+  somebody closed again as a success.
+- **Arriving at a timer is not starting one.** `/start` records `OPENED` on
+  mount and `ACTIONED` only when the timer runs, or every notification would
+  look like it worked.
+
+### The vocabulary is translated at the boundary
+
+The action names in a link are the **notification's** (PRD §63), not the
+commitment menu's, and they deliberately do not match one-to-one:
+
+```
+in    -> the PLANNED -> READY transition ("I'm in", E08)
+move  -> the reschedule dialog
+short -> the fallback endpoint, then the Start screen
+skip  -> the skip dialog
+```
+
+Translating here keeps the copy free to say "Move it" while the menu keeps saying
+"Reschedule", and keeps the API's action names out of user-facing URLs.
+
+### Handled exactly once
+
+`TodayPage` guards the deep-link effect with a ref keyed on
+`(commitment, action, n)`. Without it the effect re-runs whenever a callback
+dependency changes identity, and the consequences are not subtle: a second
+`OPENED` for one message, and — for an action that navigates away — a
+`setSearchParams` firing *after* the navigation and replacing the destination
+URL, yanking the user straight back to Today.
+
+### The settings section
+
+**Coaching reminders** is a section under the notification matrix, not a tab and
+not a second registry card. CLAUDE.md's Settings UI rules draw the line: a
+destination gate is about reachability, a tab gate is about content, and this is
+neither — it is more of the same question the matrix asks. It has its own hook
+and its own error line because the policy lives on `user_profiles` behind a
+different endpoint, not in the `user_settings` document.
+
+There is deliberately **no control for `mutedCategories`**: the matrix above *is*
+that control, and a second surface for the same intent leaves two switches
+disagreeing.
+
+Sliders debounce (a drag emits a change per pixel); time fields commit on blur
+(that is when the user has finished). Same goal — one request per decision —
+reached differently because the two controls decide differently.
+
+---
+
 ## 8. Rejected alternatives
 
 **Report every applicable suppress reason.** Rejected: it makes the metrics
