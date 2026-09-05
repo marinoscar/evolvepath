@@ -933,6 +933,15 @@ enum CommitmentStatus {
   CANCELLED
 }
 
+/// Which of a commitment's three sizes the user actually did (PRD §44/§101).
+/// Distinct from the status: "completed" and "completed the minimum version"
+/// are different facts, and only the second one explains a thin week honestly.
+enum CommitmentVersion {
+  FULL
+  SHORT
+  MINIMUM
+}
+
 enum EvidenceSource {
   USER_LOG
   TIMER
@@ -1135,18 +1144,66 @@ model Commitment {
 
   /// The three sizes of the same intention (PRD §57). The minimum version is
   /// what keeps a streak alive on a bad day.
+  ///
+  /// The `*Version` column is the TITLE and the `*Minutes` column is how long
+  /// that size takes. Two columns rather than one JSON object because both are
+  /// read on every Today request — the next-best-action sizer picks a version by
+  /// comparing its minutes against the user's remaining budget (E05-01), and a
+  /// blob would make that a parse per candidate per request.
   fullVersion    String? @map("full_version")
   shortVersion   String? @map("short_version")
   minimumVersion String? @map("minimum_version")
+  fullMinutes    Int?    @map("full_minutes")
+  shortMinutes   Int?    @map("short_minutes")
+  minimumMinutes Int?    @map("minimum_minutes")
 
   status            CommitmentStatus @default(PLANNED)
   rescheduleCount   Int              @default(0) @map("reschedule_count")
   rescheduledFromId String?          @map("rescheduled_from_id") @db.Uuid
 
   skipReason    String?   @map("skip_reason")
+  /// The user's own words about the skip. Separate from `skipReason` (the enum)
+  /// because the enum is what E07 groups on and the text is what the coach
+  /// reads back; neither should be parsed out of the other.
+  skipNote      String?   @map("skip_note")
   userConfirmed Boolean   @default(false) @map("user_confirmed")
   startedAt     DateTime? @map("started_at") @db.Timestamptz
   completedAt   DateTime? @map("completed_at") @db.Timestamptz
+
+  // ---------------------------------------------------------------------------
+  // Execution state (issue #40, epic E05)
+  // ---------------------------------------------------------------------------
+  //
+  // THE TIMER IS SERVER-DERIVED, and these two columns are why. `activeSeconds`
+  // is time banked at the last pause; `activeSince` is when the current run
+  // began, or null while paused. Elapsed time is always
+  // `activeSeconds + (activeSince ? now - activeSince : 0)`, computed at read
+  // time, so a reloaded page, a second device and a phone that slept all agree
+  // — and a client clock cannot inflate the record.
+  //
+  // There is deliberately no PAUSED status: paused is `STARTED` with
+  // `activeSince: null`. PRD §10.7 owns the status enum and a parallel notion of
+  // "running" living in it would be two sources of truth for one fact.
+
+  /// Non-null exactly while the timer is running.
+  activeSince   DateTime? @map("active_since") @db.Timestamptz
+  /// Active time banked up to the last pause, in seconds.
+  activeSeconds Int       @default(0) @map("active_seconds")
+  /// The 5/10/20/custom target the user chose at start, in minutes.
+  timerMinutes  Int?      @map("timer_minutes")
+
+  /// Which size was actually done. Defaults to FULL on completion when the user
+  /// never selected a fallback.
+  versionUsed  CommitmentVersion? @map("version_used")
+  /// Reported on completion, or derived from `activeSeconds` when it is not.
+  minutesSpent Int?               @map("minutes_spent")
+
+  /// `[{title, minutes}]` from an applied decomposition, shown by the Start
+  /// flow. Zod-validated at the boundary: the steps are coach output whose
+  /// shape belongs to the prompt, and a column per step is not a thing.
+  steps Json?
+
+  decomposedFromId String? @map("decomposed_from_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
@@ -1157,12 +1214,19 @@ model Commitment {
   routine         Routine?     @relation(fields: [routineId], references: [id], onDelete: SetNull)
   rescheduledFrom Commitment?  @relation("CommitmentReschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
   rescheduledTo   Commitment[] @relation("CommitmentReschedule")
+  /// SetNull, like every other history pointer here: deleting the big
+  /// commitment must not delete the small one the user actually did.
+  decomposedFrom  Commitment?  @relation("CommitmentDecomposition", fields: [decomposedFromId], references: [id], onDelete: SetNull)
+  decomposedTo    Commitment[] @relation("CommitmentDecomposition")
   evidence        Evidence[]
   reflections     Reflection[]
 
   @@index([userId, scheduledStart])
   @@index([userId, status])
   @@index([planVersionId])
+  /// "Does this user have a timer running?" — asked on every Today request and
+  /// before every start, which auto-pauses whatever else is running.
+  @@index([userId, status, activeSince])
   @@map("commitments")
 }
 
