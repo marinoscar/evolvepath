@@ -149,8 +149,16 @@ export default function WeeklyPlanWizard({
           <StepLabel aria-current={step === index ? 'step' : undefined}>{label}</StepLabel>
 
           {/* The horizontal stepper has no content slot, so above `sm` the
-              panel is rendered underneath the strip instead (see below). */}
-          <StepContent>{compact && renderStep(index)}</StepContent>
+              panel is rendered underneath the strip instead (see below).
+
+              `unmountOnExit` is load-bearing rather than an optimisation:
+              Collapse keeps its children mounted by default, so without it
+              every collapsed step's Next button stays in the DOM and in the
+              tab order — five buttons with the same purpose, four of them
+              invisible and reachable by keyboard. */}
+          <StepContent slotProps={{ transition: { unmountOnExit: true } }}>
+            {compact && renderStep(index)}
+          </StepContent>
         </Step>
       ))}
 

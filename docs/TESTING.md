@@ -891,6 +891,21 @@ types PRD §68's sentence into the coach, and asserts the `plan_versions` count
 "the AI never changes a plan without approval" is a claim about a write that
 does not happen, which nothing but a count can see.
 
+`specs/weekly-review.spec.ts` (epic E10) is the third: it seeds a whole
+finished week through the API, generates its review, and drives PRD §135's loop
+in the browser — read the numbers, accept the recommendation, plan the next
+week, hit the §48 load warning, approve, and find the commitments on the
+calendar. It takes the same `plan_versions` count three times, and it seeds
+**last** week rather than a partially-elapsed one: `coverage.to` is
+`min(weekEnd, now)`, so a "Monday to today" fixture makes every number depend on
+the day and hour the suite runs. Run it with `WEEKLY_REVIEW_CRON_DISABLED=true`
+in `infra/compose/.env` — an hourly sweep writing reviews for every seeded user
+turns a deterministic assertion into a race.
+
+```bash
+cd tests/e2e && npm run test:weekly
+```
+
 It runs against the compose stack **with the fake OpenAI overlay**, which
 `playwright.config.ts` already starts by default:
 
@@ -987,6 +1002,7 @@ serialized input:
 | `safety_decision` | `hurts` / `sore` / `tweak` | `conservative` / `injury` |
 | `safety_decision` | anything else | `allow` / `none` |
 | `insight_proposal` | — | two insights, each with its observation |
+| `weekly_review` | — | the PRD §14.6 six outputs, with one `move` proposal on the HEALTH plan |
 | anything else | — | `null` → the generic schema-driven builder |
 
 **Keyed on the schema name, not on a header, and that is forced rather than

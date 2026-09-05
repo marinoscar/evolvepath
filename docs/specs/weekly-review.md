@@ -1,7 +1,5 @@
 # The weekly loop
 
-> Status: complete except for the end-to-end verification E10-05 (#89) adds.
-
 PRD §135 states the loop this epic closes: *review plan → compare planned vs
 done → identify friction → learn pattern → adjust plan → approve next week*.
 VISION §29 states why it is a product ritual rather than a chat — "a failed plan
@@ -139,8 +137,8 @@ backstop. `WEEKLY_REVIEW_CRON_DISABLED=true` stops the sweep entirely.
 
 ## Notification hand-off
 
-PRD §60's N8 ("your week is ready to review") is raised by E12's candidate
-scanner reading `weekly_reviews`, not by generation. A `notify()` call at the
+PRD §60's N8 (`coach.weekly_review_ready`, "your week is ready to review") is
+raised by E12's candidate scanner reading `weekly_reviews`, not by generation. A `notify()` call at the
 end of a generation would reach the user at whatever hour their sweep ran,
 straight past quiet hours, the daily cap and the fatigue reduction — the three
 things routing coaching messages through `decide()` exists to apply.
@@ -315,8 +313,6 @@ it feel like abandoning something.
 - **AI-worded commitment titles in V1.** A `?wording=ai` flag on `/propose`
   that called the `planner` persona for titles only is a reasonable P1;
   deterministic materialisation stays the source of ids and times either way.
-- **A separate `/review` destination.** A sixth permanent tab for a screen
-  opened once a week; `/progress/*` already owns the route.
 - **Recomputing the load summary in the wizard.** Two implementations of "how
   many commitments is this week" is two answers, and the wrong one is on screen.
 

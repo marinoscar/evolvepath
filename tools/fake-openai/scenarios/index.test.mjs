@@ -159,6 +159,82 @@ describe('matchScenario', () => {
       assert.ok(insight.confidence > 0 && insight.confidence <= 1);
     }
   });
+
+  describe('weekly_review (#89, epic E10)', () => {
+    const WORK_PLAN = '44444444-4444-4444-8444-444444444444';
+    const WORK_ROUTINE = '55555555-5555-4555-8555-555555555555';
+
+    /** A planner context with a WORK plan listed BEFORE the HEALTH one. */
+    const twoPlans = [
+      'ACTIVE PLANS:',
+      `- [WORK] Ship the proposal | planId=${WORK_PLAN} | v1 | weeklyLoadMin=250 | why=`,
+      `  * Morning focus block | routineId=${WORK_ROUTINE} | WEEKDAYS | at=07:30 | 50min (min 10) | fallback= | active=true`,
+      `- [HEALTH] Get strong again | planId=${PLAN} | v1 | weeklyLoadMin=120 | why=`,
+      `  * Strength workout | routineId=${ROUTINE} | CUSTOM | days=Mon,Wed,Sat | at=18:30 | 40min (min 15) | fallback= | active=true`,
+    ].join('\n');
+
+    it('returns the six PRD §14.6 outputs', () => {
+      const review = matchScenario(request('weekly_review', context));
+
+      for (const key of [
+        'whatWorked',
+        'whatDidNot',
+        'patterns',
+        'proposedChanges',
+        'keepUnchanged',
+        'doNotAddYet',
+      ]) {
+        assert.ok(Array.isArray(review[key]), `${key} should be an array`);
+      }
+    });
+
+    it('separates observation, inference and recommendation (PRD §14.4)', () => {
+      const [pattern] = matchScenario(request('weekly_review', context)).patterns;
+
+      assert.match(pattern.observation, /4 of 5/);
+      assert.ok(pattern.inference.length > 0);
+      assert.ok(pattern.recommendation.length > 0);
+      assert.ok(pattern.confidence > 0 && pattern.confidence <= 1);
+    });
+
+    it('reads the ids back out of the context rather than inventing them', () => {
+      // A canned uuid would be dropped by `guardReviewOutput`, and the e2e
+      // would then prove only that the guard works.
+      const [proposal] = matchScenario(request('weekly_review', context)).proposedChanges;
+
+      assert.equal(proposal.planId, PLAN);
+      assert.equal(proposal.changes[0].target.id, ROUTINE);
+    });
+
+    it('targets the HEALTH plan even when a WORK plan is listed first', () => {
+      // The summary is about the workout; a WORK routine picked by position
+      // would produce a change whose target and sentence disagree.
+      const [proposal] = matchScenario(request('weekly_review', twoPlans)).proposedChanges;
+
+      assert.equal(proposal.planId, PLAN);
+      assert.equal(proposal.changes[0].target.id, ROUTINE);
+    });
+
+    it('proposes nothing when the context carries no ids', () => {
+      const review = matchScenario(request('weekly_review', 'ACTIVE PLANS:\n(none)'));
+
+      assert.deepEqual(review.proposedChanges, []);
+      // The other five outputs still arrive: a missing plan is a seed problem,
+      // not a reason to return an empty review.
+      assert.ok(review.whatWorked.length > 0);
+    });
+
+    it('proposes a move, which is what the plan-change schema requires of one', () => {
+      const [proposal] = matchScenario(request('weekly_review', context)).proposedChanges;
+      const [change] = proposal.changes;
+
+      assert.equal(change.op, 'move');
+      // `planChangeSchema` rejects a `move` with neither a new time nor a new
+      // trigger — it would be a change the user accepts and cannot see.
+      assert.ok(change.after.preferredTime || change.after.triggerValue);
+      assert.ok(change.reason.length > 0);
+    });
+  });
 });
 
 describe('firstId', () => {

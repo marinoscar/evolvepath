@@ -119,6 +119,86 @@ function coachReply(input) {
   };
 }
 
+/**
+ * The weekly reviewer's six outputs (issue #89, epic E10).
+ *
+ * The proposal's ids are read back out of the rendered context for the same
+ * reason the coach's are: `guardReviewOutput` drops any proposal naming a plan
+ * or routine the user does not have, so a canned uuid would make the e2e prove
+ * only that the guard works. `droppedProposals: 0` in the audit meta is the
+ * assertion that the ids resolved.
+ *
+ * `routineIdFor` prefers the routine on the HEALTH plan block, because the
+ * proposal is about the workout and a WORK routine listed first would produce a
+ * change whose summary and target disagree.
+ */
+function weeklyReview(input) {
+  const planId = healthPlanId(input) ?? firstId(input, 'planId');
+  const routineId = routineIdFor(input, 'Strength workout') ?? firstId(input, 'routineId');
+
+  const base = {
+    whatWorked: [
+      'Morning focus blocks: 4 of 5 done',
+      'Health: fallback used once instead of skipping',
+    ],
+    whatDidNot: [
+      'Evening workouts were moved twice',
+      'One family dinner skipped for an unexpected conflict',
+    ],
+    patterns: [
+      {
+        observation: '4 of 5 morning commitments were completed; 1 of 3 evening ones',
+        inference: 'Plans after 18:00 are less reliable than mornings',
+        recommendation: 'Move the Wednesday workout to Saturday morning',
+        confidence: 0.8,
+        domain: 'HEALTH',
+      },
+    ],
+    keepUnchanged: ['Morning focus block routine'],
+    doNotAddYet: ['Do not add a second workout day yet'],
+  };
+
+  // Without both ids there is no honest proposal to make. Returning the five
+  // other outputs is better than emitting a made-up uuid: the guard would drop
+  // it, and the spec would report a coach failure rather than a seed failure.
+  if (!planId || !routineId) return { ...base, proposedChanges: [] };
+
+  return {
+    ...base,
+    proposedChanges: [
+      {
+        planId,
+        summary: 'Move Wednesday workout to Saturday morning',
+        changes: [
+          {
+            op: 'move',
+            target: { type: 'routine', id: routineId },
+            before: { preferredTime: '18:30', triggerValue: 'WED' },
+            after: { preferredTime: '09:00', triggerValue: 'SAT' },
+            reason: 'Evening sessions were moved twice; mornings held.',
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/** The `planId=` on the HEALTH plan line, if the context has one. */
+function healthPlanId(input) {
+  const line = input.split('\n').find((row) => /\[HEALTH\]/.test(row) && /planId=/.test(row));
+
+  return line ? firstId(line, 'planId') : null;
+}
+
+/** The `routineId=` on the line naming this routine. */
+function routineIdFor(input, title) {
+  const line = input
+    .split('\n')
+    .find((row) => row.includes(title) && /routineId=/.test(row));
+
+  return line ? firstId(line, 'routineId') : null;
+}
+
 function safetyDecision(input) {
   // Only the AMBIGUOUS middle reaches the model at all — a definite match is
   // decided by the pre-check with no request. So this only ever sees words
@@ -159,6 +239,7 @@ const SCENARIOS = {
   coach_reply: coachReply,
   safety_decision: safetyDecision,
   insight_proposal: insightProposal,
+  weekly_review: weeklyReview,
 };
 
 /**

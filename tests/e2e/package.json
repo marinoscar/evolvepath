@@ -7,7 +7,8 @@
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
-    "test:report": "playwright show-report"
+    "test:report": "playwright show-report",
+    "test:weekly": "playwright test specs/weekly-review.spec.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
