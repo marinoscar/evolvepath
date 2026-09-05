@@ -48,13 +48,27 @@ const validBody = {
 describe('RitualsService', () => {
   let service: RitualsService;
   let prisma: MockPrismaService;
-  let materializer: { materialize: jest.Mock };
+  let materializer: {
+    materialize: jest.Mock;
+    desiredOccurrences: jest.Mock;
+    contentFor: jest.Mock;
+  };
   let commitments: { transition: jest.Mock };
   let routines: { create: jest.Mock; update: jest.Mock };
 
   beforeEach(async () => {
     prisma = createMockPrismaService();
-    materializer = { materialize: jest.fn().mockResolvedValue({ created: 3, skipped: 0, through: '2026-06-08' }) };
+    materializer = {
+      materialize: jest.fn().mockResolvedValue({ created: 3, skipped: 0, through: '2026-06-08' }),
+      // The edit path asks "what should exist?" and refreshes the rows the new
+      // rule still wants; both come from the real service.
+      desiredOccurrences: jest.fn().mockResolvedValue({
+        zone: 'America/Costa_Rica',
+        throughLocal: '2026-06-08',
+        starts: [],
+      }),
+      contentFor: jest.fn().mockReturnValue({ title: 'Phone-free dinner' }),
+    };
     commitments = { transition: jest.fn().mockResolvedValue({}) };
     routines = {
       create: jest.fn().mockResolvedValue({ id: 'routine-1' }),
@@ -214,15 +228,85 @@ describe('RitualsService', () => {
     });
 
     it('cancels future PLANNED and READY occurrences through the matrix', async () => {
-      prisma.commitment.findMany.mockResolvedValue([{ id: 'c1' }, { id: 'c2' }] as never);
+      prisma.commitment.findMany.mockResolvedValue([
+        { id: 'c1', scheduledStart: new Date('2026-06-03T00:30:00.000Z') },
+        { id: 'c2', scheduledStart: new Date('2026-06-05T00:30:00.000Z') },
+      ] as never);
 
       await service.update(USER, RITUAL_ID, { recurrence: { ...RECURRENCE, weekdays: [2, 4] } } as never, NOW);
 
-      // Never a raw updateMany: the matrix is what protects a row the user
-      // already touched.
-      expect(prisma.commitment.updateMany).not.toHaveBeenCalled();
+      // NO STATUS IS EVER WRITTEN BY A RAW updateMany. The matrix is what
+      // protects a row the user already touched, so a withdrawal goes through
+      // it; the only bulk write here refreshes CONTENT on rows the new rule
+      // still wants.
+      for (const call of prisma.commitment.updateMany.mock.calls) {
+        expect((call[0] as any).data).not.toHaveProperty('status');
+      }
       expect(commitments.transition).toHaveBeenCalledTimes(2);
       expect(commitments.transition).toHaveBeenCalledWith(USER, 'c1', { to: 'CANCELLED' });
+    });
+
+    // The bug E08's e2e (#53) caught. Cancelling every future row and
+    // re-materializing looks right and fails silently: the unique
+    // `(ritual_id, scheduled_start)` index turns each re-created slot into a
+    // `skipped`, so unticking Sunday would leave Tuesday and Thursday cancelled
+    // and never rebuilt.
+    it('keeps the occurrences the new rule still wants', async () => {
+      const tuesday = new Date('2026-06-03T00:30:00.000Z');
+      const sunday = new Date('2026-06-08T00:30:00.000Z');
+
+      prisma.commitment.findMany.mockResolvedValue([
+        { id: 'tue', scheduledStart: tuesday },
+        { id: 'sun', scheduledStart: sunday },
+      ] as never);
+      materializer.desiredOccurrences.mockResolvedValue({
+        zone: 'America/Costa_Rica',
+        throughLocal: '2026-06-08',
+        starts: [tuesday],
+      });
+
+      await service.update(USER, RITUAL_ID, { recurrence: { ...RECURRENCE, weekdays: [2, 4] } } as never, NOW);
+
+      // Only the dropped weekday is withdrawn.
+      expect(commitments.transition).toHaveBeenCalledTimes(1);
+      expect(commitments.transition).toHaveBeenCalledWith(USER, 'sun', { to: 'CANCELLED' });
+    });
+
+    it('refreshes the kept occurrences with the new title and durations', async () => {
+      const tuesday = new Date('2026-06-03T00:30:00.000Z');
+      materializer.desiredOccurrences.mockResolvedValue({
+        zone: 'America/Costa_Rica',
+        throughLocal: '2026-06-08',
+        starts: [tuesday],
+      });
+      materializer.contentFor.mockReturnValue({ title: 'Phone-free supper', fullMinutes: 60 });
+
+      await service.update(USER, RITUAL_ID, { idealMinutes: 60 } as never, NOW);
+
+      expect(prisma.commitment.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            ritualId: RITUAL_ID,
+            scheduledStart: { gt: NOW, in: [tuesday] },
+            status: { in: ['PLANNED', 'READY'] },
+          }),
+          data: { title: 'Phone-free supper', fullMinutes: 60 },
+        }),
+      );
+    });
+
+    it('keeps nothing when the ritual is paused', async () => {
+      prisma.commitment.findMany.mockResolvedValue([
+        { id: 'tue', scheduledStart: new Date('2026-06-03T00:30:00.000Z') },
+      ] as never);
+
+      await service.update(USER, RITUAL_ID, { active: false } as never, NOW);
+
+      // A pause withdraws everything ahead, so the desired set is never asked
+      // for and nothing is refreshed.
+      expect(materializer.desiredOccurrences).not.toHaveBeenCalled();
+      expect(prisma.commitment.updateMany).not.toHaveBeenCalled();
+      expect(commitments.transition).toHaveBeenCalledWith(USER, 'tue', { to: 'CANCELLED' });
     });
 
     it('only ever selects future rows in a cancellable status', async () => {
@@ -258,7 +342,9 @@ describe('RitualsService', () => {
     });
 
     it('cancels but does not re-materialize when the ritual is paused', async () => {
-      prisma.commitment.findMany.mockResolvedValue([{ id: 'c1' }] as never);
+      prisma.commitment.findMany.mockResolvedValue([
+        { id: 'c1', scheduledStart: new Date('2026-06-03T00:30:00.000Z') },
+      ] as never);
 
       await service.update(USER, RITUAL_ID, { active: false } as never, NOW);
 
@@ -310,7 +396,9 @@ describe('RitualsService', () => {
     });
 
     it('records what changed, what was cancelled and what was created', async () => {
-      prisma.commitment.findMany.mockResolvedValue([{ id: 'c1' }] as never);
+      prisma.commitment.findMany.mockResolvedValue([
+        { id: 'c1', scheduledStart: new Date('2026-06-03T00:30:00.000Z') },
+      ] as never);
 
       await service.update(USER, RITUAL_ID, { idealMinutes: 60 } as never, NOW);
 
@@ -332,7 +420,9 @@ describe('RitualsService', () => {
   describe('remove', () => {
     it('cancels the future occurrences and then deletes the rule', async () => {
       prisma.ritual.findFirst.mockResolvedValue(ritual() as never);
-      prisma.commitment.findMany.mockResolvedValue([{ id: 'c1' }] as never);
+      prisma.commitment.findMany.mockResolvedValue([
+        { id: 'c1', scheduledStart: new Date('2026-06-03T00:30:00.000Z') },
+      ] as never);
       prisma.ritual.delete.mockResolvedValue(ritual() as never);
 
       await service.remove(USER, RITUAL_ID, NOW);

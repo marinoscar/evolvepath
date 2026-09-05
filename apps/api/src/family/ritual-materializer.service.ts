@@ -52,6 +52,69 @@ export class RitualMaterializerService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Every instant this ritual SHOULD occupy between `now` and the horizon.
+   *
+   * Distinct from what `materialize` walks, which starts at
+   * `lastMaterializedThrough` and therefore answers "what is missing" rather
+   * than "what should exist". The edit path needs the second question: it has
+   * to tell an occurrence the new rule still wants from one it no longer does.
+   */
+  async desiredOccurrences(
+    userId: string,
+    ritual: Ritual,
+    now: Date = new Date(),
+    timezone?: string,
+  ): Promise<{ zone: string; throughLocal: string; starts: Date[] }> {
+    const zone = safeTimeZone(timezone ?? (await this.timezoneOf(userId)));
+    const throughLocal = addDays(localDateOf(now, zone), MATERIALIZE_HORIZON_DAYS);
+    const horizonEnd = localDayBounds(throughLocal, zone).end;
+
+    const starts = nextOccurrences(
+      parseRecurrence(ritual.recurrence),
+      now,
+      horizonEnd,
+      zone,
+      ritual.createdAt,
+    ).map((occurrence) => occurrence.scheduledStart);
+
+    return { zone, throughLocal, starts };
+  }
+
+  /**
+   * The fields an occurrence carries from its ritual.
+   *
+   * Shared by the insert and by the edit path's in-place refresh, so a row the
+   * user has not touched shows the new title and the new durations rather than
+   * the ones the rule had when it was created.
+   */
+  contentFor(ritual: Ritual): Prisma.CommitmentUncheckedUpdateInput {
+    // The three sizes come straight from the ritual (PRD §57). `shortVersion`
+    // is only offered when there is real room between the ideal and the
+    // minimum — below ten minutes of spread the "short" version is the same
+    // decision as the minimum one wearing a different label, and a third
+    // identical choice makes the card harder to read, not easier.
+    const spread = ritual.idealMinutes - ritual.minimumMinutes;
+    const hasShort = spread >= 10;
+
+    return {
+      title: ritual.title,
+      familyMemberId: ritual.familyMemberId,
+      routineId: ritual.routineId,
+      fullVersion: ritual.title,
+      fullMinutes: ritual.idealMinutes,
+      shortVersion: hasShort ? ritual.title : null,
+      shortMinutes: hasShort
+        ? Math.round((ritual.idealMinutes + ritual.minimumMinutes) / 2)
+        : null,
+      // The fallback text IS the minimum version's title when the user wrote
+      // one: "Sit down phone-free for the first 10 minutes" is a better bad-day
+      // instruction than the ritual's own name.
+      minimumVersion: ritual.fallbackBehavior ?? ritual.title,
+      minimumMinutes: ritual.minimumMinutes,
+    };
+  }
+
+  /**
    * Create every missing occurrence of one ritual inside the horizon.
    *
    * Call it AFTER the ritual's own write has committed and OUTSIDE any
@@ -190,27 +253,16 @@ export class RitualMaterializerService {
     return { rituals, created };
   }
 
-  /**
-   * One occurrence, as a commitment.
-   *
-   * The three sizes come straight from the ritual (PRD §57). `shortVersion` is
-   * only offered when there is real room between the ideal and the minimum —
-   * below ten minutes of spread the "short" version is the same decision as the
-   * minimum one wearing a different label, and a third identical choice makes
-   * the card harder to read, not easier.
-   */
+  /** One occurrence, as a commitment. Content from `contentFor`. */
   private occurrenceData(
     userId: string,
     ritual: Ritual,
     scheduledStart: Date,
   ): Prisma.CommitmentUncheckedCreateInput {
-    const spread = ritual.idealMinutes - ritual.minimumMinutes;
-    const hasShort = spread >= 10;
-
     return {
+      ...(this.contentFor(ritual) as Prisma.CommitmentUncheckedCreateInput),
       userId,
       domain: 'FAMILY',
-      title: ritual.title,
       status: 'PLANNED',
       scheduledStart,
       scheduledEnd: new Date(scheduledStart.getTime() + ritual.idealMinutes * 60_000),
@@ -219,19 +271,6 @@ export class RitualMaterializerService {
       // them is that they do not lose every tie.
       importance: 4,
       ritualId: ritual.id,
-      familyMemberId: ritual.familyMemberId,
-      routineId: ritual.routineId,
-      fullVersion: ritual.title,
-      fullMinutes: ritual.idealMinutes,
-      shortVersion: hasShort ? ritual.title : null,
-      shortMinutes: hasShort
-        ? Math.round((ritual.idealMinutes + ritual.minimumMinutes) / 2)
-        : null,
-      // The fallback text IS the minimum version's title when the user wrote
-      // one: "Sit down phone-free for the first 10 minutes" is a better bad-day
-      // instruction than the ritual's own name.
-      minimumVersion: ritual.fallbackBehavior ?? ritual.title,
-      minimumMinutes: ritual.minimumMinutes,
     };
   }
 
