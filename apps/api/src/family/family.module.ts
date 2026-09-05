@@ -4,9 +4,12 @@ import { AiModule } from '../ai/ai.module';
 import { CommitmentsModule } from '../commitments/commitments.module';
 import { PathModule } from '../path/path.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { UserProfileModule } from '../user-profile/user-profile.module';
 import { BehaviourLintModule } from './behaviour-lint.module';
 import { FamilyMembersController } from './family-members.controller';
 import { FamilyMembersService } from './family-members.service';
+import { FamilySummaryController } from './family-summary.controller';
+import { FamilySummaryService } from './family-summary.service';
 import { RitualMaterializerService } from './ritual-materializer.service';
 import { RitualsController } from './rituals.controller';
 import { RitualsService } from './rituals.service';
@@ -31,11 +34,19 @@ import { RitualMaterializeTask } from './tasks/ritual-materialize.task';
  * `behaviour-lint.module.ts`.
  */
 @Module({
-  imports: [PrismaModule, AiModule, BehaviourLintModule, CommitmentsModule, PathModule],
-  controllers: [FamilyMembersController, RitualsController],
+  imports: [
+    PrismaModule,
+    AiModule,
+    BehaviourLintModule,
+    CommitmentsModule,
+    PathModule,
+    UserProfileModule,
+  ],
+  controllers: [FamilyMembersController, RitualsController, FamilySummaryController],
   providers: [
     FamilyMembersService,
     RitualsService,
+    FamilySummaryService,
     RitualMaterializerService,
     RitualMaterializeTask,
   ],
