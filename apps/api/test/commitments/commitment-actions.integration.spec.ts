@@ -67,6 +67,7 @@ describe('Commitment actions (integration)', () => {
     minutesSpent: null,
     steps: null,
     decomposedFromId: null,
+    workoutTemplateId: null,
     ritualId: null,
     familyMemberId: null,
     createdAt: start,

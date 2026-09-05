@@ -66,6 +66,7 @@ describe('Today (integration)', () => {
     minutesSpent: null,
     steps: null,
     decomposedFromId: null,
+    workoutTemplateId: null,
     ritualId: null,
     familyMemberId: null,
     createdAt: new Date(Date.now() - 86_400_000),
