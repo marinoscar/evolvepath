@@ -771,6 +771,12 @@ Structured training. **Nothing writes a plan until the user approves** — `gene
 - `POST /api/workouts/programs/generate` - Safety pre-check → the programmer persona → deterministic rules (beginner day cap, contraindications, time budget). Any failure returns the **starter program** with a `reason` (`invalid_output` / `ai_unavailable` / `safety_redirect` / `requested`); 412 `AI_KEY_REQUIRED` is the one exception, because that is the user's to fix
 - `GET /api/workouts/programs?status=` / `GET /api/workouts/programs/{id}` - List / read (404 for a foreign id)
 - `POST /api/workouts/programs/{id}/approve` - The only path that turns a draft into a plan. One transaction: the Health outcome and plan, a user-approved `PlanVersion`, one `Routine` per FULL template linked by `workout_templates.routine_id`, the previous program archived, and 14 days of commitments carrying all three sizes. 409 `PROGRAM_NOT_DRAFT`
+- `POST /api/workouts/sessions` - Start a workout from a commitment or a template. Goes through E05's `start` action so the timer, the matrix and the evidence stay in one place. 409 `SESSION_IN_PROGRESS` carries the open session's id
+- `GET /api/workouts/sessions` / `GET /api/workouts/sessions/{id}` - List / the runner view: the current variant's exercises, everything logged, and `lastTime` per movement (the latest COMPLETED session for it, in **any** template)
+- `POST /api/workouts/sessions/{id}/sets` - Idempotent on the client-minted `clientId`: a replay returns the existing row, a new `clientId` on the same `(exercise, setNumber)` is a correction. `SHARP_PAIN` flags the session and answers with the PRD §45 constant — **no model call, no programming advice**
+- `POST /api/workouts/sessions/{id}/sets/batch` - The offline replay. Per item, never all-or-nothing: `accepted` / `duplicates` / `rejected`
+- `POST /api/workouts/sessions/{id}/switch-variant` - Drop to SHORT or MINIMUM. Sets for dropped movements survive under `alsoLogged`
+- `POST /api/workouts/sessions/{id}/finish` - One `WORKOUT_LOG` evidence row, then the commitment through E05's actions. Abandoning with nothing logged leaves the commitment open, on purpose
 - `POST /api/workouts/programs/{id}/archive` - Retire it; future `PLANNED` days cancelled, history untouched
 - `DELETE /api/workouts/programs/{id}` - Drafts only (204). A live program is archived, never deleted
 

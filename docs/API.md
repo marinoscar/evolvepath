@@ -4034,6 +4034,99 @@ full, short and minimum sizes.
 own timezone. **409 `PROGRAM_NOT_DRAFT`** for a program that has already been
 decided on.
 
+#### Run a workout
+
+```http
+POST /api/workouts/sessions
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{ "commitmentId": "…", "variant": "FULL" }
+```
+
+Exactly one of `commitmentId` (today's scheduled workout) or `templateId` (an
+ad-hoc session). A commitment-backed start goes through the ordinary
+`POST /commitments/{id}/actions/start`, so the timer, the transition matrix and
+the `started` evidence stay in one place rather than being reimplemented here.
+
+One workout is open at a time: a second start answers **409
+`SESSION_IN_PROGRESS`** with the open session's id in `details.sessionId`.
+
+The response is the runner view: the exercise list for the current variant,
+every set logged so far, `header` (`"Upper A · Workout 3 of 18"`), the variants
+available to drop to, and per movement a `lastTime` — the sets of the most
+recent **COMPLETED** session for it, **in any template**. Any template
+deliberately: a user's bench press history is their bench press history, and
+scoping it to one workout would reset it whenever the program changed.
+
+#### Log sets
+
+```http
+POST /api/workouts/sessions/{id}/sets
+Content-Type: application/json
+
+{
+  "clientId": "11111111-1111-4111-8111-111111111111",
+  "exerciseId": "…",
+  "setNumber": 1,
+  "weightKg": 20,
+  "reps": 12,
+  "rpe": 7,
+  "discomfort": "NONE"
+}
+```
+
+`clientId` is minted by the **client**, and it is the whole of PRD §121's
+offline story: the phone queues sets it could not send and replays the queue on
+reconnect, so the server has to tell a replay from a second set. The same
+`clientId` twice returns the row that already exists; the same
+`(exercise, setNumber)` under a **new** `clientId` is a correction and
+overwrites.
+
+`POST /api/workouts/sessions/{id}/sets/batch` is the replay entry point. It is
+**never all-or-nothing** — the response splits into `accepted`, `duplicates` and
+`rejected`, because one bad set must not cost the user the twenty-nine good ones
+they actually performed.
+
+`discomfort: "SHARP_PAIN"` flags the session and returns the PRD §45 copy with
+`action: "stop_exercise"`. **No model is called**, and the copy contains no
+programming advice — this is the one signal the software does not reason about.
+
+#### Switch to a smaller version
+
+```http
+POST /api/workouts/sessions/{id}/switch-variant
+{ "variant": "SHORT" }
+```
+
+Re-derives the exercise list from the sibling template. Sets already logged for
+movements the new variant does not include are kept and returned under
+`alsoLogged`: they really happened, and dropping them would make the app appear
+to lose work the user watched it save. **400 `VARIANT_NOT_DEFINED`** when the
+sibling does not exist.
+
+#### Finish
+
+```http
+POST /api/workouts/sessions/{id}/finish
+{ "status": "COMPLETED", "notes": "felt strong" }
+```
+
+Writes one `WORKOUT_LOG` evidence row (volume in kilograms, with the set count,
+minutes, variant and notes in `qualitativeValue`) and settles the attached
+commitment through the ordinary actions:
+
+| Session | Attached commitment becomes |
+|---|---|
+| `COMPLETED`, variant `FULL`, every movement logged | `COMPLETED` |
+| `COMPLETED` otherwise | `PARTIALLY_COMPLETED` |
+| `ABANDONED` with at least one set | `PARTIALLY_COMPLETED` |
+| `ABANDONED` with nothing logged | unchanged — still `STARTED` |
+
+The last row is deliberate: the user opened the app, changed their mind, and
+still has all of Today's vocabulary available. Marking it partial would be the
+product deciding they failed at something they never started.
+
 #### List, read, archive, delete
 
 ```http
