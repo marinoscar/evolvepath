@@ -1274,10 +1274,13 @@ export async function getSuggestedPrompts(): Promise<{
 export async function getProposals(params?: {
   status?: ProposalStatus;
   planId?: string;
+  /** Which service raised it — `WORKOUT` for E09's adaptation detector. */
+  sourceKind?: string;
 }): Promise<ProposalSummary[]> {
   const query = new URLSearchParams();
   if (params?.status) query.set('status', params.status);
   if (params?.planId) query.set('planId', params.planId);
+  if (params?.sourceKind) query.set('sourceKind', params.sourceKind);
   const suffix = query.toString() ? `?${query.toString()}` : '';
   return api.get<ProposalSummary[]>(`/proposals${suffix}`);
 }
@@ -1500,4 +1503,68 @@ export async function getWeight(params?: { from?: string; to?: string }): Promis
 
 export async function deleteWeight(dateLocal: string): Promise<void> {
   await api.delete<void>(`/health/weight/${dateLocal}`);
+}
+
+// -----------------------------------------------------------------------------
+// Workout programs (epic E09)
+// -----------------------------------------------------------------------------
+
+import type {
+  ApproveProgramResult,
+  Exercise,
+  GenerateProgramRequest,
+  GenerateProgramResult,
+  WorkoutProgram,
+  WorkoutProgramStatus,
+  WorkoutProgramSummary,
+} from '../types';
+
+export async function listExercises(params?: {
+  q?: string;
+  group?: string;
+}): Promise<Exercise[]> {
+  const query = new URLSearchParams();
+  if (params?.q) query.set('q', params.q);
+  if (params?.group) query.set('group', params.group);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+
+  const result = await api.get<{ items: Exercise[] }>(`/workouts/exercises${suffix}`);
+  return result.items;
+}
+
+/** Always resolves with a program: a provider failure is `source: 'starter'`. */
+export async function generateWorkoutProgram(
+  body: GenerateProgramRequest,
+): Promise<GenerateProgramResult> {
+  return api.post<GenerateProgramResult>('/workouts/programs/generate', body);
+}
+
+export async function listWorkoutPrograms(
+  status?: WorkoutProgramStatus,
+): Promise<WorkoutProgramSummary[]> {
+  const suffix = status ? `?status=${status}` : '';
+  const result = await api.get<{ items: WorkoutProgramSummary[] }>(
+    `/workouts/programs${suffix}`,
+  );
+  return result.items;
+}
+
+export async function getWorkoutProgram(id: string): Promise<WorkoutProgram> {
+  return api.get<WorkoutProgram>(`/workouts/programs/${id}`);
+}
+
+/** The only call that turns a drafted program into a plan (PRD §15). */
+export async function approveWorkoutProgram(
+  id: string,
+  body: { preferredTime?: string; startDate?: string },
+): Promise<ApproveProgramResult> {
+  return api.post<ApproveProgramResult>(`/workouts/programs/${id}/approve`, body);
+}
+
+export async function archiveWorkoutProgram(id: string): Promise<WorkoutProgram> {
+  return api.post<WorkoutProgram>(`/workouts/programs/${id}/archive`, {});
+}
+
+export async function deleteWorkoutProgram(id: string): Promise<void> {
+  await api.delete<void>(`/workouts/programs/${id}`);
 }
