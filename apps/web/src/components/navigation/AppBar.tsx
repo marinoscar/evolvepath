@@ -109,6 +109,11 @@ const PRODUCT_DRILLDOWNS: ReadonlyArray<{ pattern: RegExp; title: string; upPath
   { pattern: /^\/path\/outcomes\/[^/]+$/, title: 'Outcome', upPath: '/path' },
   // Epic E10. Two levels: the wizard's up is the review it was opened from,
   // not the Progress tab — structural up, as the header explains.
+  // Epic E09. `/health/programs/:id` is a drill-down; `/health/programs` is
+  // not — it is reached from `/health`, which is a top-level Path surface.
+  { pattern: /^\/health\/programs$/, title: 'Programs', upPath: '/health' },
+  { pattern: /^\/health\/programs\/new$/, title: 'Build a program', upPath: '/health/programs' },
+  { pattern: /^\/health\/programs\/[^/]+$/, title: 'Program', upPath: '/health/programs' },
   { pattern: /^\/progress\/week$/, title: 'Your Week', upPath: '/progress' },
   { pattern: /^\/progress\/week\/plan$/, title: 'Plan next week', upPath: '/progress/week' },
 ];

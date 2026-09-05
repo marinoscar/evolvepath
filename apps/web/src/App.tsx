@@ -32,6 +32,9 @@ const FamilyPage = lazy(() => import('./pages/FamilyPage'));
 // explicitly — the URL does not start with `/path`, but the destination it
 // belongs to is Path.
 const HealthPage = lazy(() => import('./pages/HealthPage'));
+const WorkoutProgramsPage = lazy(() => import('./pages/WorkoutProgramsPage'));
+const ProgramBuilderPage = lazy(() => import('./pages/ProgramBuilderPage'));
+const WorkoutProgramPage = lazy(() => import('./pages/WorkoutProgramPage'));
 const CoachPage = lazy(() => import('./pages/CoachPage'));
 const ProgressPage = lazy(() => import('./pages/ProgressPage'));
 // Progress surfaces, not sixth destinations: `DESTINATION_ROUTES.progress`
@@ -174,6 +177,12 @@ function AppRoutes() {
                   <Route path="/path/outcomes/:id" element={<OutcomeDetailPage />} />
                   <Route path="/path/family" element={<FamilyPage />} />
                   <Route path="/health" element={<HealthPage />} />
+                  <Route path="/health/programs" element={<WorkoutProgramsPage />} />
+                  <Route path="/health/programs/new" element={<ProgramBuilderPage />} />
+                  <Route
+                    path="/health/programs/:programId"
+                    element={<WorkoutProgramPage />}
+                  />
                   <Route path="/coach" element={<CoachPage />} />
                 {/* One thread, its own URL. `/coach/:id` is what the narrow
                     layout navigates to and what a link to a conversation is;
