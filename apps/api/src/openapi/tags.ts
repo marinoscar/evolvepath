@@ -195,6 +195,12 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'Optional, lightweight notes and scores attached to a commitment, outcome, plan ' +
           'version or day.',
       },
+      {
+        name: 'Family',
+        description:
+          'Family members (minimal records), rituals, recurrence materialization, the ' +
+          'behaviour lint and the planned-versus-kept summary. Own data only.',
+      },
     ],
   },
   {
