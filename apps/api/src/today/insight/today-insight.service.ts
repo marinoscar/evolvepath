@@ -6,6 +6,7 @@ import { UserProfileService } from '../../user-profile/user-profile.service';
 import { TodayService } from '../today.service';
 import type { TodayInsight } from '../today.schema';
 import { EMPTY_DAY_INSIGHT, insightTemplateFor } from './insight-templates';
+import { TodayInsightCache } from './today-insight.cache';
 
 /** Bumped whenever the instructions change meaningfully (PRD §117). */
 export const TODAY_INSIGHT_PROMPT_VERSION = 'today-insight.v1';
@@ -45,29 +46,20 @@ export function buildInsightInstructions(coachingStyle: string): string {
 // slow call to be a different request the client makes after the page is up —
 // not a call inside the page's own request with a timeout somebody could raise.
 //
-// The cache is a per-process `Map` keyed by user and local date. That is a
-// deliberate limitation, stated rather than hidden: with several API instances a
-// user can see one regeneration per instance per day. The alternative — a table
-// or a shared cache — is real infrastructure for a sentence whose only cost is
-// one small model call, and it would still need the same invalidation.
+// The cache lives in its own provider (`TodayInsightCache`) rather than in a
+// field here, so the check-in (#43) can invalidate it without depending on this
+// service — which would close a dependency cycle back through `TodayService`.
 // =============================================================================
-
-interface CacheEntry {
-  dateLocal: string;
-  insight: TodayInsight;
-}
 
 @Injectable()
 export class TodayInsightService {
   private readonly logger = new Logger(TodayInsightService.name);
 
-  /** `userId → { dateLocal, insight }`. One entry per user; the date evicts. */
-  private readonly cache = new Map<string, CacheEntry>();
-
   constructor(
     private readonly ai: AiGatewayService,
     private readonly today: TodayService,
     private readonly userProfile: UserProfileService,
+    private readonly cache: TodayInsightCache,
   ) {}
 
   /**
@@ -77,16 +69,14 @@ export class TodayInsightService {
    * reads yesterday's chirpy insight would reasonably conclude nothing listened.
    */
   invalidate(userId: string): void {
-    this.cache.delete(userId);
+    this.cache.invalidate(userId);
   }
 
   async getInsight(userId: string, now: Date = new Date()): Promise<TodayInsight> {
     const today = await this.today.getToday(userId, now);
-    const cached = this.cache.get(userId);
+    const cached = this.cache.get(userId, today.dateLocal);
 
-    // The stored date not matching today's IS the eviction: no timer, no sweep,
-    // and it lands at the user's local midnight rather than the server's.
-    if (cached && cached.dateLocal === today.dateLocal) return cached.insight;
+    if (cached) return cached;
 
     const started = Date.now();
     const insight = await this.generate(userId, today, now);
@@ -95,7 +85,7 @@ export class TodayInsightService {
       `today.insight user=${userId} source=${insight.source} latencyMs=${Date.now() - started}`,
     );
 
-    this.cache.set(userId, { dateLocal: today.dateLocal, insight });
+    this.cache.set(userId, today.dateLocal, insight);
 
     return insight;
   }

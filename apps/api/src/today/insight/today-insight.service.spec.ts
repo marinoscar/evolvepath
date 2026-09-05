@@ -5,6 +5,7 @@ import { UserProfileService } from '../../user-profile/user-profile.service';
 import { TodayService } from '../today.service';
 import { todayInsightSchema } from '../today.schema';
 import { EMPTY_DAY_INSIGHT, insightTemplateFor } from './insight-templates';
+import { TodayInsightCache } from './today-insight.cache';
 import {
   buildInsightInstructions,
   TODAY_INSIGHT_PROMPT_VERSION,
@@ -57,6 +58,7 @@ describe('TodayInsightService (#38)', () => {
         { provide: AiGatewayService, useValue: ai },
         { provide: TodayService, useValue: today },
         { provide: UserProfileService, useValue: userProfile },
+        TodayInsightCache,
       ],
     }).compile();
 
