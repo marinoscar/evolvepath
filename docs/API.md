@@ -2613,6 +2613,89 @@ AI**: `suggestion` is `null` with `source: "none"` whenever the provider is
 unavailable, the per-user window (10/min) is spent, or the model's own rewrite
 fails the same lint. A suggestion is offered, never applied.
 
+#### The review summary
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/family/summary?weekStart=YYYY-MM-DD&weeks=1..12` | Planned versus kept, per ritual, per week |
+
+`weekStart` is a Monday in the caller's timezone and defaults to the current
+local week; `weeks` counts **backwards from it, inclusive** and defaults to 4.
+Weeks come back newest first.
+
+```json
+{
+  "data": {
+    "timezone": "America/Costa_Rica",
+    "weeks": [
+      {
+        "weekStart": "2026-09-01",
+        "rituals": [
+          {
+            "ritualId": "8a1f…",
+            "title": "Phone-free dinner",
+            "planned": 3, "kept": 1, "partial": 0,
+            "moved": 1, "skipped": 1, "missed": 0, "open": 0
+          },
+          {
+            "ritualId": null,
+            "title": "Other family commitments",
+            "planned": 1, "kept": 1, "partial": 0,
+            "moved": 0, "skipped": 0, "missed": 0, "open": 0
+          }
+        ],
+        "totals": {
+          "planned": 4, "kept": 2, "partial": 0,
+          "moved": 1, "skipped": 1, "missed": 0, "open": 0
+        }
+      }
+    ],
+    "coachNote": {
+      "text": "Work displaced 2 evening family commitments this week. Do you want to protect those times more aggressively, or is the current trade-off intentional?",
+      "source": "template"
+    }
+  }
+}
+```
+
+**What the counts mean.** `planned` is every row scheduled in the week in any
+status except `CANCELLED`; `kept` is `COMPLETED`; `partial` is
+`PARTIALLY_COMPLETED`; `moved` is `RESCHEDULED`; `skipped` is `SKIPPED`;
+`missed` is `MISSED`; `open` is `PLANNED`, `READY` or `STARTED`. A ritual with
+no rows this week is still listed at zero when it was active and already
+existed — an every-other-week ritual must not look abandoned in its off week.
+Ad-hoc family commitments (quick add, onboarding) are one line under
+`ritualId: null`.
+
+**Moved rows are counted where they were originally due.** A reschedule closes
+the original as `RESCHEDULED` and opens a **new** `PLANNED` row at the new
+time, so the original week counts the move and the new week sees the live row.
+A commitment moved twice therefore leaves two `RESCHEDULED` rows behind, each
+counted once in the week it was due.
+
+**The payload is integers, deliberately.** PRD §35 permits
+"Planned family commitments: 4 / Kept: 3" and nothing more; VISION §12 forbids
+any relationship or parenting score outright, and PRD §105 makes
+"Product never creates family-quality score" a hard acceptance rule. There is
+no ratio, no percentage, no streak and no grade here, and adding one is not a
+small change — a "kept %" sorts, can go down, and invites a colour scale, which
+is exactly the gamified judgement PRD §35 rules out. A consumer that wants the
+ratio can divide two integers; the API doing it for them is what would make it
+the product's opinion rather than the reader's arithmetic.
+`no-score.guard.spec.ts` fails the build if `score`, `quality`, `rating`,
+`grade` or `sentiment` appears in any family schema, DTO, or `/api/family` path
+of the OpenAPI document.
+
+**`coachNote`** is PRD §35's sentence, and is `null` below two displaced
+commitments — one displaced dinner in a week is a Tuesday, not a trend.
+"Displaced" means a `SKIPPED` row whose reason is `UNEXPECTED_CONFLICT`,
+`BAD_TIMING` or `TOO_MUCH`, plus a `RESCHEDULED` row carrying a reflection with
+one of those friction tags. (A move with no stated reason is not evidence that
+work displaced anything, and counting it would inflate the one number the
+sentence rests on.) The numbers are computed by the server; AI may rephrase the
+sentence but never compute it, and a rephrase that loses the count or rates the
+relationship is discarded for the template. `source` says which you got.
+
 #### Error codes
 
 | Status | Code / reason | When |
@@ -2621,6 +2704,7 @@ fails the same lint. A suggestion is offered, never applied.
 | 400 | `details.reason = "BEHAVIOUR_TARGETS_OTHER_PERSON"` | The title describes another person's feelings or conduct |
 | 400 | `details.reason = "MINIMUM_EXCEEDS_IDEAL"` | A patch whose merged result has a minimum longer than the ideal |
 | 401 | `UNAUTHORIZED` | No bearer token, or an expired one |
+| 400 | `details.reason = "WEEK_START_NOT_MONDAY"` | `weekStart` on the summary is not a Monday |
 | 404 | `NOT_FOUND` | The id is unknown **or** belongs to another user — deliberately indistinguishable |
 | 409 | `details.reason = "OUTCOME_HAS_NO_ACTIVE_PLAN"` | `outcomeId` names an outcome with no active plan version to hold a routine |
 
