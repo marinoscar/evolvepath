@@ -225,6 +225,21 @@ export type NotificationPreferencesPatch = Partial<
  * mapping. See `streamEventToNotification` in `services/notificationStream.ts`,
  * which is the only place the missing field is filled in.
  */
+/**
+ * What one notification button does, mirroring the API's
+ * `NOTIFICATION_ACTION_KEYS` (#54). Hand-maintained, like the rest of this
+ * file — see the header on the EvolvePath types below for why.
+ */
+export type NotificationActionKey = 'start' | 'in' | 'move' | 'short' | 'skip';
+
+export interface NotificationAction {
+  action: NotificationActionKey;
+  /** PRD §63's vocabulary, rendered verbatim: "I'm in", "Skip today". */
+  label: string;
+  /** Root-relative, same guarantee as `AppNotification.link`. */
+  link: string;
+}
+
 export interface AppNotification {
   id: string;
   /**
@@ -251,6 +266,16 @@ export interface AppNotification {
    * and survives the day it is broken.
    */
   link: string | null;
+  /**
+   * The buttons this notification offers (#54, epic E12).
+   *
+   * ALWAYS PRESENT, `[]` for the foundation events, so a renderer never has to
+   * distinguish "no actions" from "an older server". Each `link` carries the
+   * same root-relative guarantee as `link` above, and `action` names what the
+   * button does so the client can record an ACTIONED interaction without
+   * parsing the URL it is about to navigate to.
+   */
+  actions: NotificationAction[];
   /** ISO-8601. When the user marked it read; `null` while unread. */
   readAt: string | null;
   /** ISO-8601. */

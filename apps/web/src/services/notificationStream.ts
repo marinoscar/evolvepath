@@ -42,7 +42,11 @@
 
 import { API_BASE_URL, api } from './api';
 import { connectSse, type SseConnection, type SseState } from './sse';
-import type { AppNotification, NotificationStreamEvent } from '../types';
+import type {
+  AppNotification,
+  NotificationAction,
+  NotificationStreamEvent,
+} from '../types';
 
 /**
  * The `event:` name the API publishes notifications under.
@@ -109,8 +113,26 @@ export function parseNotificationEvent(data: string): NotificationStreamEvent | 
     title: value.title,
     body: value.body,
     link: value.link,
+    // TOLERATED, NOT REQUIRED, unlike every field above it. The five checked
+    // fields are what makes a row renderable at all, so a frame missing one is
+    // a frame to drop. Actions are additive: a server that does not send them
+    // yet, or sends something malformed, should still produce a notification
+    // the user can read and tap — just without buttons.
+    actions: parseActions(value.actions),
     createdAt: value.createdAt,
   };
+}
+
+function parseActions(value: unknown): NotificationAction[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (entry): entry is NotificationAction =>
+      typeof entry === 'object' &&
+      entry !== null &&
+      typeof (entry as NotificationAction).action === 'string' &&
+      typeof (entry as NotificationAction).label === 'string' &&
+      typeof (entry as NotificationAction).link === 'string',
+  );
 }
 
 /**

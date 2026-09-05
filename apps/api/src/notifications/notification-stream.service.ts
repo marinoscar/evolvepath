@@ -1,6 +1,8 @@
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { Observable, type Subscriber } from 'rxjs';
 
+import type { NotificationActionDef } from '../coaching-notifications/coaching-actions';
+
 // =============================================================================
 // NotificationStreamService — the live half of the browser channel (#127, #109)
 // =============================================================================
@@ -95,6 +97,12 @@ export interface NotificationStreamEvent {
   title: string;
   body: string;
   link: string | null;
+  /**
+   * The notification's action buttons (issue #54). Present on every event —
+   * `[]` for the foundation events — so the client never has to distinguish
+   * "no actions" from "an older server that did not send the field".
+   */
+  actions: NotificationActionDef[];
   createdAt: string;
 }
 

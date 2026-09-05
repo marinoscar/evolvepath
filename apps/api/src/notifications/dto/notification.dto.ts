@@ -1,6 +1,8 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+import { NOTIFICATION_ACTION_KEYS } from '../../coaching-notifications/coaching-actions';
+
 // =============================================================================
 // Notification centre wire types (issue #127, epic #109)
 // =============================================================================
@@ -55,6 +57,23 @@ export const notificationSchema = z.object({
    * that function for why sanitising on render would be the weaker place.
    */
   link: z.string().nullable(),
+
+  /**
+   * The buttons this row offers (issue #54, epic E12).
+   *
+   * ALWAYS PRESENT, `[]` for events that have none, so a client never has to
+   * distinguish "this event has no actions" from "an older server did not send
+   * the field". Derived from `(eventKey, link)` on every read — the stored row
+   * keeps no payload — which is why a start button read back from the inbox
+   * says "Start" where the live SSE event said "Start workout".
+   */
+  actions: z.array(
+    z.object({
+      action: z.enum(NOTIFICATION_ACTION_KEYS),
+      label: z.string(),
+      link: z.string(),
+    }),
+  ),
 
   /** When the user marked it read, or null while it is unread. */
   readAt: z.iso.datetime().nullable(),

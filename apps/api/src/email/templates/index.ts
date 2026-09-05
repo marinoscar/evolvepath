@@ -6,6 +6,10 @@ import {
 import { type RoleChangedEmailData, roleChangedEmail } from './role-changed.email';
 import { type TestEmailData, testEmail } from './test-email.email';
 import { type UserWelcomeEmailData, userWelcomeEmail } from './user-welcome.email';
+import {
+  type WeeklyReviewReadyEmailData,
+  weeklyReviewReadyEmail,
+} from './weekly-review-ready.email';
 
 // =============================================================================
 // Email template registry (issue #123, epic #109)
@@ -66,6 +70,7 @@ export interface EmailTemplateDataMap {
   'user-welcome': UserWelcomeEmailData;
   'allowlist-invitation': AllowlistInvitationEmailData;
   'role-changed': RoleChangedEmailData;
+  'weekly-review-ready': WeeklyReviewReadyEmailData;
 }
 
 /**
@@ -97,6 +102,7 @@ export const EMAIL_TEMPLATES: {
   'user-welcome': userWelcomeEmail,
   'allowlist-invitation': allowlistInvitationEmail,
   'role-changed': roleChangedEmail,
+  'weekly-review-ready': weeklyReviewReadyEmail,
 };
 
 /**
@@ -200,6 +206,7 @@ export { testEmail } from './test-email.email';
 export { userWelcomeEmail } from './user-welcome.email';
 export { allowlistInvitationEmail } from './allowlist-invitation.email';
 export { roleChangedEmail } from './role-changed.email';
+export { weeklyReviewReadyEmail } from './weekly-review-ready.email';
 
 export type { PlainTextOptions, RenderLayoutOptions } from './layout';
 export type { EmailTemplate, RenderedEmail } from './email-template.types';
@@ -213,3 +220,4 @@ export type { TestEmailData } from './test-email.email';
 export type { UserWelcomeEmailData } from './user-welcome.email';
 export type { AllowlistInvitationEmailData } from './allowlist-invitation.email';
 export type { RoleChangedEmailData } from './role-changed.email';
+export type { WeeklyReviewReadyEmailData } from './weekly-review-ready.email';

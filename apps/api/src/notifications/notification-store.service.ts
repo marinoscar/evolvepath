@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
+import { actionsForStoredRow } from '../coaching-notifications/coaching-actions';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   NotificationListQueryDto,
@@ -219,6 +220,13 @@ function toResponse(row: {
     title: row.title,
     body: row.body,
     link: row.link,
+    // Rebuilt from the link on every read, never stored. The alternative is a
+    // payload column on `notifications`, and the header of that model already
+    // spells out why there isn't one: a row renders what the user WAS TOLD.
+    // Actions are the same argument applied to what they can still do about it
+    // — re-derived through today's code, so a button that no longer exists
+    // simply stops appearing rather than 404ing.
+    actions: actionsForStoredRow(row.eventKey, row.link),
     readAt: row.readAt ? row.readAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
   };

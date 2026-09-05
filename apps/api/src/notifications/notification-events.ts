@@ -226,6 +226,91 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     // nobody outside the admin console can tell. Not silenceable.
     mandatory: true,
   },
+
+  // ---------------------------------------------------------------------------
+  // The coaching categories N1-N9 (issue #54, epic E12)
+  // ---------------------------------------------------------------------------
+  //
+  // These are ORDINARY registry entries, and that is the whole point: the
+  // preferences page grew nine rows without a line of code changing on it, and
+  // the dispatcher carries them exactly as it carries `user.welcome`. What is
+  // coaching-specific — payload shapes, deep links, action buttons, wording --
+  // lives in `coaching-notifications/`, which DERIVES from this list rather
+  // than repeating it (`coaching-events.spec.ts` asserts both directions).
+  //
+  // NONE OF THEM IS `mandatory`. A user must be able to silence every one: PRD
+  // §59's first input is permission, and a coaching message a user cannot turn
+  // off is exactly the kind that gets the whole app muted at the OS level.
+  //
+  // `channels` is `['browser']` for eight of the nine. Only the weekly review is
+  // worth an email — the rest are moment-bound, and an email arriving twenty
+  // minutes after the moment has passed is noise. E12-04 adds `'push'` to each
+  // of these rows when it registers that channel.
+  {
+    key: 'coach.commitment_upcoming',
+    label: 'Upcoming commitment',
+    description: 'A commitment on your path starts in about 20 minutes.',
+    channels: ['browser'],
+    defaultEnabled: true,
+  },
+  {
+    key: 'coach.start_cue',
+    label: 'Start cue',
+    description: 'A commitment is due now and ready to start.',
+    channels: ['browser'],
+    defaultEnabled: true,
+  },
+  {
+    key: 'coach.rescue',
+    label: 'Start rescue',
+    description:
+      'Something you have moved more than once is due today — a smaller start is offered.',
+    channels: ['browser'],
+    defaultEnabled: true,
+  },
+  {
+    key: 'coach.fallback_offer',
+    label: 'Fallback offer',
+    description: 'The full version no longer fits the time left, but a shorter one does.',
+    channels: ['browser'],
+    defaultEnabled: true,
+  },
+  {
+    key: 'coach.family_presence',
+    label: 'Family presence cue',
+    description: 'A family ritual starts soon.',
+    channels: ['browser'],
+    defaultEnabled: true,
+  },
+  {
+    key: 'coach.recovery',
+    label: 'Recovery',
+    description: 'After a few days away, one small restart action is ready.',
+    channels: ['browser'],
+    defaultEnabled: true,
+  },
+  {
+    key: 'coach.evidence',
+    label: 'Evidence celebration',
+    description: 'You reached a consistency milestone worth noticing.',
+    channels: ['browser'],
+    defaultEnabled: true,
+  },
+  {
+    key: 'coach.weekly_review_ready',
+    label: 'Weekly review ready',
+    description: 'Your weekly review has been prepared.',
+    channels: ['email', 'browser'],
+    defaultEnabled: true,
+  },
+  {
+    key: 'coach.plan_issue',
+    label: 'Plan issue',
+    description:
+      'The coach proposes a plan change because the current schedule keeps failing.',
+    channels: ['browser'],
+    defaultEnabled: true,
+  },
 ];
 
 /**

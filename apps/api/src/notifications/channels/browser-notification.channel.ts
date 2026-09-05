@@ -1,5 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import {
+  actionsFor,
+  primaryLink,
+  type NotificationActionDef,
+} from '../../coaching-notifications/coaching-actions';
+import {
+  COACHING_EVENT_KEYS,
+  COACHING_PAYLOAD_SCHEMAS,
+} from '../../coaching-notifications/coaching-events';
+import { defaultCopyFor } from '../../coaching-notifications/copy/copy-templates';
 import type { RoleChangedEmailData } from '../../email';
 import { PrismaService } from '../../prisma/prisma.service';
 import { describeThrown } from '../describe-thrown';
@@ -73,6 +83,17 @@ export interface BrowserNotificationContent {
    * before it is stored, not before it is rendered.
    */
   link?: string;
+
+  /**
+   * The buttons this notification offers (issue #54, epic E12).
+   *
+   * Carried on the SSE event so a live row renders its actions with no refetch.
+   * A row read back from the inbox derives them again from `(eventKey, link)`
+   * instead, because the `notifications` table stores rendered text and no
+   * payload — a deliberate decision documented on `model Notification`, not an
+   * omission to work around by adding a payload column here.
+   */
+  actions?: NotificationActionDef[];
 }
 
 /** Renders one event's payload into what the user actually sees. */
@@ -127,9 +148,47 @@ function formatRoles(roles: string[]): string {
  * The difference from the email channel is what happens on a MISS, and it is
  * deliberate — see {@link BrowserNotificationChannel.render}.
  */
+/**
+ * One template per coaching category, generated rather than written out (#54).
+ *
+ * Nine near-identical entries would be nine chances for one of them to forget
+ * to validate its payload, or to reach for `DEFAULT_COPY` when the AI copy is
+ * present. The shape is genuinely uniform: parse the payload, prefer the
+ * copywriter's words over the deterministic ones, derive the link and the
+ * buttons from the same pure functions everything else uses. Where the
+ * categories differ — wording, which buttons, where they point — the
+ * difference lives in `copy-templates.ts` and `coaching-actions.ts`, which is
+ * where it can be read as a table.
+ *
+ * A payload that fails its schema THROWS, and the channel turns that into a
+ * recorded delivery failure. That is the recipe's contract, and it is the right
+ * one here: a coaching message rendered from a half-built payload would show
+ * `undefined minutes` to a user.
+ */
+function coachingBrowserTemplates(): Record<string, BrowserNotificationTemplate> {
+  const templates: Record<string, BrowserNotificationTemplate> = {};
+
+  for (const key of COACHING_EVENT_KEYS) {
+    templates[key] = (data: never): BrowserNotificationContent => {
+      const payload = COACHING_PAYLOAD_SCHEMAS[key].parse(data);
+      const copy = payload.copy ?? defaultCopyFor(key, payload);
+      return {
+        title: copy.title,
+        body: copy.body,
+        link: primaryLink(key, payload),
+        actions: actionsFor(key, payload),
+      };
+    };
+  }
+
+  return templates;
+}
+
 export const EVENT_BROWSER_TEMPLATES: Partial<
   Record<string, BrowserNotificationTemplate>
 > = {
+  ...coachingBrowserTemplates(),
+
   // The payload is the SAME OBJECT the email template renders — one `notify()`
   // call, one payload, two channels — so the type is imported rather than
   // restated. A per-channel payload type would let the two drift and would put
@@ -265,6 +324,11 @@ export class BrowserNotificationChannel implements NotificationChannelSender {
       title,
       body,
       link,
+      // The LIVE row's actions come from the payload, so they carry the precise
+      // labels ("Start workout", "Start 38 min"). A refetch of the same row
+      // derives them from the link instead and gets the generic ones — see
+      // `startLabel`. Both are correct; only the live path has the domain.
+      actions: rendered.content.actions ?? [],
       createdAt: notification.createdAt.toISOString(),
     });
 
