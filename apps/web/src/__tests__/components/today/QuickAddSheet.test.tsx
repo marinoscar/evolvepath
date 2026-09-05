@@ -208,4 +208,41 @@ describe('QuickAddSheet', () => {
       expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
     });
   });
+
+  describe('eating habits (epic E09)', () => {
+    it('offers a nutrition behaviour kind', async () => {
+      act(() => setViewportWidth(DESKTOP));
+      renderSheet();
+
+      expect(screen.getByRole('button', { name: /Eating habit/ })).toBeEnabled();
+    });
+
+    it('shows the registry rather than the commitment form', async () => {
+      const user = userEvent.setup();
+      act(() => setViewportWidth(DESKTOP));
+      renderSheet();
+
+      await user.click(screen.getByRole('button', { name: /Eating habit/ }));
+
+      // PRD §46's whole point: the user PICKS a behaviour rather than writing
+      // one, so this kind does not open the editor.
+      expect(await screen.findByText('Vegetables with dinner')).toBeInTheDocument();
+      expect(screen.queryByLabelText(/Title/)).not.toBeInTheDocument();
+    });
+
+    it('closes once a habit has been added', async () => {
+      const onClose = vi.fn();
+      const user = userEvent.setup();
+      act(() => setViewportWidth(DESKTOP));
+      renderSheet({ onClose });
+
+      await user.click(screen.getByRole('button', { name: /Eating habit/ }));
+      const card = (await screen.findByText('Vegetables with dinner')).closest('.MuiCard-root')!;
+      await user.click(
+        within(card as HTMLElement).getByRole('button', { name: 'Add to this week' }),
+      );
+
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
 });
