@@ -454,8 +454,9 @@ above. Don't restate any of that here; extend those three instead.
 - `DELETE /api/me/ai-key` - Remove your key (idempotent 204)
 - `POST /api/me/ai-key/test` - Probe your own key (200 always)
 
-Note: `GET /api/auth/me` also carries `aiKey: { configured, hint }`, so the web
-app can gate its shell without a second request on boot.
+Note: `GET /api/auth/me` also carries `aiKey: { configured, hint }` and
+`onboarding: { completed }`, so the web app can gate its shell without a second
+request on boot. Reading `onboarding` never creates a `user_profiles` row.
 
 ### Best Self (current user)
 - `GET /api/me/best-self` - The caller's Best Self profile; `data: null` until saved
@@ -551,6 +552,7 @@ app can gate its shell without a second request on boot.
 - `evidence_items` - Facts about what actually happened; survives its commitment (`commitment_id` is SET NULL)
 - `reflections` - What the user made of a commitment, outcome, plan version or day
 - `domain_modes` - Per-domain posture (GROW, MAINTAIN, RECOVER, PAUSE); a missing row means GROW
+- `user_profiles` - Typed per-user preferences the product reasons about: `timezone` (what "today" means), `coachingStyle`, `weekdayMinutes`, quiet hours and onboarding progress; one row per user, created lazily (a missing row means onboarding has not finished)
 
 ## Access Control: Email Allowlist
 

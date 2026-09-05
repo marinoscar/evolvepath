@@ -733,6 +733,14 @@ Best Self  →  Domains (Work / Family / Health)  →  Outcomes  →  Plans
 | `reflections` | What the user made of it. |
 | `domain_modes` | Per-domain posture (GROW / MAINTAIN / RECOVER / PAUSE). |
 
+Alongside them, `user_profiles` (E04, #100) holds the typed answers the product
+itself reasons about — `timezone` (what "today" means for this user),
+`coachingStyle`, `weekdayMinutes` (the budget the next-best-action sizes
+against), quiet hours, and the onboarding step. It is deliberately not part of
+`user_settings`, whose JSONB document the API never interprets. One row per
+user, created lazily on first write; a missing row means onboarding has not
+finished.
+
 Three properties are structural rather than conventional, and each is written
 out in the schema header (`apps/api/prisma/schema.prisma`, "EvolvePath core
 domain"):
