@@ -20,6 +20,7 @@ import { EmailModule } from './email/email.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AiModule } from './ai/ai.module';
 import { PathModule } from './path/path.module';
+import { CommitmentsModule } from './commitments/commitments.module';
 import { LoggerModule } from './common/logger/logger.module';
 import { TestAuthModule } from './test-auth/test-auth.module';
 
@@ -87,6 +88,11 @@ import configuration from './config/configuration';
     // plans, routines and commitments to the same module rather than new ones,
     // so the hierarchy stays one graph rather than three that must agree.
     PathModule,
+    // The commitment lifecycle, evidence and reflections (#47, epic #33).
+    // Separate from PathModule because the boundary is real: Path is the shape
+    // of a life, edited deliberately; commitments are the record of days,
+    // written at volume by the flows E05/E07/E09 add.
+    CommitmentsModule,
 
     // Test modules (non-production only)
     ...(process.env.NODE_ENV !== 'production' ? [TestAuthModule] : []),
