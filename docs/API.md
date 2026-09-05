@@ -1211,6 +1211,62 @@ device: anyone holding it can push to it.
 reason: a 2 KB capability URL in a query string lands in access logs and browser
 history.
 
+##### GET /notifications/metrics?days=30
+
+What the coach has learned about its own messages. `days` is 7–180 (**400**
+outside that): below seven days every rate is noise, above 180 the aggregation
+walks rows nobody is asking a question about.
+
+**Response 200:**
+
+```json
+{
+  "data": {
+    "window": { "from": "...", "to": "...", "days": 30 },
+    "perEvent": [
+      {
+        "eventKey": "coach.commitment_upcoming",
+        "category": "N1",
+        "sent": 12, "opened": 8, "actioned": 6, "dismissed": 1, "ignored": 3,
+        "suppressed": { "QUIET_HOURS": 2, "DAILY_CAP": 0, "…": 0 },
+        "actionRate": 0.5,
+        "bestLeadMinutes": 20
+      }
+    ],
+    "independence": { "completions": 12, "unprompted": 7, "ratio": 0.583 },
+    "reminderTrend": [
+      { "month": "2026-08", "domain": "HEALTH", "sent": 9, "completions": 4 },
+      { "month": "2026-09", "domain": "HEALTH", "sent": 2, "completions": 4 }
+    ],
+    "insights": [
+      "You needed 9 Health reminders in August. In September you needed 2."
+    ]
+  }
+}
+```
+
+Read it in the direction of **"can we stop?"**, not "how do we get more clicks?"
+— a coach that is working needs to say less over time (VISION §38). Every
+coaching event appears, in registry order, even at zero: a shape that depends on
+what happened is one a client has to guard every field of.
+
+- **`independence`** is PRD §65: completions with no `SENT` for that commitment
+  *before* `completedAt`. A send afterwards does not count — a celebration fires
+  after a completion by construction, and counting it would drive the metric down
+  exactly when the user is doing best. `ratio` is `null` at zero completions:
+  nothing having happened is no answer, not 0%.
+- **`bestLeadMinutes`** is the lead bucket (5/10/20/30) with the best action rate
+  among those with at least three sends. The threshold is what makes it a finding
+  rather than a coincidence.
+- **`reminderTrend`** groups by calendar month **in the user's timezone**. A send
+  whose commitment was never completed is filed under no domain rather than a
+  guessed one.
+- **`insights`** are at most three deterministic sentences, held to the same
+  banned-phrase rule as the notification copy. A domain whose reminders dropped
+  is only reported when it *also* still has completions — fewer reminders with no
+  completions is somebody who stopped, and congratulating them would be the worst
+  thing this screen could say.
+
 ##### POST /notifications/interactions
 
 ```json
