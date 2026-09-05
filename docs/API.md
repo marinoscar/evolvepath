@@ -527,6 +527,34 @@ Authorization: Bearer <token>
 
 ---
 
+#### POST /auth/test/run-job
+
+Runs a background job synchronously and returns its counts. Non-production only,
+and `@Auth()` — the job acts on real data across all users, so it needs a caller.
+
+**Request:**
+
+```json
+{ "job": "coaching-notifications", "now": "2026-09-08T18:00:00.000Z" }
+```
+
+`now` simulates the clock. Every rule the coaching engine enforces is about time
+("starts in twenty minutes", "inside quiet hours", "already sent today"), so a
+test that could only run at the real `now` would have to seed data relative to
+the wall clock and then wait. This runs **the same `runOnce` the cron calls**,
+not a test double of it.
+
+**Response 201:**
+
+```json
+{ "data": { "scanned": 1, "sent": 1, "suppressed": 0, "skipped": false } }
+```
+
+`skipped: true` means another run was already in progress and this one did
+nothing.
+
+Later epics add their jobs to the same enum rather than adding a second route.
+
 ### Users
 
 **All user endpoints require Admin role (`users:read` or `users:write` permissions)**

@@ -1,10 +1,17 @@
 import { Module } from '@nestjs/common';
 
+import { AiModule } from '../ai/ai.module';
+import { EmailModule } from '../email/email.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { UserProfileModule } from '../user-profile/user-profile.module';
+import { CandidateScannerService } from './candidates/candidate-scanner.service';
+import { CoachingNotificationsService } from './coaching-notifications.service';
+import { NotificationCopywriterService } from './copy/notification-copywriter.service';
 import { NotificationInteractionsService } from './interactions/notification-interactions.service';
 import { NotificationPolicyController } from './policy/notification-policy.controller';
 import { NotificationPolicyService } from './policy/notification-policy.service';
+import { CoachingNotificationTask } from './tasks/coaching-notification.task';
 
 /**
  * The coaching side of notifications (epic E12).
@@ -18,9 +25,29 @@ import { NotificationPolicyService } from './policy/notification-policy.service'
  * changes.
  */
 @Module({
-  imports: [PrismaModule, UserProfileModule],
+  imports: [
+    PrismaModule,
+    UserProfileModule,
+    // The transport, so the engine can hand a decision to it (#59). The
+    // dependency points this way and only this way: the dispatcher knows
+    // nothing about coaching.
+    NotificationsModule,
+    AiModule,
+    EmailModule,
+  ],
   controllers: [NotificationPolicyController],
-  providers: [NotificationPolicyService, NotificationInteractionsService],
-  exports: [NotificationPolicyService, NotificationInteractionsService],
+  providers: [
+    NotificationPolicyService,
+    NotificationInteractionsService,
+    CandidateScannerService,
+    NotificationCopywriterService,
+    CoachingNotificationsService,
+    CoachingNotificationTask,
+  ],
+  exports: [
+    NotificationPolicyService,
+    NotificationInteractionsService,
+    CoachingNotificationsService,
+  ],
 })
 export class CoachingNotificationsModule {}
