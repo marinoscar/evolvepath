@@ -4,7 +4,10 @@ import { AiModule } from '../ai/ai.module';
 import { CommitmentsModule } from '../commitments/commitments.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { UserProfileModule } from '../user-profile/user-profile.module';
-import { CHECK_IN_READER, NullCheckInReader } from './check-in-reader';
+import { CHECK_IN_READER } from './check-in-reader';
+import { CheckInService } from './check-in/check-in.service';
+import { DayReflectionService } from './reflection/day-reflection.service';
+import { TodayInsightCache } from './insight/today-insight.cache';
 import { TodayInsightService } from './insight/today-insight.service';
 import { CandidateLoaderService } from './nba/candidate-loader.service';
 import { TodayController } from './today.controller';
@@ -13,10 +16,10 @@ import { TodayService } from './today.service';
 /**
  * The Today screen's API (issue #38, epic E05).
  *
- * `CHECK_IN_READER` is bound to the null implementation here. E05-03 (#43)
- * rebinds it to the service that reads `daily_check_ins`; until then "the user
- * has not said how today feels" is the correct answer for everybody, and every
- * consumer already handles it.
+ * `CHECK_IN_READER` resolves to `CheckInService` (#43). The token stays rather
+ * than being inlined: the loader depends on the QUESTION ("has this user said
+ * how today feels?"), not on `daily_check_ins`, and that separation is what let
+ * #38 land and be tested before the table existed.
  */
 @Module({
   imports: [PrismaModule, AiModule, CommitmentsModule, UserProfileModule],
@@ -25,8 +28,11 @@ import { TodayService } from './today.service';
     TodayService,
     CandidateLoaderService,
     TodayInsightService,
-    { provide: CHECK_IN_READER, useClass: NullCheckInReader },
+    TodayInsightCache,
+    CheckInService,
+    DayReflectionService,
+    { provide: CHECK_IN_READER, useExisting: CheckInService },
   ],
-  exports: [TodayService, TodayInsightService],
+  exports: [TodayService, TodayInsightService, CheckInService, DayReflectionService],
 })
 export class TodayModule {}

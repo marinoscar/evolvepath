@@ -1923,6 +1923,81 @@ listened.
 
 ---
 
+#### POST /today/check-in
+**Requires Authentication** — "How does today feel?" (PRD §73). **200.**
+
+```json
+{ "feel": "LOW_ENERGY" }
+```
+
+`feel` is one of `NORMAL`, `PACKED`, `LOW_ENERGY`, `UNEXPECTED_PROBLEM`. **One
+field, and that is the whole design** — PRD §73 also says to avoid "daily
+emotional interrogation", and the guard against that is structural: there is
+nowhere in this body to put a follow-up question.
+
+**Upsert, not insert.** The question is asked once a day and the answer can
+change — a morning that started fine can become a packed afternoon — so a history
+of taps would be noise. The unique index on `(user_id, date_local)` is what makes
+"one answer per day" a property of the data rather than of the caller.
+
+`date_local` is stored as `YYYY-MM-DD` **text**, resolved in the user's own
+timezone. Not a `date` column: it is a label in their zone, and a date mapping
+round-trips through UTC, which would file a 19:00 check-in in Costa Rica under
+the following day.
+
+Answering also **invalidates today's cached coach insight** — a user who just
+said "low energy" and still reads this morning's chirpy sentence would reasonably
+conclude nothing listened.
+
+**Response:** `{ "dateLocal": "2026-03-02", "feel": "LOW_ENERGY", "updatedAt": "…" }`
+
+Audit: `today:check_in` with `meta: { dateLocal, feel }`.
+
+---
+
+#### GET /today/check-in
+**Requires Authentication** — today's check-in, or `null`. Null is the normal
+state: most days start there.
+
+---
+
+#### POST /today/reflection
+**Requires Authentication** — "Anything EvolvePath should learn from today?"
+(PRD §74). **201.**
+
+```json
+{ "quickOption": "TOO_MUCH", "text": "evenings are chaos" }
+```
+
+`quickOption` is one of `PLAN_WORKED`, `TOO_MUCH`, `BAD_TIMING`,
+`UNEXPECTED_CONFLICT`, `LOW_ENERGY`, `AVOIDED`, `OTHER`. It is the **structured**
+half — what the weekly review groups on — and `text` is the user's own words,
+which never reach an audit row or a log line.
+
+Deliberately **not** the same enum as a commitment's `SkipReason`, even though
+five of the seven overlap: `PLAN_WORKED` is a real answer about a day and is not
+a reason to skip anything, and merging the two would either smuggle it into the
+skip menu or lose it here.
+
+Stored as a `Reflection` with `relatedType: "day"` — E02's soft `relatedType` /
+`relatedId` pointer exists for exactly this, so a day reflection is not a second
+table. `relatedId` stays **null**: a day has no row to point at, and the column
+is a uuid. The day is recovered from `createdAt` against the user's own day
+bounds, which is also the honest answer — for an end-of-day prompt, "which day is
+this about" and "when was it written" are the same question.
+
+`friction_tags` carries the option and **nothing else**. Several reflections per
+day are allowed; a user may come back with more to say.
+
+Audit: `today:reflection` with `meta: { dateLocal, quickOption }`.
+
+---
+
+#### GET /today/reflection
+**Requires Authentication** — today's latest day reflection, or `null`.
+
+---
+
 #### Commitments
 
 A commitment is one intended action at one time, in three sizes (PRD §57 /
