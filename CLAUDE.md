@@ -32,7 +32,14 @@ Web Application Foundation with React UI + Node API + PostgreSQL. Production-gra
       Dockerfile            # API container (near its code)
     web/                    # Frontend React app
       src/
+      src/pwa/              # Service worker registration (production only)
       src/__tests__/
+      build/                # Build-time Vite plugins (app-shell service worker)
+      public/
+        manifest.webmanifest  # PWA manifest (hand-authored; a test keeps it honest)
+        icons/                # Installable app icons, generated from icon.svg
+      scripts/
+        generate-icons.mjs  # `npm run icons` — rasterises icon.svg
       Dockerfile            # Web container (near its code)
     cli/                    # First-party command-line client (`appctl`)
       src/

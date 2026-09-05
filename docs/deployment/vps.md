@@ -336,6 +336,29 @@ the flag for the real certificate — `install` skips issuance entirely when a
 usable certificate already exists, so re-running costs nothing if staging
 already got you a (test) one.
 
+## 8a. If you run your own proxy in front of this stack
+
+The app's own nginx serves three files with `Cache-Control: no-cache`, and a
+host proxy **must not override them**:
+
+| Path | Why |
+|---|---|
+| `/sw.js` | The service worker. Cached, it pins every user's app at the version they first installed: the browser never fetches a newer worker, so it never learns about the new build, and the only user-side remedy is clearing site data. Browsers cap worker caching at 24 hours as a backstop, which turns a permanent break into a day-long one. |
+| `/index.html` | The SPA entry point. Its name never changes but its asset references do, so a cached copy points at assets the new build did not emit. |
+| `/manifest.webmanifest` | Must also keep its `application/manifest+json` content type — served as `application/octet-stream`, Chrome refuses to parse it and the app becomes silently uninstallable. |
+
+Everything else under `/assets/` is content-hashed and is safe to cache
+aggressively; the app already marks it `immutable` for a year.
+
+If a deploy appears not to reach users, this is the first thing to check:
+
+```bash
+curl -sI https://<your-host>/sw.js | grep -i cache-control
+# expect: Cache-Control: no-cache
+```
+
+---
+
 ## 9. Troubleshooting
 
 | Symptom | Likely cause | What to do |
