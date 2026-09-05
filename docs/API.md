@@ -3941,6 +3941,116 @@ GET /api/weekly/plans/{id}
 
 Another user's plan id answers **404, never 403**.
 
+### Workouts
+
+Structured training (PRD §37–§44). The program lives in tables rather than in a
+chat transcript, which is what lets it schedule itself onto Today, show "last
+time" on the next session, and be adapted when it keeps failing.
+
+**Nothing here writes a plan until the user approves.** `generate` writes
+`workout_programs` rows and stops; `plans`, `plan_versions`, `routines` and
+`commitments` are untouched until `POST /workouts/programs/{id}/approve`
+(PRD §15).
+
+#### The exercise catalog
+
+```http
+GET /api/workouts/exercises?q=row&group=horizontal_pull
+Authorization: Bearer <token>
+```
+
+The 44 seeded movements plus the caller's own custom rows — never another
+user's. `substitutionGroup` is what makes "what can I do instead of a lat
+pulldown?" a lookup rather than a model call, so it keeps working with the
+provider down.
+
+#### Draft a program
+
+```http
+POST /api/workouts/programs/generate
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+  "goal": "Get stronger and look better",
+  "experience": "BEGINNER",
+  "daysPerWeek": 3,
+  "minutesPerSession": 40,
+  "equipment": ["DUMBBELL", "BENCH"],
+  "limitations": "left shoulder is not great overhead"
+}
+```
+
+```json
+{
+  "data": {
+    "program": { "id": "…", "name": "…", "status": "DRAFT", "templates": [ … ] },
+    "source": "ai",
+    "reason": null,
+    "message": null
+  }
+}
+```
+
+Three things happen in order, and the order is the point:
+
+1. **Safety runs before the model.** A `redirect` decision means the programmer
+   persona is never invoked and the response carries professional-care copy —
+   which is exactly the situation a model-written answer would not arrive in.
+2. **The model is asked**, with a catalog filtered to the equipment the user
+   actually has.
+3. **The answer is checked** against deterministic rules: a beginner gets at
+   most four days, the week matches what was asked for, no movement is
+   prescribed that clashes with a stated limitation, and a FULL session has to
+   fit the requested minutes within 10%.
+
+Any failure — a rejected proposal, an unreachable provider, a safety redirect —
+returns **the deterministic starter program** with a `reason`
+(`invalid_output`, `ai_unavailable`, `safety_redirect`, `requested`) and one
+sentence for the user in `message`. It is a worse program and a working product
+(PRD §120). `useStarter: true` skips the model entirely.
+
+The one exception is **412 `AI_KEY_REQUIRED`**: no key is a thing the user can
+go and fix, and handing them a starter program would hide it.
+
+#### Approve
+
+```http
+POST /api/workouts/programs/{id}/approve
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{ "preferredTime": "07:00", "startDate": "2026-09-07" }
+```
+
+One transaction, five parts: the Health outcome and its plan exist; a new
+`PlanVersion` carries the program's rationale with `userApproved: true`; one
+`Routine` per FULL template, linked back by `workout_templates.routine_id`; any
+previously active program is archived and its future days cancelled; and the
+next **14 days** of training-day commitments are written, each carrying its
+full, short and minimum sizes.
+
+`preferredTime` defaults to `07:00` and `startDate` to tomorrow in the user's
+own timezone. **409 `PROGRAM_NOT_DRAFT`** for a program that has already been
+decided on.
+
+#### List, read, archive, delete
+
+```http
+GET    /api/workouts/programs?status=ACTIVE
+GET    /api/workouts/programs/{id}
+POST   /api/workouts/programs/{id}/archive
+DELETE /api/workouts/programs/{id}
+```
+
+Archiving cancels the program's future `PLANNED` days and leaves every past
+session and every piece of evidence alone. `DELETE` is for **drafts only** —
+a live program has history hanging off it, and "delete" there means archive.
+
+Another user's program id answers **404, never 403**.
+
+---
+
 ---
 
 ## HTTP Status Codes
