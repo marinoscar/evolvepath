@@ -100,10 +100,12 @@ export default function TodayPage() {
 
   const checkIn = useCheckIn(refresh);
 
-  // One extra request, for the birthday cue on the Family card. Failing is
-  // survivable — the cue simply does not render, and nothing else on Today
-  // depends on it.
-  const { members: familyMembers } = useFamilyMembers();
+  // The birthday cue on the Family card. Deliberately NOT fetched until
+  // `/today` has answered: a request fired at mount races the boot token
+  // refresh and can cost the user their session (see `useFamilyMembers`).
+  // Failing is otherwise survivable — the cue does not render and nothing else
+  // on Today depends on it.
+  const { members: familyMembers } = useFamilyMembers({ enabled: today !== null });
 
   const allCommitments = useMemo(
     () => today?.domains.flatMap((section) => section.commitments) ?? [],
