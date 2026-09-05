@@ -25,6 +25,9 @@ const PathPage = lazy(() => import('./pages/PathPage'));
 // The outcome drill-down (#56). Its own route at every width — see the page's
 // header for why a master/detail split above `sm` was rejected.
 const OutcomeDetailPage = lazy(() => import('./pages/OutcomeDetailPage'));
+// A Path surface, not a sixth destination: `DESTINATION_ROUTES.path` already
+// owns `/path/family` by prefix, so no registry entry is needed (epic E08).
+const FamilyPage = lazy(() => import('./pages/FamilyPage'));
 const CoachPage = lazy(() => import('./pages/CoachPage'));
 const ProgressPage = lazy(() => import('./pages/ProgressPage'));
 // User settings — the hub (#96) plus one route per card in
@@ -149,6 +152,7 @@ function AppRoutes() {
                   <Route path="/" element={<TodayPage />} />
                   <Route path="/path" element={<PathPage />} />
                   <Route path="/path/outcomes/:id" element={<OutcomeDetailPage />} />
+                  <Route path="/path/family" element={<FamilyPage />} />
                   <Route path="/coach" element={<CoachPage />} />
                   <Route path="/progress" element={<ProgressPage />} />
                   {/* The per-user settings surface (#96, epic #90) — the same

@@ -79,6 +79,7 @@ import type { Role, User } from '../src/types';
 
 const TodayPage = lazy(() => import('../src/pages/TodayPage'));
 const PathPage = lazy(() => import('../src/pages/PathPage'));
+const FamilyPage = lazy(() => import('../src/pages/FamilyPage'));
 const CoachPage = lazy(() => import('../src/pages/CoachPage'));
 const ProgressPage = lazy(() => import('../src/pages/ProgressPage'));
 const UserSettingsHubPage = lazy(() => import('../src/pages/UserSettingsHubPage'));
@@ -213,6 +214,10 @@ function HarnessRoutes() {
           <Route element={<Layout />}>
             <Route path="/" element={<TodayPage />} />
             <Route path="/path" element={<PathPage />} />
+            {/* The Family surface (epic E08). A route under Path, so no
+                navigation or registry change — but it has to exist here or a
+                future visual spec would capture a redirect. */}
+            <Route path="/path/family" element={<FamilyPage />} />
             <Route path="/coach" element={<CoachPage />} />
             <Route path="/progress" element={<ProgressPage />} />
 
