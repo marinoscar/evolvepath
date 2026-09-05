@@ -151,4 +151,41 @@ describe('CommitmentRow', () => {
 
     expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled();
   });
+
+  describe('a workout commitment (epic E09)', () => {
+    it('offers the runner instead of the generic timer', () => {
+      render(
+        <CommitmentRow
+          commitment={card({ status: 'PLANNED', workoutTemplateId: 'template-1' })}
+          onAction={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByRole('button', { name: 'Start workout' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Start' })).not.toBeInTheDocument();
+    });
+
+    it('leaves a Health commitment without a workout on the generic timer', () => {
+      // A walk is a Health commitment too; the domain is not the signal.
+      render(
+        <CommitmentRow
+          commitment={card({ status: 'PLANNED', domain: 'HEALTH' })}
+          onAction={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument();
+    });
+
+    it('reports the workout action to the page', async () => {
+      const onAction = vi.fn();
+      const user = userEvent.setup();
+      const commitment = card({ status: 'PLANNED', workoutTemplateId: 'template-1' });
+      render(<CommitmentRow commitment={commitment} onAction={onAction} />);
+
+      await user.click(screen.getByRole('button', { name: 'Start workout' }));
+
+      expect(onAction).toHaveBeenCalledWith('start_workout', commitment);
+    });
+  });
 });

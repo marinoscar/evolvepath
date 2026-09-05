@@ -3,8 +3,12 @@ import { http, HttpResponse } from 'msw';
 import type {
   Exercise,
   GenerateProgramRequest,
+  LogSetBody,
+  SetLog,
   WorkoutProgram,
+  WorkoutSessionView,
   WorkoutTemplate,
+  WorkoutVariant,
 } from '../../types';
 
 // =============================================================================
@@ -109,7 +113,18 @@ export function buildProgram(overrides: Partial<WorkoutProgram> = {}): WorkoutPr
   };
 }
 
+interface SessionState {
+  view: WorkoutSessionView;
+  logged: SetLog[];
+}
+
 interface WorkoutState {
+  session: SessionState | null;
+  loggedBodies: LogSetBody[];
+  batches: LogSetBody[][];
+  finished: Array<{ status: string; notes: string | null }>;
+  /** When set, the next set POST fails with this status. `0` means a network error. */
+  setPostStatus: number | null;
   programs: WorkoutProgram[];
   generateRequests: GenerateProgramRequest[];
   approveRequests: Array<{ id: string; body: { preferredTime?: string; startDate?: string } }>;
@@ -122,6 +137,11 @@ interface WorkoutState {
 }
 
 const state: WorkoutState = {
+  session: null,
+  loggedBodies: [],
+  batches: [],
+  finished: [],
+  setPostStatus: null,
   programs: [],
   generateRequests: [],
   approveRequests: [],
@@ -132,6 +152,11 @@ const state: WorkoutState = {
 };
 
 export function resetWorkoutState(): void {
+  state.session = null;
+  state.loggedBodies = [];
+  state.batches = [];
+  state.finished = [];
+  state.setPostStatus = null;
   state.programs = [];
   state.generateRequests = [];
   state.approveRequests = [];
@@ -167,7 +192,264 @@ export function setGenerateStatus(status: number | null): void {
   state.generateStatus = status;
 }
 
+// ---------------------------------------------------------------------------
+// Sessions (issue #109)
+// ---------------------------------------------------------------------------
+
+export function buildSessionView(
+  overrides: Partial<WorkoutSessionView> = {},
+): WorkoutSessionView {
+  return {
+    id: 'session-1',
+    status: 'IN_PROGRESS',
+    variant: 'FULL',
+    templateId: 'upper-a-full',
+    templateName: 'Upper A',
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    discomfortFlag: false,
+    commitmentId: 'commitment-1',
+    setCount: 0,
+    program: { id: 'program-1', name: 'Two-day upper/lower' },
+    template: { id: 'upper-a-full', name: 'Upper A', variant: 'FULL', targetMinutes: 40 },
+    header: { title: 'Upper A', sessionIndex: 3, sessionTotal: 18 },
+    availableVariants: ['FULL', 'MINIMUM', 'SHORT'],
+    exercises: [
+      {
+        order: 1,
+        exerciseId: 'exercise-bench',
+        name: 'Dumbbell Bench Press',
+        equipment: ['DUMBBELL', 'BENCH'],
+        instructions: 'Press both dumbbells up until your arms are straight.',
+        sets: 3,
+        repMin: 8,
+        repMax: 12,
+        restSeconds: 90,
+        notes: null,
+        lastTime: {
+          sessionDate: '2026-09-03T13:00:00.000Z',
+          sets: [
+            {
+              id: 'old-1',
+              clientId: 'old-1',
+              exerciseId: 'exercise-bench',
+              setNumber: 1,
+              weightKg: 20,
+              reps: 12,
+              rpe: 7,
+              discomfort: 'NONE',
+              loggedAt: '2026-09-03T13:10:00.000Z',
+            },
+          ],
+        },
+        progression: {
+          action: 'increase',
+          currentWeightKg: 20,
+          suggestedWeightKg: 22.5,
+          deltaKg: 2.5,
+          reason: 'top_of_range_twice',
+          basis: { sessions: 2, lastReps: [12, 12, 12], lastRpe: [7, 7, 7] },
+        },
+        logged: [],
+      },
+    ],
+    alsoLogged: [],
+    safety: null,
+    ...overrides,
+  };
+}
+
+export function seedSession(view: WorkoutSessionView = buildSessionView()): void {
+  state.session = { view, logged: [] };
+}
+
+export function loggedSetBodies(): ReadonlyArray<LogSetBody> {
+  return state.loggedBodies;
+}
+
+export function batchedSets(): ReadonlyArray<LogSetBody[]> {
+  return state.batches;
+}
+
+export function finishedSessions(): ReadonlyArray<{ status: string; notes: string | null }> {
+  return state.finished;
+}
+
+export function setSetPostStatus(status: number | null): void {
+  state.setPostStatus = status;
+}
+
+/** Fold a logged set into the session view, the way the API's read does. */
+function applySet(session: SessionState, body: LogSetBody): SetLog {
+  const set: SetLog = {
+    id: body.clientId,
+    clientId: body.clientId,
+    exerciseId: body.exerciseId,
+    setNumber: body.setNumber,
+    weightKg: body.weightKg ?? null,
+    reps: body.reps,
+    rpe: body.rpe ?? null,
+    discomfort: body.discomfort,
+    loggedAt: body.loggedAt ?? new Date().toISOString(),
+  };
+
+  session.logged.push(set);
+  const discomfortFlag = session.view.discomfortFlag || body.discomfort === 'SHARP_PAIN';
+
+  session.view = {
+    ...session.view,
+    setCount: session.logged.length,
+    discomfortFlag,
+    // The API returns the copy on the VIEW for the rest of the session, not
+    // only in the response to the set that raised it. Mirroring that here is
+    // what makes a reload-mid-session test meaningful.
+    safety: discomfortFlag
+      ? { copy: 'Stop this exercise. Sharp pain is not something to train through.' }
+      : session.view.safety,
+    exercises: session.view.exercises.map((exercise) =>
+      exercise.exerciseId === body.exerciseId
+        ? {
+            ...exercise,
+            logged: [
+              ...exercise.logged.filter((row) => row.setNumber !== body.setNumber),
+              set,
+            ].sort((a, b) => a.setNumber - b.setNumber),
+          }
+        : exercise,
+    ),
+  };
+
+  return set;
+}
+
 export const workoutHandlers = [
+  http.post(`${API_BASE}/workouts/sessions`, async ({ request }) => {
+    const body = (await request.json()) as { commitmentId?: string; templateId?: string };
+
+    if (!state.session) seedSession();
+
+    state.session!.view = {
+      ...state.session!.view,
+      commitmentId: body.commitmentId ?? null,
+    };
+
+    return HttpResponse.json({ data: state.session!.view }, { status: 201 });
+  }),
+
+  http.get(`${API_BASE}/workouts/sessions/:id`, ({ params }) => {
+    if (!state.session || state.session.view.id !== String(params.id)) {
+      return HttpResponse.json({ message: 'Workout session not found' }, { status: 404 });
+    }
+
+    return HttpResponse.json({ data: state.session.view });
+  }),
+
+  http.post(`${API_BASE}/workouts/sessions/:id/sets`, async ({ request }) => {
+    const body = (await request.json()) as LogSetBody;
+
+    if (state.setPostStatus === 0) return HttpResponse.error();
+
+    if (state.setPostStatus !== null) {
+      return HttpResponse.json({ message: 'refused' }, { status: state.setPostStatus });
+    }
+
+    state.loggedBodies.push(body);
+
+    if (!state.session) seedSession();
+
+    // Idempotent on clientId, exactly like the API's unique index.
+    const existing = state.session!.logged.find((row) => row.clientId === body.clientId);
+    const set = existing ?? applySet(state.session!, body);
+
+    return HttpResponse.json(
+      {
+        data: {
+          set,
+          safety:
+            body.discomfort === 'SHARP_PAIN'
+              ? { copy: 'Stop this exercise. Sharp pain is not something to train through.', action: 'stop_exercise' }
+              : null,
+        },
+      },
+      { status: 201 },
+    );
+  }),
+
+  http.post(`${API_BASE}/workouts/sessions/:id/sets/batch`, async ({ request }) => {
+    const body = (await request.json()) as { sets: LogSetBody[] };
+
+    if (state.setPostStatus === 0) return HttpResponse.error();
+
+    state.batches.push(body.sets);
+
+    if (!state.session) seedSession();
+
+    const accepted: SetLog[] = [];
+    const duplicates: string[] = [];
+
+    for (const set of body.sets) {
+      const existing = state.session!.logged.find((row) => row.clientId === set.clientId);
+
+      if (existing) duplicates.push(set.clientId);
+      else {
+        state.loggedBodies.push(set);
+        accepted.push(applySet(state.session!, set));
+      }
+    }
+
+    return HttpResponse.json({ data: { accepted, duplicates, rejected: [] } });
+  }),
+
+  http.post(`${API_BASE}/workouts/sessions/:id/switch-variant`, async ({ request }) => {
+    const body = (await request.json()) as { variant: WorkoutVariant };
+
+    if (!state.session) seedSession();
+
+    state.session!.view = {
+      ...state.session!.view,
+      variant: body.variant,
+      template: { ...state.session!.view.template, variant: body.variant, targetMinutes: 10 },
+      exercises: state.session!.view.exercises.slice(0, 1),
+    };
+
+    return HttpResponse.json({ data: state.session!.view });
+  }),
+
+  http.post(`${API_BASE}/workouts/sessions/:id/finish`, async ({ request }) => {
+    const body = (await request.json()) as { status: string; notes?: string | null };
+
+    state.finished.push({ status: body.status, notes: body.notes ?? null });
+
+    if (!state.session) seedSession();
+
+    const sets = state.session!.logged.length;
+
+    return HttpResponse.json({
+      data: {
+        session: { ...state.session!.view, status: body.status },
+        summary: {
+          sets,
+          volumeKg: 480,
+          minutes: 42,
+          exercisesCompleted: 1,
+          exercisesPlanned: 1,
+        },
+        commitmentStatus: body.status === 'COMPLETED' ? 'COMPLETED' : null,
+      },
+    });
+  }),
+
+  http.get(
+    `${API_BASE}/workouts/sessions/:id/exercises/:exerciseId/explain`,
+    () =>
+      HttpResponse.json({
+        data: {
+          sentence: 'Two sessions at the top of the range and comfortable — 22.5 kg today.',
+          source: 'template',
+        },
+      }),
+  ),
+
   http.get(`${API_BASE}/workouts/exercises`, () =>
     HttpResponse.json({ data: { items: MOCK_EXERCISES } }),
   ),
