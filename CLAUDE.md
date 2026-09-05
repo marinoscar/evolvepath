@@ -691,6 +691,20 @@ The user's half of PRD §15's mutation protocol. There is deliberately no
 - `POST /api/proposals/{id}/edit` - Rewrite the whole change set. Keeps `originalChanges`; a later accept is attributed `createdBy: USER`
 - `POST /api/proposals/{id}/reject` - Keep the current plan. Touches nothing; the reason is kept for the coach
 
+### Weekly Review (epic E10)
+The PRD §135 loop's first half. Weeks are the user's local Monday as
+`'YYYY-MM-DD'`; the numbers are deterministic and the coach's reading of them is
+a separate column, so a provider outage changes the words and never the counts.
+- `POST /api/weekly/reviews/generate` - Aggregate the week, then ask the reviewer for the PRD §14.6 six outputs. **Always produces a review**: `aiSummary.source` is `'template'` when the provider is unavailable. Any proposed change becomes a `WEEKLY_REVIEW` proposal — this route never writes a `PlanVersion`. Omitting `weekStart` reviews last week on Mon/Tue and the week in progress from Wed. 400 `INVALID_WEEK_START`; 409 `WEEKLY_REVIEW_APPROVED` / `WEEKLY_REVIEW_IN_PROGRESS`; 429 after five per hour
+- `GET /api/weekly/reviews?weekStart=&limit=` - Newest week first
+- `GET /api/weekly/reviews/current` - The latest, or **`null`** for a user who has never had one
+- `GET /api/weekly/reviews/{id}` - One review with its resolved proposals (404 for a foreign id, never 403)
+- `POST /api/weekly/reviews/{id}/skip` - A week the user chooses not to review; 409 `WEEKLY_REVIEW_NOT_SKIPPABLE`
+- `GET /api/weekly/settings` / `PUT /api/weekly/settings` - The review day (0–6) and `'HH:mm'`, plus `nextReviewAt`. **The sweep is hourly**, so `16:30` is prepared in the 16:00 pass
+
+Note: `invocationId` is never on the wire. It is an internal telemetry pointer,
+written to the review row and the audit meta and nowhere a client can read it.
+
 ### Family (epic E08)
 Own data only; a foreign or unknown id answers 404, never 403.
 - `GET /api/family/members` - List; items carry exactly `id`, `nickname`, `relationship`, `birthday`, `createdAt` — PRD §33 fixes the record and there is nothing else to return
@@ -856,6 +870,10 @@ Note: `DATABASE_URL` is constructed automatically from these variables at runtim
 - `AI_REQUEST_TIMEOUT_MS` - Hard deadline for one generation (default: 60000)
 - `AI_MAX_IMAGE_BYTES` - Largest image the gateway will inline (default: 20971520). Bounds one AI call, not one upload.
 - `AI_MAX_IMAGES_PER_CALL` - Images per call, counted after a video expands to its sampled frames (default: 10)
+
+**Weekly review (epic E10):**
+- `WEEKLY_LOAD_SOFT_CAP` - The number of recurring commitments past which the product says "replace something rather than add another habit" (PRD §48, default 8). A **soft** cap: the warning is data on the response, never an exception, because a person who deliberately wants a heavy week is not making a mistake the software should refuse.
+- `WEEKLY_REVIEW_CRON_DISABLED` - Stops the hourly review sweep (default `false`). Integration tests and the e2e stack set it to `true`: a background job that writes reviews for every seeded user turns a deterministic assertion into a race.
 
 **Coaching notifications (epic E12):**
 - `COACHING_NOTIFICATIONS_ENABLED` - The decision engine's five-minute cron (default: `true`). An off switch rather than a feature flag: the engine's failure mode is sending people messages, so it must be stoppable in one restart. The on-demand `POST /api/auth/test/run-job` route (non-production) is deliberately not gated by it.
@@ -1083,7 +1101,11 @@ settings hub and the notification registry each make on their own axis
    caller decides.
 
    Live example of the smallest possible call: `AiAdminTestService`'s connection
-   probe (`apps/api/src/ai/connection-probe.ts`).
+   probe (`apps/api/src/ai/connection-probe.ts`). The `weekly_reviewer` persona
+   is called from exactly one place —
+   `apps/api/src/weekly/weekly-review.service.ts` — and is the worked example of
+   a caller that branches on `ok: false` into a deterministic template rather
+   than failing the request.
 
 ### Calling an AI persona
 
