@@ -2065,3 +2065,105 @@ export interface WeightTrend {
   trend: WeightTrendPoint[];
   summary: { first: number; last: number; deltaKg: number; days: number } | null;
 }
+
+// -----------------------------------------------------------------------------
+// Workout programs (epic E09)
+// -----------------------------------------------------------------------------
+
+export type Equipment =
+  | 'BODYWEIGHT'
+  | 'DUMBBELL'
+  | 'BARBELL'
+  | 'MACHINE'
+  | 'CABLE'
+  | 'KETTLEBELL'
+  | 'BAND'
+  | 'BENCH';
+
+export type WorkoutVariant = 'FULL' | 'SHORT' | 'MINIMUM';
+
+export type WorkoutProgramStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+
+export interface Exercise {
+  id: string;
+  name: string;
+  equipment: string[];
+  movementPattern: string;
+  instructions: string;
+  contraindicationTags: string[];
+  substitutionGroup: string;
+  isCustom: boolean;
+}
+
+export interface WorkoutTemplateExercise {
+  id: string;
+  exerciseId: string;
+  name: string;
+  order: number;
+  sets: number;
+  repMin: number;
+  repMax: number;
+  restSeconds: number;
+  notes: string | null;
+}
+
+export interface WorkoutTemplate {
+  id: string;
+  name: string;
+  variant: WorkoutVariant;
+  targetMinutes: number;
+  routineId: string | null;
+  exercises: WorkoutTemplateExercise[];
+}
+
+export interface WeeklyStructureEntry {
+  /** 0 = Sunday … 6 = Saturday. */
+  weekday: number;
+  templateId: string;
+}
+
+export interface WorkoutProgramSummary {
+  id: string;
+  name: string;
+  status: WorkoutProgramStatus;
+  durationWeeks: number;
+  weeklyStructure: WeeklyStructureEntry[];
+  planId: string | null;
+  createdAt: string;
+}
+
+export interface WorkoutProgram extends WorkoutProgramSummary {
+  rationale: string | null;
+  templates: WorkoutTemplate[];
+  substitutions: Array<{ exerciseId: string; alternativeExerciseIds: string[] }>;
+}
+
+export interface GenerateProgramRequest {
+  goal: string;
+  experience: 'BEGINNER' | 'INTERMEDIATE';
+  daysPerWeek: number;
+  minutesPerSession: number;
+  equipment: Equipment[];
+  preferences?: string;
+  limitations?: string;
+  useStarter?: boolean;
+}
+
+/**
+ * `source: 'starter'` is a SUCCESS, not an error: the deterministic program
+ * shipped because the model could not (PRD §120). `reason` says which of the
+ * four ways that happened, and the UI owes the user a different sentence for
+ * each.
+ */
+export interface GenerateProgramResult {
+  program: WorkoutProgram;
+  source: 'ai' | 'starter';
+  reason: 'invalid_output' | 'ai_unavailable' | 'safety_redirect' | 'requested' | null;
+  message: string | null;
+}
+
+export interface ApproveProgramResult {
+  program: WorkoutProgram;
+  planVersionId: string;
+  commitmentIds: string[];
+}
