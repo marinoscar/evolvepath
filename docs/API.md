@@ -2206,6 +2206,7 @@ that is not the caller's.
 
 | Method | Path | Body | Result |
 |---|---|---|---|
+| GET | `/commitments/{id}/actions` | — | 200 card **+ `whyItMatters`** |
 | POST | `/commitments/{id}/actions/start` | `{ minutes? }` | 200 card |
 | POST | `/commitments/{id}/actions/pause` | — | 200 card |
 | POST | `/commitments/{id}/actions/continue` | `{ extraMinutes? }` | 200 card |
@@ -2273,12 +2274,25 @@ otherwise offer a move this API refuses.
 
 Semantics worth stating:
 
+- **`GET /commitments/{id}/actions`** is what an execution screen reads: the
+  same card every action returns, plus `whyItMatters` (the outcome's motivation,
+  falling back to its definition of done). Separate from `GET /commitments/{id}`,
+  which is the *record* — every column, its evidence and its reflections. Two
+  shapes on one screen is how a UI drifts from an API one field at a time.
 - **`start`** stamps `startedAt` (first time only), sets `activeSince`, and
   writes `APP_FLOW started`. A start on a *paused* commitment resumes it rather
   than erroring — to a user there is one button. Any other timer the user left
   running is paused first, with its own `paused` evidence: **one running timer
   per user**, because two commitments claiming the same wall-clock minutes would
   make every later "how long did this take" answer a lie.
+- **`continue`** is accepted **while the timer is still running**, which is the
+  one place the action set is wider than `availableActions`. A session that has
+  passed its target is still `STARTED` with `activeSince` set, and that is
+  exactly when the Start screen offers "Continue another 15?" — refusing it
+  would leave the user's only way forward a pause followed by a continue, which
+  writes a `paused` evidence row for a pause that never happened (PRD §10.9).
+  When it is already running, `activeSince` is left alone so no accumulated time
+  is lost; only the target moves.
 - **`complete` / `partial`** fold the running time into `activeSeconds`, stamp
   `completedAt`, and set `minutesSpent` from the body or, failing that, from the
   timer. `versionUsed` defaults to `FULL`. The evidence row is `USER_LOG` with
