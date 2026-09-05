@@ -44,6 +44,13 @@ export const THROTTLE_LIMITS = {
   user_test: 5,
   admin_test: 5,
   models_refresh: 10,
+  /**
+   * The family behaviour-rewrite suggestion (issue #41). Looser than the two
+   * `*_test` buckets because it is typed into a form rather than clicked, and
+   * the deterministic verdict the user actually needs never reaches this code
+   * at all — only the optional rephrase does.
+   */
+  family_lint: 10,
 } as const;
 
 /** One rate-limited surface. */

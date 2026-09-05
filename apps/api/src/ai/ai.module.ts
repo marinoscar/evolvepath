@@ -74,6 +74,10 @@ import { AiAttachmentResolverService } from './attachments/ai-attachment-resolve
     UserAiKeyService,
     AiSettingsService,
     AiProviderRegistry,
+    // Exported for the family behaviour-rewrite endpoint (#41), which is a
+    // user-triggered AI call outside this module and needs the same per-user
+    // window every other user-triggered AI call here goes through.
+    TestThrottle,
   ],
 })
 export class AiModule {}
