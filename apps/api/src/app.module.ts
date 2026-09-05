@@ -23,6 +23,7 @@ import { AiModule } from './ai/ai.module';
 import { PathModule } from './path/path.module';
 import { CommitmentsModule } from './commitments/commitments.module';
 import { TodayModule } from './today/today.module';
+import { WorkoutsModule } from './workouts/workouts.module';
 import { CoachModule } from './coach/coach.module';
 import { SafetyModule } from './coach/safety/safety.module';
 import { FamilyModule } from './family/family.module';
@@ -101,6 +102,7 @@ import configuration from './config/configuration';
     // written at volume by the flows E05/E07/E09 add.
     CommitmentsModule,
     TodayModule,
+    WorkoutsModule,
 
     // The Family domain (epic E08): members, rituals and their materialized
     // occurrences. Separate from PathModule because a ritual is a rule the
