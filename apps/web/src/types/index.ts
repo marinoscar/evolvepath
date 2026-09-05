@@ -2292,3 +2292,57 @@ export interface FinishSessionResult {
   summary: FinishSummary;
   commitmentStatus: string | null;
 }
+
+// -----------------------------------------------------------------------------
+// Health media coaching (epic E09)
+// -----------------------------------------------------------------------------
+
+export interface StorageObjectSummary {
+  id: string;
+  name: string;
+  mimeType: string;
+  status: string;
+}
+
+export type RiskFlag =
+  | 'pain_reported'
+  | 'joint_instability'
+  | 'spinal_rounding_under_load'
+  | 'loss_of_control'
+  | 'unclear_footage'
+  | 'none';
+
+export interface FormCheckResult {
+  observations: string[];
+  cues: string[];
+  riskFlags: RiskFlag[];
+  safetyNote: string | null;
+  confidence: 'low' | 'medium' | 'high';
+  /** True when a body became the question and the cues were withheld. */
+  redirected: boolean;
+}
+
+export interface EquipmentSubstitution {
+  exerciseId: string;
+  exerciseName: string;
+  alternativeExerciseId: string;
+  alternativeName: string;
+  reason: string;
+}
+
+export interface EquipmentCheckResult {
+  equipmentDetected: Equipment[];
+  notes: string[];
+  substitutions: EquipmentSubstitution[];
+  proposalId: string | null;
+}
+
+export interface MealCheckResult {
+  observations: string[];
+  behaviorSuggestions: Array<{ key: string; text: string }>;
+}
+
+/** Every media check answers 200; a failure is `ok: false`. */
+export type MediaCheckResponse<T> =
+  | { ok: true; result: T; storageObjectId: string; invocationId: string }
+  | { ok: false; error: { code: string; message: string } };
