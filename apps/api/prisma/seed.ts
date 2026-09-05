@@ -65,6 +65,11 @@ const PERMISSIONS = [
   // Storage management
   { name: 'storage:read', description: 'Read object metadata, get download URLs' },
   { name: 'storage:write', description: 'Upload, update metadata' },
+  {
+    name: 'storage:read_any',
+    description: "Admin: read any object's metadata and download URL",
+  },
+  { name: 'storage:write_any', description: "Admin: update any object's metadata" },
   { name: 'storage:delete_any', description: 'Admin: delete any object' },
 ] as const;
 
@@ -82,6 +87,8 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'allowlist:write',
     'storage:read',
     'storage:write',
+    'storage:read_any',
+    'storage:write_any',
     'storage:delete_any',
   ],
   contributor: [

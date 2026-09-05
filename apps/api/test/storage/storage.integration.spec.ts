@@ -9,6 +9,7 @@ import { setupBaseMocks } from '../fixtures/mock-setup.helper';
 import {
   createMockTestUser,
   createMockAdminUser,
+  createMockContributorUser,
   authHeader,
 } from '../helpers/auth-mock.helper';
 import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
@@ -22,10 +23,10 @@ describe('Storage Integration', () => {
 
   const mockStorageObject = {
     id: mockStorageObjectId,
-    name: 'test-file.pdf',
+    name: 'test-file.jpg',
     size: BigInt(1024000),
-    mimeType: 'application/pdf',
-    storageKey: 'uploads/123456/uuid-123.pdf',
+    mimeType: 'image/jpeg',
+    storageKey: 'uploads/123456/uuid-123.jpg',
     storageProvider: 's3',
     bucket: 'test-bucket',
     status: 'ready',
@@ -62,14 +63,14 @@ describe('Storage Integration', () => {
       const user = await createMockTestUser(context);
 
       const dto = {
-        name: 'test.pdf',
+        name: 'test.jpg',
         size: 52428800, // 50MB
-        mimeType: 'application/pdf',
+        mimeType: 'image/jpeg',
       };
 
       mockStorageProvider.initMultipartUpload.mockResolvedValue({
         uploadId: 'upload-123',
-        key: 'uploads/123/uuid.pdf',
+        key: 'uploads/123/uuid.jpg',
       });
       mockStorageProvider.getBucket.mockReturnValue('test-bucket');
 
@@ -102,9 +103,9 @@ describe('Storage Integration', () => {
       await request(context.app.getHttpServer())
         .post('/api/storage/objects/upload/init')
         .send({
-          name: 'test.pdf',
+          name: 'test.jpg',
           size: 1024000,
-          mimeType: 'application/pdf',
+          mimeType: 'image/jpeg',
         })
         .expect(401);
     });
@@ -117,7 +118,7 @@ describe('Storage Integration', () => {
         .set(authHeader(user.accessToken))
         .send({
           // Missing required fields
-          name: 'test.pdf',
+          name: 'test.jpg',
         })
         .expect(400);
     });
@@ -512,9 +513,9 @@ describe('Storage Integration', () => {
       await request(context.app.getHttpServer())
         .post('/api/storage/objects/upload/init')
         .send({
-          name: 'test.pdf',
+          name: 'test.jpg',
           size: 1024000,
-          mimeType: 'application/pdf',
+          mimeType: 'image/jpeg',
         })
         .expect(401);
 
@@ -561,6 +562,57 @@ describe('Storage Integration', () => {
         .patch(`/api/storage/objects/${mockStorageObjectId}/metadata`)
         .set(authHeader(user.accessToken))
         .send({ metadata: { key: 'value' } })
+        .expect(403);
+    });
+  });
+  // ---------------------------------------------------------------------------
+  // Issue #71 — the allowlist, the size limit and the admin overrides
+  // ---------------------------------------------------------------------------
+  describe('upload limits and admin overrides (issue #71)', () => {
+    it('refuses a disallowed MIME type with a message naming the allowed list', async () => {
+      const user = await createMockTestUser(context);
+
+      const response = await request(context.app.getHttpServer())
+        .post('/api/storage/objects/upload/init')
+        .set(authHeader(user.accessToken))
+        .send({ name: 'x.txt', size: 10, mimeType: 'text/plain' })
+        .expect(400);
+
+      expect(response.body.message).toContain('not allowed');
+      expect(response.body.message).toContain('image/*, video/*');
+      expect(mockStorageProvider.initMultipartUpload).not.toHaveBeenCalled();
+    });
+
+    it('refuses a size above MAX_FILE_SIZE', async () => {
+      const user = await createMockTestUser(context);
+
+      const response = await request(context.app.getHttpServer())
+        .post('/api/storage/objects/upload/init')
+        .set(authHeader(user.accessToken))
+        // One byte over the 500 MiB default.
+        .send({ name: 'x.mp4', size: 524288001, mimeType: 'video/mp4' })
+        .expect(400);
+
+      expect(response.body.message).toContain('the limit is');
+    });
+
+    it('lets an admin read another user\'s object, and refuses a contributor', async () => {
+      const admin = await createMockAdminUser(context);
+      const contributor = await createMockContributorUser(context);
+
+      context.prismaMock.storageObject.findUnique.mockResolvedValue({
+        ...mockStorageObject,
+        uploadedById: 'somebody-else',
+      });
+
+      await request(context.app.getHttpServer())
+        .get(`/api/storage/objects/${mockStorageObjectId}`)
+        .set(authHeader(admin.accessToken))
+        .expect(200);
+
+      await request(context.app.getHttpServer())
+        .get(`/api/storage/objects/${mockStorageObjectId}`)
+        .set(authHeader(contributor.accessToken))
         .expect(403);
     });
   });

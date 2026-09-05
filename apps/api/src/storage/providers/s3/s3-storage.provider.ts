@@ -32,6 +32,15 @@ import {
 export class S3StorageProvider implements StorageProvider {
   private readonly logger = new Logger(S3StorageProvider.name);
   private readonly s3Client: S3Client;
+  /**
+   * A second client that differs from `s3Client` in exactly one way: it points
+   * at the endpoint a BROWSER (or the AI provider) can reach. Signing has to
+   * happen against the host the fetcher will use, because the host is part of
+   * what gets signed — so in Compose the API talks to http://minio:9000 and
+   * signs against http://localhost:9000 (issue #71). Undefined when the two
+   * are the same, which is every deployment that is not Compose.
+   */
+  private readonly signingClient: S3Client;
   private readonly bucket: string;
 
   constructor(private readonly configService: ConfigService) {
@@ -50,20 +59,37 @@ export class S3StorageProvider implements StorageProvider {
       this.logger.warn('S3 bucket not configured');
     }
 
+    const forcePathStyle = this.configService.get<boolean>(
+      'storage.s3.forcePathStyle',
+      !!endpoint,
+    );
+    const publicEndpoint = this.configService.get<string>(
+      'storage.s3.publicEndpoint',
+    );
+
+    const credentials =
+      accessKeyId && secretAccessKey
+        ? { accessKeyId, secretAccessKey }
+        : undefined;
+
     // Initialize S3 client
     this.s3Client = new S3Client({
       region,
       endpoint,
-      credentials:
-        accessKeyId && secretAccessKey
-          ? {
-              accessKeyId,
-              secretAccessKey,
-            }
-          : undefined,
-      // Force path-style URLs for MinIO/LocalStack compatibility
-      forcePathStyle: !!endpoint,
+      credentials,
+      // Path-style URLs for MinIO/LocalStack compatibility; AWS ignores it.
+      forcePathStyle,
     });
+
+    this.signingClient =
+      publicEndpoint && publicEndpoint !== endpoint
+        ? new S3Client({
+            region,
+            endpoint: publicEndpoint,
+            credentials,
+            forcePathStyle,
+          })
+        : this.s3Client;
 
     this.logger.log(
       `S3StorageProvider initialized - Bucket: ${this.bucket}, Region: ${region}${endpoint ? `, Endpoint: ${endpoint}` : ''}`,
@@ -175,7 +201,7 @@ export class S3StorageProvider implements StorageProvider {
         PartNumber: partNumber,
       });
 
-      const signedUrl = await getSignedUrl(this.s3Client, command, {
+      const signedUrl = await getSignedUrl(this.signingClient, command, {
         expiresIn,
       });
 
@@ -313,7 +339,7 @@ export class S3StorageProvider implements StorageProvider {
         ResponseContentDisposition: options?.responseContentDisposition,
       });
 
-      const signedUrl = await getSignedUrl(this.s3Client, command, {
+      const signedUrl = await getSignedUrl(this.signingClient, command, {
         expiresIn,
       });
 

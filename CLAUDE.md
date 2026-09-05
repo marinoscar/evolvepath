@@ -570,6 +570,10 @@ cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml up
 # Start development with observability (Uptrace UI at http://localhost:14318)
 cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f otel.compose.yml up
 
+# Start development with a local object store (MinIO console at http://localhost:9001)
+# Uncomment the MinIO block in .env first; see infra/compose/.env.example
+cd infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f minio.compose.yml up
+
 # Start production mode
 cd infra/compose && docker compose -f base.compose.yml -f prod.compose.yml up
 
@@ -900,8 +904,8 @@ Behaviours, not calories: no macro, no food database, no BMI, no goal weight.
 - `users:read/write` - User management
 - `rbac:manage` - Role assignment
 - `allowlist:read/write` - Allowlist management (Admin only)
-- `storage:read/write/delete` - Storage object access (own objects)
-- `storage:read_any/write_any/delete_any` - Storage object access (all objects, Admin only)
+- `storage:read/write` - Storage object access (own objects)
+- `storage:read_any/write_any/delete_any` - Storage object access (all objects, Admin only). Real, seeded to admin only, and consulted by `ObjectsService` since issue #71 — `read_any` and `write_any` were previously documented here and existed nowhere. Uploads themselves stay plain `@Auth()`: Viewer is the default EvolvePath role and every user uploads media
 
 ## Database Tables
 
@@ -980,7 +984,7 @@ The application uses an **email allowlist** to restrict access to pre-authorized
 - JWT access tokens are short-lived (15 min default)
 - Refresh tokens in HttpOnly cookies with rotation
 - Input validation on all endpoints
-- File uploads: images only, size/type limits, randomized filenames
+- File uploads: images and videos only (`ALLOWED_MIME_TYPES`), size limit (`MAX_FILE_SIZE`, 500 MiB default), randomized object keys. Both limits are enforced on both upload paths, and the simple path counts the bytes it stores rather than recording `0`
 - Email allowlist restricts application access to pre-authorized users
 - OpenAI keys (platform and per-user) are encrypted in `credentials` under two
   distinct purposes, write-only through the API, and redacted from every error,
@@ -1051,6 +1055,13 @@ Note: `DATABASE_URL` is constructed automatically from these variables at runtim
 - `WEB_PUSH_PUBLIC_KEY` / `WEB_PUSH_PRIVATE_KEY` / `WEB_PUSH_SUBJECT` - VAPID credentials for web push, generated once per deployment with `npx web-push generate-vapid-keys`. All three optional: without them the push channel is inactive and every user still gets the inbox row and the live update. `WEB_PUSH_PRIVATE_KEY` is a secret and is never logged or returned. **Rotating them invalidates every existing subscription** — each browser signed up against the old public key.
 
 Note: `SECRETS_ENCRYPTION_KEY` now also protects the platform OpenAI key and every user's own key. Without it, saving either fails.
+
+**Storage (epic #67):**
+- `MAX_FILE_SIZE` - Largest upload accepted, in bytes (default: 524288000 = 500 MiB). Enforced on `upload/init` from the declared size and on the simple path from the bytes that actually flow — a Content-Length is a claim, not a measurement.
+- `ALLOWED_MIME_TYPES` - Comma-separated allowlist (default: `image/*,video/*`). An exact type, or one trailing `/*`. **An empty value denies every upload**, which is the safe reading of "no types are configured".
+- `S3_FORCE_PATH_STYLE` - Path-style addressing for MinIO/LocalStack (default: true whenever `S3_ENDPOINT` is set). AWS ignores it.
+- `S3_PUBLIC_ENDPOINT` - The address a **browser** reaches the object store at, used only when signing URLs (default: `S3_ENDPOINT`). In Compose the API talks to `http://minio:9000` and signs against `http://localhost:9000`; signing against the internal host produces a URL that is valid and unreachable.
+- `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` - Credentials for the `minio.compose.yml` overlay (default: `minioadmin`).
 
 **Observability:**
 - `OTEL_ENABLED` - Enable OpenTelemetry (default: true)

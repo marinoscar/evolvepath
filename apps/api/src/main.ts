@@ -58,10 +58,20 @@ async function bootstrap() {
     secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET,
   });
 
-  // Register multipart plugin for file uploads
+  // Register multipart plugin for file uploads.
+  //
+  // The plugin cap is the HARD ceiling for the simple path; the service's byte
+  // counter enforces MAX_FILE_SIZE below it. Reading the same config here is
+  // what stops the two from disagreeing: an operator who lowers MAX_FILE_SIZE
+  // gets a 400 with their number in it, and one who raises it past 100 MiB is
+  // told to use the resumable path rather than silently capped (issue #71).
+  const simpleUploadCeiling = Math.min(
+    100 * 1024 * 1024,
+    parseInt(process.env.MAX_FILE_SIZE || '524288000', 10),
+  );
   await app.register(multipart, {
     limits: {
-      fileSize: 100 * 1024 * 1024, // 100MB for simple upload
+      fileSize: simpleUploadCeiling,
       files: 1,
     },
   });

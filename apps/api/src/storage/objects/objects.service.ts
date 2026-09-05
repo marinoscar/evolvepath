@@ -41,6 +41,29 @@ import {
   OBJECT_UPLOADED_EVENT,
   ObjectUploadedEvent,
 } from '../processing/events/object-uploaded.event';
+import {
+  disallowedMimeTypeMessage,
+  fileTooLargeMessage,
+  isMimeTypeAllowed,
+} from './mime-allowlist';
+import {
+  ByteCounterStream,
+  isByteLimitExceeded,
+} from './byte-counter.stream';
+import { PERMISSIONS } from '../../common/constants/roles.constants';
+import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+
+/**
+ * What the caller wants to do with an object. Each maps to one admin override
+ * permission; the owner always passes regardless.
+ */
+export type ObjectAction = 'read' | 'write' | 'delete';
+
+const ADMIN_OVERRIDE_PERMISSION: Record<ObjectAction, string> = {
+  read: PERMISSIONS.STORAGE_READ_ANY,
+  write: PERMISSIONS.STORAGE_WRITE_ANY,
+  delete: PERMISSIONS.STORAGE_DELETE_ANY,
+};
 
 export interface MultipartFile {
   filename: string;
@@ -68,6 +91,11 @@ export class ObjectsService {
     userId: string,
   ): Promise<InitUploadResponseDto> {
     const { name, size, mimeType } = dto;
+
+    // Issue #71: the allowlist and the size limit have to be checked before a
+    // multipart upload is initialized with the provider, or a rejected upload
+    // still leaves an open multipart session on the bucket.
+    this.assertUploadAllowed(mimeType, size, userId);
 
     // Get configuration
     const partSize = this.config.get<number>('storage.partSize', 10485760); // 10MB default
@@ -326,6 +354,13 @@ export class ObjectsService {
   ): Promise<ObjectResponseDto> {
     const { filename, mimetype, file: stream } = file;
 
+    // Issue #71: reject the type BEFORE a byte reaches the provider. The
+    // stream is still unread at this point, so nothing is written and nothing
+    // needs cleaning up.
+    this.assertUploadAllowed(mimetype, null, userId);
+
+    const maxFileSize = this.getMaxFileSize();
+
     // Generate storage key
     const timestamp = Date.now();
     const uuid = randomUUID();
@@ -334,17 +369,41 @@ export class ObjectsService {
 
     this.logger.log(`Simple upload starting: ${filename}`);
 
-    // Upload to storage
-    const result = await this.storageProvider.upload(storageKey, stream, {
-      mimeType: mimetype,
-    });
+    // The size limit cannot be enforced from a header the client controls, so
+    // it is enforced on the bytes as they flow. The counter is also how `size`
+    // gets a real value: it was written as 0 "to be updated by
+    // post-processing", and nothing ever updated it.
+    const counter = new ByteCounterStream(maxFileSize);
+    const countedStream = stream.pipe(counter);
 
-    // We don't know the size until after upload for streams
-    // Use a default size of 0, should be updated in post-processing
+    let result: Awaited<ReturnType<StorageProvider['upload']>>;
+    try {
+      result = await this.storageProvider.upload(storageKey, countedStream, {
+        mimeType: mimetype,
+      });
+    } catch (error) {
+      // Destroy both: leaving the multipart parser buffering keeps the
+      // connection alive on a request we have already refused.
+      stream.destroy();
+      counter.destroy();
+
+      if (isByteLimitExceeded(error) || this.isFastifyFileTooLarge(error)) {
+        await this.bestEffortDeleteKey(storageKey);
+        this.logger.warn(
+          `Rejected oversize upload: userId=${userId} mimeType=${mimetype} bytes=${counter.bytes}`,
+        );
+        throw new BadRequestException(
+          fileTooLargeMessage(counter.bytes, maxFileSize),
+        );
+      }
+
+      throw error;
+    }
+
     const storageObject = await this.prisma.storageObject.create({
       data: {
         name: filename,
-        size: BigInt(0), // Will be updated by post-processing
+        size: counter.bytes,
         mimeType: mimetype,
         storageKey,
         storageProvider: 's3',
@@ -425,8 +484,27 @@ export class ObjectsService {
   /**
    * Get object by ID with ownership check
    */
-  async getById(id: string, userId: string): Promise<ObjectResponseDto> {
-    const object = await this.getObjectWithAuthCheck(id, userId);
+  async getById(id: string, user: RequestUser): Promise<ObjectResponseDto> {
+    const object = await this.getObjectWithAuthCheck(id, user, 'read');
+    return this.mapToResponseDto(object);
+  }
+
+  /**
+   * Owner-only read for SERVER-SIDE callers that hold a user id and no request
+   * (the AI attachment resolver, the media coaching services).
+   *
+   * Deliberately not `getById` with an empty permission list: an admin
+   * resolving their own AI attachments must not be able to inline another
+   * user's photo into a model call because their token happens to carry
+   * `storage:read_any`. The override is an operator affordance on the storage
+   * API, not a capability the AI path inherits.
+   */
+  async getOwnedById(id: string, userId: string): Promise<ObjectResponseDto> {
+    const object = await this.getObjectWithAuthCheck(
+      id,
+      { id: userId, email: '', roles: [], permissions: [], isActive: true },
+      'read',
+    );
     return this.mapToResponseDto(object);
   }
 
@@ -435,10 +513,10 @@ export class ObjectsService {
    */
   async getDownloadUrl(
     id: string,
-    userId: string,
+    user: RequestUser,
     expiresIn?: number,
   ): Promise<DownloadUrlResponseDto> {
-    const object = await this.getObjectWithAuthCheck(id, userId);
+    const object = await this.getObjectWithAuthCheck(id, user, 'read');
 
     // Verify status is ready
     if (object.status !== 'ready') {
@@ -469,8 +547,8 @@ export class ObjectsService {
   /**
    * Delete object from storage and database
    */
-  async delete(id: string, userId: string): Promise<void> {
-    const object = await this.getObjectWithAuthCheck(id, userId);
+  async delete(id: string, user: RequestUser): Promise<void> {
+    const object = await this.getObjectWithAuthCheck(id, user, 'delete');
 
     this.logger.log(`Deleting object ${id} from storage and database`);
 
@@ -483,10 +561,11 @@ export class ObjectsService {
     });
 
     // Create audit event
-    await this.createAuditEvent(userId, 'storage:object:delete', id, {
+    await this.createAuditEvent(user.id, 'storage:object:delete', id, {
       name: object.name,
       size: object.size.toString(),
       mimeType: object.mimeType,
+      ...(object.uploadedById !== user.id ? { actedAsAdmin: true } : {}),
     });
 
     this.logger.log(`Object deleted: ${id}`);
@@ -498,9 +577,9 @@ export class ObjectsService {
   async updateMetadata(
     id: string,
     dto: UpdateMetadataDto,
-    userId: string,
+    user: RequestUser,
   ): Promise<ObjectResponseDto> {
-    const object = await this.getObjectWithAuthCheck(id, userId);
+    const object = await this.getObjectWithAuthCheck(id, user, 'write');
 
     // Merge new metadata with existing
     const existingMetadata = (object.metadata as Record<string, unknown>) || {};
@@ -516,9 +595,10 @@ export class ObjectsService {
     });
 
     // Create audit event
-    await this.createAuditEvent(userId, 'storage:object:metadata:update', id, {
+    await this.createAuditEvent(user.id, 'storage:object:metadata:update', id, {
       name: object.name,
       metadataChanges: dto.metadata,
+      ...(object.uploadedById !== user.id ? { actedAsAdmin: true } : {}),
     });
 
     this.logger.log(`Updated metadata for object ${id}`);
@@ -532,7 +612,8 @@ export class ObjectsService {
    */
   private async getObjectWithAuthCheck(
     id: string,
-    userId: string,
+    user: RequestUser,
+    action: ObjectAction,
   ): Promise<any> {
     const object = await this.prisma.storageObject.findUnique({
       where: { id },
@@ -542,12 +623,91 @@ export class ObjectsService {
       throw new NotFoundException('Object not found');
     }
 
-    // Check ownership
-    if (object.uploadedById !== userId) {
-      throw new ForbiddenException('You do not have access to this object');
+    if (object.uploadedById === user.id) {
+      return object;
     }
 
-    return object;
+    // Issue #71: the three `storage:*_any` permissions are the only way a
+    // non-owner reaches an object. 403 (not 404) is kept on purpose for RAW
+    // storage objects — this is a generic, permission-based API where "you may
+    // not" is the honest answer. Media attachments (#83) are a private product
+    // resource and answer 404; the two are deliberately different.
+    if (user.permissions?.includes(ADMIN_OVERRIDE_PERMISSION[action])) {
+      return object;
+    }
+
+    throw new ForbiddenException('You do not have access to this object');
+  }
+
+  /** The configured upload ceiling, in bytes. */
+  private getMaxFileSize(): number {
+    return this.config.get<number>('storage.maxFileSize', 524288000);
+  }
+
+  /** The configured allowlist patterns. */
+  private getAllowedMimeTypes(): string[] {
+    return this.config.get<string[]>('storage.allowedMimeTypes', [
+      'image/*',
+      'video/*',
+    ]);
+  }
+
+  /**
+   * Reject a disallowed type or a declared size past the limit.
+   *
+   * `size` is null on the simple path, where the declared length is a header
+   * the client controls and the real check happens on the bytes themselves.
+   */
+  private assertUploadAllowed(
+    mimeType: string,
+    size: number | null,
+    userId: string,
+  ): void {
+    const allowed = this.getAllowedMimeTypes();
+
+    if (!isMimeTypeAllowed(mimeType, allowed)) {
+      this.logger.warn(
+        `Rejected upload: userId=${userId} mimeType=${mimeType} reason=mime_not_allowed`,
+      );
+      throw new BadRequestException(
+        disallowedMimeTypeMessage(mimeType, allowed),
+      );
+    }
+
+    const maxFileSize = this.getMaxFileSize();
+    if (size !== null && size > maxFileSize) {
+      this.logger.warn(
+        `Rejected upload: userId=${userId} mimeType=${mimeType} size=${size} reason=too_large`,
+      );
+      throw new BadRequestException(fileTooLargeMessage(size, maxFileSize));
+    }
+  }
+
+  /**
+   * Fastify's multipart plugin caps the simple path before our counter can;
+   * its error must produce the same 400, not a 500.
+   */
+  private isFastifyFileTooLarge(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      (error as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE'
+    );
+  }
+
+  /**
+   * Remove a key we wrote and then refused. Best effort: a provider failure
+   * here is a leaked object, not a reason to turn the user's 400 into a 500.
+   */
+  private async bestEffortDeleteKey(storageKey: string): Promise<void> {
+    try {
+      await this.storageProvider.delete(storageKey);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Failed to clean up partial upload key ${storageKey}: ${message}`,
+      );
+    }
   }
 
   /**

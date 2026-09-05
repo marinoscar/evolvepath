@@ -54,7 +54,7 @@ describeWithDb('Media coaching (integration, real DB)', () => {
   let generator: WorkoutProgramGeneratorService;
   let programs: WorkoutProgramsService;
   let ai: { invoke: jest.Mock };
-  let objects: { getById: jest.Mock };
+  let objects: { getOwnedById: jest.Mock };
   const seededUserIds: string[] = [];
 
   async function createUser(): Promise<string> {
@@ -82,7 +82,7 @@ describeWithDb('Media coaching (integration, real DB)', () => {
       },
     });
 
-    objects.getById.mockResolvedValue({ id: object.id, status: 'ready' });
+    objects.getOwnedById.mockResolvedValue({ id: object.id, status: 'ready' });
 
     return object.id;
   }
@@ -121,7 +121,7 @@ describeWithDb('Media coaching (integration, real DB)', () => {
 
     const service = prisma as unknown as PrismaService;
     ai = { invoke: jest.fn() };
-    objects = { getById: jest.fn() };
+    objects = { getOwnedById: jest.fn() };
 
     const versions = new PlanVersionsService(
       service,
@@ -281,7 +281,7 @@ describeWithDb('Media coaching (integration, real DB)', () => {
     const { session, exerciseId } = await sessionFor(userId, program);
     const objectId = await createObject(userId);
 
-    objects.getById.mockResolvedValue({ id: objectId, status: 'uploading' });
+    objects.getOwnedById.mockResolvedValue({ id: objectId, status: 'uploading' });
 
     await expect(
       media.formCheck(userId, session.id, { storageObjectId: objectId, exerciseId }),

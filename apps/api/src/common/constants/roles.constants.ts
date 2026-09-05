@@ -37,6 +37,12 @@ export const PERMISSIONS = {
   // Storage
   STORAGE_READ: 'storage:read',
   STORAGE_WRITE: 'storage:write',
+  // The three admin overrides. `delete_any` has existed since the storage
+  // module was written; `read_any` and `write_any` were documented in
+  // CLAUDE.md and never seeded, so nothing consulted any of the three
+  // (issue #71). All three are now real and honored by ObjectsService.
+  STORAGE_READ_ANY: 'storage:read_any',
+  STORAGE_WRITE_ANY: 'storage:write_any',
   STORAGE_DELETE_ANY: 'storage:delete_any',
 } as const;
 

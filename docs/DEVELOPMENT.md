@@ -92,6 +92,48 @@ This application uses **Fastify** as the HTTP adapter, not Express. This has imp
    - API: http://localhost:3535/api
    - API reference: http://localhost:3535/api/docs
 
+### Object storage (MinIO)
+
+The storage module is S3-only and Compose had no object store, so nothing
+storage-related could be verified from a clean clone. `minio.compose.yml`
+(epic #67) fixes that:
+
+1. Uncomment the MinIO block in `infra/compose/.env` — copy it verbatim from
+   `.env.example`. The two endpoint variables are not interchangeable:
+
+   ```bash
+   S3_ENDPOINT=http://minio:9000         # the address the API uses
+   S3_PUBLIC_ENDPOINT=http://localhost:9000  # the address a BROWSER uses
+   S3_BUCKET=evolvepath-dev
+   S3_FORCE_PATH_STYLE=true
+   AWS_ACCESS_KEY_ID=minioadmin
+   AWS_SECRET_ACCESS_KEY=minioadmin
+   ```
+
+   Signed URLs are signed against `S3_PUBLIC_ENDPOINT`, because the host is
+   part of what gets signed. Signing a presigned PUT against `http://minio:9000`
+   hands the browser a URL that is perfectly valid and completely unreachable.
+
+2. Bring the stack up with the overlay:
+
+   ```bash
+   cd infra/compose
+   docker compose -f base.compose.yml -f dev.compose.yml -f minio.compose.yml up
+   ```
+
+   `minio-init` creates the bucket and exits; `api` waits for it
+   (`service_completed_successfully`), so the first upload cannot race the
+   bucket into existence.
+
+3. Console at http://localhost:9001 (`minioadmin` / `minioadmin` by default).
+   Uploads land under `<bucket>/uploads/`, and objects derived from them —
+   video frames, normalized AI variants — under `<bucket>/derived/<parent id>/`.
+
+The overlay sets `MINIO_API_CORS_ALLOW_ORIGIN` from `APP_URL`, because the
+browser PUTs multipart parts straight to the object store: MinIO, not nginx, is
+the origin that has to allow it. On AWS S3 the equivalent is a bucket CORS rule
+that also lists `ETag` under `ExposeHeaders`.
+
 ### Building images directly
 
 The `docker compose` commands above are unchanged. If you invoke `docker build`

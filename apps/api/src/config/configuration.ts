@@ -102,11 +102,30 @@ export default () => {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
       endpoint: process.env.S3_ENDPOINT || undefined,
+      // MinIO and LocalStack need path-style addressing; AWS ignores it. The
+      // provider previously inferred this from `endpoint` being set, which is
+      // right for MinIO and wrong for any S3-compatible service that wants
+      // virtual-host style — so it is now a decision an operator can make.
+      forcePathStyle:
+        (process.env.S3_FORCE_PATH_STYLE ?? '').toLowerCase() === 'true' ||
+        !!process.env.S3_ENDPOINT,
+      // Used ONLY when signing URLs a browser or the AI provider will fetch.
+      // In Compose the API reaches MinIO at http://minio:9000 while the phone
+      // reaches it at http://localhost:9000; signing against the internal host
+      // produces a URL that is valid and unreachable.
+      publicEndpoint:
+        process.env.S3_PUBLIC_ENDPOINT || process.env.S3_ENDPOINT || undefined,
     },
-    maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '10737418240', 10), // 10GB default
-    allowedMimeTypes: (
-      process.env.ALLOWED_MIME_TYPES || 'image/*,application/pdf,video/*'
-    ).split(','),
+    // 500 MiB, not 10 GiB (issue #71). The previous default was never read by
+    // any code path; the number that matters is "a phone video of a set", and
+    // 500 MiB is generous for two minutes of 4K.
+    maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '524288000', 10),
+    // PDFs dropped: the product has no use for one and "images only" was the
+    // documented intent all along. Empty list denies everything, deliberately.
+    allowedMimeTypes: (process.env.ALLOWED_MIME_TYPES || 'image/*,video/*')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean),
     signedUrlExpiry: parseInt(process.env.SIGNED_URL_EXPIRY || '3600', 10), // 1 hour default
     partSize: parseInt(process.env.STORAGE_PART_SIZE || '10485760', 10), // 10MB default
   },
