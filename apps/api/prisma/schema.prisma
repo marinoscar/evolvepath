@@ -847,9 +847,15 @@ model AiInvocation {
   /// that have no contract to satisfy (a listModels-only test).
   outputValid Boolean? @map("output_valid")
 
-  /// Free text reserved for E06-06 (#82): 'allow' / 'conservative' / 'redirect'.
-  /// Present from day one so the safety classifier needs no migration.
-  safetyDecision String? @map("safety_decision")
+  /// The `SafetyDecision` (E06-06, #82) that governed this call: decision,
+  /// category, source, matched rule id, prompt version.
+  ///
+  /// jsonb, not the free-text column this started as. The decision is five
+  /// fields and the audit question is "which rule fired, and did a model or a
+  /// regex decide?" — `safety_decision->>'source'` answers it; a bare 'allow'
+  /// does not. Converted rather than dropped: nothing wrote the column before
+  /// #82, and `to_jsonb` keeps any value that somehow did.
+  safetyDecision Json? @map("safety_decision")
 
   attachmentCount Int @default(0) @map("attachment_count")
 

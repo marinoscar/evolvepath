@@ -997,6 +997,16 @@ settings hub and the notification registry each make on their own axis
 
 ### Calling an AI persona
 
+**Run `SafetyPolicyService.evaluate({ userId, text, surface })` over user free
+text before the call** (`apps/api/src/coach/safety/`). A `redirect` decision
+means the persona is not invoked at all and the caller returns
+`decision.userFacingNote`; a `conservative` one means
+`SAFETY_CONSERVATIVE_INSTRUCTIONS` is appended to the persona's instructions.
+Pass the decision back as `invoke({ …, safetyDecision })` so it lands on the
+`ai_invocations` row (PRD §88). `evaluate` never throws and never returns
+`allow` when it could not reach the safety persona — see
+[`docs/specs/coach-and-memory.md`](docs/specs/coach-and-memory.md) §2.
+
 Whatever the persona, the **input comes from
 `ContextAssemblerService.assemble(userId, scope)` and
 `renderForPrompt(context)`** (`apps/api/src/coach/context/`), never from an

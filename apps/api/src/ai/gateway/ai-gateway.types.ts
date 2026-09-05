@@ -1,5 +1,6 @@
 import type { ZodType } from 'zod';
 
+import type { SafetyDecision } from '../../coach/safety/safety.types';
 import type { AiReasoningEffort, PersonaKey } from '../ai-personas';
 import type { AiErrorCode } from './ai-errors';
 import type {
@@ -73,6 +74,18 @@ export interface AiInvokeRequest<T> {
 
   /** The HTTP request id, when called from a request scope. Joins the app logs. */
   requestId?: string;
+
+  /**
+   * The E06-06 safety decision that GOVERNED this call, written to
+   * `ai_invocations.safetyDecision` (PRD §88).
+   *
+   * A TYPE-ONLY IMPORT from `coach/safety`, which is what keeps this additive
+   * field from making the gateway depend on the coach: TypeScript erases it,
+   * so there is no runtime edge and no module cycle. The alternative — an
+   * untyped `Record<string, unknown>` — would let a caller write any shape at
+   * all into the column the audit reads.
+   */
+  safetyDecision?: SafetyDecision;
 }
 
 /**

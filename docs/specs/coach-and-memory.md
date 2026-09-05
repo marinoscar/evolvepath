@@ -134,3 +134,97 @@ what cannot be fetched cannot be rendered.
 - **Token-based budgets.** See "Characters, not tokens" above.
 - **Letting each persona pass its own section list.** That is the convention
   this component exists to replace.
+
+---
+
+## 2. Safety policy
+
+*(E06-06, issue #82 — `apps/api/src/coach/safety/`)*
+
+### The rule
+
+**Any user free text about to become an AI prompt runs through
+`SafetyPolicyService.evaluate({ userId, text, surface })` first**, and the
+decision it returns is recorded on `ai_invocations.safety_decision` for the call
+it governed.
+
+### Two steps, in this order, on purpose
+
+1. **`precheck` — a pure function over a rule table.** A `definite` match is
+   decided here, with no model call, and the user gets the professional-care
+   copy immediately.
+2. **The `safety` persona — only for the ambiguous middle.**
+
+The ordering is a safety property, not an optimisation:
+
+- A user typing "I have sharp chest pain when I run" is answered when the
+  provider is down, when they have no API key, and when their key has run out
+  of credit. A model-first design has nothing to say in exactly those cases.
+- The words they read are constants in `safety-copy.ts`, reviewed once, rather
+  than whatever a model produced this time.
+- Ordinary coaching traffic costs nothing. "Help me plan my week" never leaves
+  the process.
+
+### The rule table
+
+| category | definite (redirect immediately) | ambiguous (ask the model) |
+|---|---|---|
+| `crisis` | kill myself, suicid, end my life, self-harm / hurt myself, don't want to be alive, *quitarme la vida / no quiero vivir* | hopeless, can't go on, worthless |
+| `injury` | chest pain (*dolor de pecho*), numb(ness), can't put/bear weight, sharp pain, popped in/my, heard a crack | pain, hurts, injur, tweak, sore **only when qualified** by sharp/severe/worse |
+| `disordered_eating` | purg, starv, fast for N days (*ayunar por N días*), under 500–800 calories, laxative, throw up after | skip meals/lunch/dinner, eat less, lose N lbs/kg |
+| `medication` | stop taking (*dejar de tomar*), my/the dose, insulin / antidepressants / blood pressure meds | medication, pills |
+| `pregnancy` | — | pregnan, *embaraz*, postpartum, trimester |
+| `other_medical` | — | diagnos, doctor said, condition |
+
+Two properties of the table, both test-enforced:
+
+- **Table order is precedence.** Crisis rules come first, so a message about
+  both self-harm and a sore knee is a crisis message.
+- **Ids are stable.** They go into `ai_invocations.safety_decision`,
+  `coach_messages.safety_decision` and the log line. Add ids; never rename one.
+
+### Not catching too much is the hard part
+
+PRD §82 explicitly allows ordinary behaviour-change language. A product that
+answers "my legs are sore" with a professional-care redirect is one the user
+stops telling things to — which costs more safety than it buys. `sore`,
+`tired` and `stressed` are therefore not rules on their own, and `sore` becomes
+ambiguous only next to `sharp`, `severe` or `worse`.
+
+### Failure leans one way
+
+An unreachable `safety` persona turns an ambiguous message into
+`conservative` — never `allow`, and never an exception. `evaluate` has no
+failure mode that reaches its caller. A safety layer that can take the product
+down is one somebody is eventually tempted to remove.
+
+### The persona cannot advise
+
+`safetyModelSchema` has exactly three keys — `decision`, `category`,
+`rationale` (≤200 chars, written for a log, never rendered). The prompt says
+"classify only"; the schema is what makes it true. A classifier that can also
+write a sentence is a second coach with none of the coach's copy rules applied
+to it, speaking on exactly the inputs where the words matter most.
+
+### Copy rules, enforced by test
+
+No string in `safety-copy.ts` contains "diagnos", "prescrib" or "therapist"
+(PRD §81, §82). Every redirect ends with "I'm a behaviour coach, not a
+clinician, and I'm here when you want to plan the next small step". The crisis
+copy names local emergency services and "a crisis line in your country" and
+**contains no phone number**: a wrong number is worse than none, and this
+product does not know where the user is.
+
+### Nothing logs the text
+
+The Pino line is `safety decision=… category=… source=… surface=… rule=…` and
+a spec asserts the evaluated text is absent from it.
+
+### Rejected alternatives
+
+- **A "restrict" tier that silently blocks.** Everything blocked is redirected
+  with copy. Silence on this path reads as a bug and teaches the user nothing.
+- **Region-specific hotline numbers.** See the crisis copy above.
+- **Admin-editable rules or copy.** Code-only in V1: these strings are the
+  product's most consequential and belong in review, not in a settings form.
+- **Model-first classification.** See "Two steps, in this order".

@@ -300,6 +300,7 @@ export class AiGatewayService {
             attachmentCount: attachmentParts.length,
             input: this.describeInput(req),
             output: outcome.output,
+            safetyDecision: req.safetyDecision ?? null,
             secrets: [apiKey],
           });
 
@@ -449,6 +450,7 @@ export class AiGatewayService {
       attachmentCount: extra.attachmentCount ?? req.attachments?.length ?? 0,
       input: this.describeInput(req),
       output: extra.output ?? null,
+      safetyDecision: req.safetyDecision ?? null,
       secrets: extra.secrets,
     });
 
