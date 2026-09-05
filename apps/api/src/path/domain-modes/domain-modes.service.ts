@@ -29,12 +29,21 @@ export class DomainModesService {
     });
   }
 
+  /**
+   * `tx` exists for E10-03's weekly approve, which applies the postures the
+   * user chose in the same transaction as the commitments they chose them for.
+   * Going around this method would mean an upsert with no `domain_mode:set`
+   * audit row and no `effectiveFrom` rule.
+   */
   async set(
     userId: string,
     domain: DomainValue,
     dto: SetDomainModeDto,
+    tx?: Prisma.TransactionClient,
   ): Promise<DomainModeResponseDto> {
-    const existing = await this.prisma.domainMode.findUnique({
+    const db = tx ?? this.prisma;
+
+    const existing = await db.domainMode.findUnique({
       where: { userId_domain: { userId, domain } },
     });
 
@@ -45,13 +54,13 @@ export class DomainModesService {
     const modeChanged = from !== dto.mode;
     const effectiveFrom = modeChanged || !existing ? new Date() : existing.effectiveFrom;
 
-    const row = await this.prisma.domainMode.upsert({
+    const row = await db.domainMode.upsert({
       where: { userId_domain: { userId, domain } },
       create: { userId, domain, mode: dto.mode, reason: dto.reason ?? null, effectiveFrom },
       update: { mode: dto.mode, reason: dto.reason ?? null, effectiveFrom },
     });
 
-    await this.prisma.auditEvent.create({
+    await db.auditEvent.create({
       data: {
         actorUserId: userId,
         action: 'domain_mode:set',

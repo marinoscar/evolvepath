@@ -705,6 +705,16 @@ a separate column, so a provider outage changes the words and never the counts.
 Note: `invocationId` is never on the wire. It is an internal telemetry pointer,
 written to the review row and the audit meta and nowhere a client can read it.
 
+### Weekly Planning (epic E10)
+PRD §50's seven steps as a draft row patched step by step. **No model call
+anywhere in this block** — materialisation is arithmetic over the user's own
+routines.
+- `POST /api/weekly/plans` - Start or resume next week. **Idempotent**: a second call returns the same DRAFT (201 for a new one, 200 for an existing). `domainModes` opens on the postures the user is in today. 400 `INVALID_WEEK_START`; 409 `WEEKLY_PLAN_APPROVED`
+- `GET /api/weekly/plans?weekStart=` / `GET /api/weekly/plans/{id}` - List / read (404 for a foreign id)
+- `PATCH /api/weekly/plans/{id}` - One step. `constraints` replaced whole (a merge patch cannot delete a travel day), `domainModes` merged (naming FAMILY means "leave the other two alone"). Clears the previous proposal; 409 `WEEKLY_PLAN_NOT_EDITABLE`
+- `POST /api/weekly/plans/{id}/propose` - What next week would look like, plus the PRD §48 load check. An occurrence dropped for a travel day, a colliding fixed event or a paused domain comes back with `include: false` and an `excludedBy` reason, never omitted
+- `POST /api/weekly/plans/{id}/approve` - One transaction: the commitments, the changed domain modes and the previous week's review. Idempotent under retry (`skippedExisting`); 422 `LOAD_WARNINGS_UNACKNOWLEDGED` until the user has read the warnings
+
 ### Family (epic E08)
 Own data only; a foreign or unknown id answers 404, never 403.
 - `GET /api/family/members` - List; items carry exactly `id`, `nickname`, `relationship`, `birthday`, `createdAt` — PRD §33 fixes the record and there is nothing else to return
@@ -1020,6 +1030,28 @@ Two rules the Path screen holds that are easy to break:
   verbatim copy of the API's matrix and exists only for optimistic rendering
   between a successful transition and its refetch; each file points at the
   other.
+
+### Materialising commitments from routines
+
+`apps/api/src/weekly/materialize-week.ts` turns a week's active routines into
+proposed commitments, and `load-check.ts` measures what that adds up to. Both
+are **pure** — no Prisma, no Nest, no clock — because three things read them:
+the approve path, the wizard (which renders the summary the API computed rather
+than recomputing it), and their own table-driven specs.
+
+Two rules that are easy to break:
+
+- **An excluded occurrence is still an item.** A Wednesday dropped for a travel
+  day is returned with `include: false` and an `excludedBy` reason. A silently
+  missing row is indistinguishable from one the product forgot about, and the
+  user has no way to tell which happened.
+- **Recurring counts are per routine, not per occurrence.** Five morning focus
+  blocks are one habit; counting occurrences would put every weekday routine
+  over the soft cap on its own and the PRD §48 warning would fire on every
+  realistic week until people learned to ignore it.
+
+E08-02's ritual generator solves the same occurrence problem for family rituals
+and should converge on these rules rather than growing a second copy.
 
 ### Proposing a plan change
 

@@ -56,11 +56,24 @@ export class CommitmentsService {
     return rows.map(toCommitmentDto);
   }
 
-  async create(userId: string, dto: CreateCommitmentDto): Promise<CommitmentResponseDto> {
-    this.assertFamilyBehaviour(dto.domain, dto.title);
-    await this.assertLinksOwnedAndConsistent(userId, dto);
+  /**
+   * `tx` exists for one caller: E10-03's weekly approve, which writes a whole
+   * week of commitments in one transaction and must not leave half of them
+   * behind if the eleventh fails. Every ownership check, the behaviour lint and
+   * the audit row happen either way — routing a bulk write around this method
+   * would be a second, unchecked way to create a commitment.
+   */
+  async create(
+    userId: string,
+    dto: CreateCommitmentDto,
+    tx?: Prisma.TransactionClient,
+  ): Promise<CommitmentResponseDto> {
+    const db = tx ?? this.prisma;
 
-    const row = await this.prisma.commitment.create({
+    this.assertFamilyBehaviour(dto.domain, dto.title);
+    await this.assertLinksOwnedAndConsistent(userId, dto, db);
+
+    const row = await db.commitment.create({
       data: {
         userId,
         domain: dto.domain,
@@ -86,12 +99,18 @@ export class CommitmentsService {
     // NO EVIDENCE ROW. Creating a commitment is a plan, and PRD §10.9 is
     // explicit that the product must not pretend a planned item is evidence
     // that anything happened.
-    await this.audit(userId, 'commitment:create', row.id, {
-      domain: row.domain,
-      planVersionId: row.planVersionId,
-      routineId: row.routineId,
-      rescheduledFromId: row.rescheduledFromId,
-    });
+    await this.audit(
+      userId,
+      'commitment:create',
+      row.id,
+      {
+        domain: row.domain,
+        planVersionId: row.planVersionId,
+        routineId: row.routineId,
+        rescheduledFromId: row.rescheduledFromId,
+      },
+      db,
+    );
 
     return toCommitmentDto(row);
   }
@@ -317,11 +336,12 @@ export class CommitmentsService {
   private async assertLinksOwnedAndConsistent(
     userId: string,
     dto: CreateCommitmentDto,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
   ): Promise<void> {
     const outcome = dto.outcomeId
       ? await findOwnedOrThrow(
           () =>
-            this.prisma.outcome.findFirst({
+            db.outcome.findFirst({
               where: { id: dto.outcomeId as string, userId },
               select: { id: true, plan: { select: { id: true } } },
             }),
@@ -332,7 +352,7 @@ export class CommitmentsService {
     const version = dto.planVersionId
       ? await findOwnedOrThrow(
           () =>
-            this.prisma.planVersion.findFirst({
+            db.planVersion.findFirst({
               where: { id: dto.planVersionId as string, userId },
               select: { id: true, planId: true, status: true },
             }),
@@ -343,7 +363,7 @@ export class CommitmentsService {
     const routine = dto.routineId
       ? await findOwnedOrThrow(
           () =>
-            this.prisma.routine.findFirst({
+            db.routine.findFirst({
               where: { id: dto.routineId as string, userId },
               select: { id: true, planVersionId: true },
             }),
@@ -398,8 +418,9 @@ export class CommitmentsService {
     action: string,
     targetId: string,
     meta: Prisma.InputJsonValue,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
   ): Promise<void> {
-    await this.prisma.auditEvent.create({
+    await db.auditEvent.create({
       data: { actorUserId: userId, action, targetType: 'commitment', targetId, meta },
     });
   }

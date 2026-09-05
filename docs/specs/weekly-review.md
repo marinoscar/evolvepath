@@ -1,7 +1,7 @@
 # The weekly loop
 
-> Status: **partial**. Sections marked *(E10-03)* and *(E10-04)* are filled in
-> by those children; E10-05 (#89) completes the document.
+> Status: **partial**. The section marked *(E10-04)* is filled in by that
+> child; E10-05 (#89) completes the document.
 
 PRD §135 states the loop this epic closes: *review plan → compare planned vs
 done → identify friction → learn pattern → adjust plan → approve next week*.
@@ -152,7 +152,74 @@ once that evening and once the next day, and then never again.
 
 ## Materialisation rules and load check
 
-*(E10-03)*
+`materializeWeek` and `checkLoad` (`apps/api/src/weekly/`) are pure — no Prisma,
+no Nest, no clock — because three things read them: the approve path, the wizard
+(which renders the summary the API computed rather than recomputing it), and
+their own table-driven specs.
+
+**Occurrence days**: `DAILY` all seven; `WEEKDAYS` Mon–Fri; `WEEKENDS` Sat–Sun;
+`WEEKLY` the earliest day in `daysOfWeek`, else Monday; `CUSTOM` exactly
+`daysOfWeek`. The time is `preferredTime`, else the domain default (`WORK`
+09:00, `FAMILY` 18:30, `HEALTH` 07:00). `minimumVersion` is the routine's
+`fallbackBehavior`, else "N-minute version"; `shortVersion` stays null, because
+a routine has two sizes and inventing a middle one would put a version on the
+Start screen the plan never described.
+
+**Exclusions** set `include: false` with a reason rather than dropping the row:
+`paused_domain` (the domain's mode is `PAUSE`), `travel_day`, `fixed_event` (an
+event overlapping `[startTime, startTime + estimatedMinutes)`, or one with no
+times at all, which blocks the whole day). PRD §50 step 5 shows the user what
+their week *would* be, and a silently missing Wednesday is indistinguishable
+from one the product forgot about.
+
+An occurrence that already exists — matched on `(routineId, date)` — is not
+returned at all. It is not a proposal any more, and that is the idempotency
+that makes a retried approve safe. Cancelled rows do not count as existing: a
+slot the user emptied on purpose must stay recoverable.
+
+Extras are appended with `extra:<index>` keys and are never excluded: the user
+typed them while looking at the same week and can see the travel day on it.
+
+Output is sorted by date, then time, then domain, then title, and the same input
+produces the same list — the wizard re-proposes on every edit, and a list that
+reordered itself would move the checkbox the user was reaching for.
+
+**Load check.** `recurringCount` is distinct included routine ids plus included
+extras flagged `recurring` — per routine, not per occurrence, because five
+morning focus blocks are one habit and counting occurrences would put every
+weekday routine over an eight-commitment cap on its own.
+
+| Warning | Raised when |
+|---|---|
+| `RECURRING_OVER_CAP` | `recurringCount > WEEKLY_LOAD_SOFT_CAP` (default 8) |
+| `MINUTES_OVER_CAPACITY` | Total minutes exceed `5 × weekdayMinutes` |
+| `DAY_OVER_CAPACITY` | The single heaviest day exceeds `weekdayMinutes` — one warning, not one per day |
+
+A null `weekdayMinutes` produces no capacity warning at all, rather than one
+about a fabricated budget.
+
+**Warnings are data, never exceptions.** PRD §48 asks the product to
+*recommend* replacing something; VISION §26 is about preventing overload, and a
+product that refuses to let a person plan the week they want is a different kind
+of overload. `approve` answers 422 `LOAD_WARNINGS_UNACKNOWLEDGED` until
+`acknowledgeWarnings: true` — which means the user has read them, not that the
+software agreed.
+
+## Approve
+
+One `$transaction`: a `PLANNED` commitment per included item through
+`CommitmentsService.create` (so ownership checks, the family behaviour lint and
+the `commitment:create` audit row all apply), the domain modes that actually
+changed through `DomainModesService.set` (so `domain_mode:set` carries its
+reason), and `WeeklyReviewService.markApproved` on the previous week. A
+half-approved week is worse than an unapproved one.
+
+`userConfirmed` is `true` on every created commitment, and only because the user
+pressed approve. Nothing else in this epic sets it.
+
+The transaction re-reads the existing occurrences before writing, so an approve
+retried after a partial failure — or one racing a quick add on the Today screen
+— completes the week rather than duplicating it.
 
 ## Screens
 
@@ -163,9 +230,12 @@ once that evening and once the next day, and then never again.
 - Span `weekly.review.generate` with `weekly.week_start`, `weekly.trigger`,
   `weekly.source`, `weekly.proposals`. No text, ever.
 - One Pino line per generation and one per sweep.
+- Span `weekly.plan.approve`, and one Pino line per approve.
 - Audit actions: `weekly_review:generate` (meta: `weekStart`, `trigger`,
   `source`, `proposalCount`, `droppedProposals`, `invocationId`,
-  `coveragePartial`), `weekly_review:skip`, `weekly_settings:update`.
+  `coveragePartial`), `weekly_review:skip`, `weekly_settings:update`,
+  `weekly_plan:create`, `weekly_plan:update`, `weekly_plan:propose`,
+  `weekly_plan:approve`.
 - `invocationId` is written to the review row and the audit meta and is
   **never** on the wire.
 
@@ -185,6 +255,14 @@ once that evening and once the next day, and then never again.
 - **A single "summary" string from the model.** Cannot be rendered as What
   worked / What got in the way / Pattern / Recommendation, which is the layout
   PRD §51 fixes.
+- **Blocking approve on a load warning.** PRD §48 recommends; a product that
+  refuses to let a person plan the week they want is a different kind of
+  overload.
+- **Omitting excluded occurrences from the proposal.** A missing Wednesday is
+  indistinguishable from one the product forgot about.
+- **AI-worded commitment titles in V1.** A `?wording=ai` flag on `/propose`
+  that called the `planner` persona for titles only is a reasonable P1;
+  deterministic materialisation stays the source of ids and times either way.
 
 ## Extension points
 

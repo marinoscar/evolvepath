@@ -46,6 +46,16 @@ import { RoutinesService } from './routines/routines.service';
     PlanVersionsService,
     RoutinesService,
   ],
-  exports: [OutcomesService, PlansService, PlanVersionsService, RoutinesService],
+  // `DomainModesService` is exported for E10-03's weekly approve, which applies
+  // the postures the user chose for next week through it rather than upserting
+  // `domain_modes` directly — the audit row and the `effectiveFrom` rule live
+  // in that method.
+  exports: [
+    OutcomesService,
+    PlansService,
+    PlanVersionsService,
+    RoutinesService,
+    DomainModesService,
+  ],
 })
 export class PathModule {}
