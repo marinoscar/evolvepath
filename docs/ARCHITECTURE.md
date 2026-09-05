@@ -748,9 +748,11 @@ domain"):
 - **Every table carries `user_id`.** Ownership is a single indexed predicate
   (`findFirst({ where: { id, userId } })`), not a multi-table join.
 
-The full model — field-by-field rationale, the commitment transition matrix and
-the rejected alternatives — will live in `docs/specs/domain-model.md`
-(forthcoming, epic E02 child #62).
+The full model — field-by-field rationale, the commitment transition matrix,
+the ownership rule, the audit actions and the rejected alternatives — is
+[`docs/specs/domain-model.md`](specs/domain-model.md). It is the contract
+E04–E11 build on, and its "Extending the model" section says which tables each
+of those epics adds and which they must not touch.
 
 ### 6.4 Database Design Principles
 

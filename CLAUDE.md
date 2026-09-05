@@ -299,6 +299,20 @@ This section states the rules; that file explains why.
 See [`docs/specs/settings-ui.md`](docs/specs/settings-ui.md) for the full
 rationale, the rejected alternatives, and the accessibility requirements.
 
+## The domain model
+
+The EvolvePath product tables — the PRD §9 hierarchy from Best Self down to
+Evidence — have their own written contract in
+[`docs/specs/domain-model.md`](docs/specs/domain-model.md): every enum, every
+table, the plan-versioning rules, the commitment transition matrix, the
+ownership rule (404, never 403), the audit actions, and an "extending the
+model" section saying which tables E04–E11 add and which they must not touch.
+
+Read it before changing anything under `apps/api/src/path/` or
+`apps/api/src/commitments/`. `apps/api/test/docs/domain-model-doc.spec.ts`
+fails if the schema grows an enum member or a table the document does not
+mention, so the two cannot drift silently.
+
 ## Architecture Principles
 
 1. **Separation of Concerns**: UI handles presentation only; API handles all business logic and authorization
@@ -582,6 +596,12 @@ The application uses an **email allowlist** to restrict access to pre-authorized
 - Integration tests: API + DB + RBAC flows with test DB
 - Mock OAuth in CI (no real Google dependency)
 - Frontend: component and hook tests
+- **E2E: every epic ships Playwright specs under `tests/e2e/specs/` proving its
+  flow end to end — browser, API and database — against the fake OpenAI server
+  (`infra/compose/fake-openai.compose.yml`). They run on two projects,
+  `chromium` and `mobile-chromium`, because the shell mounts different
+  navigation components either side of the `sm` boundary. See
+  `docs/TESTING.md` → "E2E Testing with Playwright".
 
 ## Environment Variables
 
