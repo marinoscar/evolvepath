@@ -1472,6 +1472,293 @@ Audit: `domain_mode:set` with `meta: { domain, from, to }`.
 
 ---
 
+#### Plans and plan versions
+
+A **Plan** is the stable container — one per outcome, and nothing mutable on
+it. Everything a user would call "the plan" lives on a **PlanVersion**, and
+versions are append-only:
+
+```
+              activate
+   DRAFT ─────────────────► ACTIVE ─────────────────► SUPERSEDED
+     │                        (at most one per plan,      (activeUntil set)
+     │                         enforced by a partial
+     │                         unique index)
+     │  reject
+     └──────────► REJECTED
+```
+
+A superseded or rejected version stays fully readable, routines and all. PRD
+§103 requires the user to be able to inspect *why* the plan changed, and that
+needs both sides of every change to still exist.
+
+---
+
+#### POST /outcomes/{outcomeId}/plans
+**Requires Authentication** — create the plan for an outcome. **201**.
+
+Creates the plan, its v1 and any inline routines in **one transaction**. v1 is
+`ACTIVE` and `userApproved: true` immediately — a first plan that landed as a
+draft would ask the user to approve what they just wrote.
+
+**Request Body:**
+```json
+{
+  "rationale": "Start with mornings",
+  "expectedWeeklyLoad": 120,
+  "fallbackStrategy": "If the week collapses, keep Saturday only",
+  "routines": [
+    {
+      "title": "Morning workout",
+      "triggerType": "EVENT",
+      "triggerValue": "after morning coffee",
+      "frequency": "WEEKDAYS",
+      "preferredTime": "06:30",
+      "estimatedDurationMin": 45,
+      "minimumDurationMin": 10,
+      "fallbackBehavior": "10-minute bodyweight circuit"
+    }
+  ]
+}
+```
+
+Every field is optional; `routines` is capped at 10. Each routine's `domain`
+defaults to the outcome's. **409** if the outcome already has a plan or is
+archived.
+
+Audit: `plan:create`.
+
+---
+
+#### GET /outcomes/{outcomeId}/plans
+**Requires Authentication** — zero or one element. The array shape is
+deliberate: allowing several plans later becomes a data change rather than a
+breaking response change.
+
+---
+
+#### GET /plans/{id}
+**Requires Authentication** — the plan and its active version.
+
+**Response:**
+```json
+{
+  "data": {
+    "id": "9b71…",
+    "outcomeId": "3f2a…",
+    "activeVersion": {
+      "id": "c4d8…",
+      "version": 2,
+      "status": "ACTIVE",
+      "rationale": "Evenings kept slipping; move to two mornings + Saturday",
+      "createdBy": "USER",
+      "userApproved": true,
+      "previousVersionId": "a119…",
+      "activeFrom": "2026-02-08T09:00:00.000Z",
+      "activeUntil": null,
+      "routineCount": 2,
+      "createdAt": "2026-02-08T08:55:00.000Z"
+    },
+    "versionCount": 2,
+    "createdAt": "2026-02-01T10:00:00.000Z"
+  }
+}
+```
+
+`activeVersion` is `null` while the plan has only drafts.
+
+---
+
+#### GET /plans/{id}/versions
+**Requires Authentication** — the whole history, newest first, so it reads
+downward from what is in force now.
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": "c4d8…",
+      "version": 2,
+      "status": "ACTIVE",
+      "rationale": "Evenings kept slipping; move to two mornings + Saturday",
+      "createdBy": "USER",
+      "userApproved": true,
+      "previousVersionId": "a119…",
+      "activeFrom": "2026-02-08T09:00:00.000Z",
+      "activeUntil": null,
+      "routineCount": 2,
+      "createdAt": "2026-02-08T08:55:00.000Z"
+    },
+    {
+      "id": "a119…",
+      "version": 1,
+      "status": "SUPERSEDED",
+      "rationale": "Start with mornings",
+      "createdBy": "USER",
+      "userApproved": true,
+      "previousVersionId": null,
+      "activeFrom": "2026-02-01T10:00:00.000Z",
+      "activeUntil": "2026-02-08T09:00:00.000Z",
+      "routineCount": 1,
+      "createdAt": "2026-02-01T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+#### GET /plans/{id}/versions/{version}
+**Requires Authentication** — one version in full: the summary above plus
+`planId`, `expectedWeeklyLoad`, `fallbackStrategy` and `routines`.
+
+`{version}` is the **integer version number** ("2"), not the version's UUID —
+it is what the user sees. `previousVersionId` links by id internally.
+
+---
+
+#### POST /plans/{id}/versions
+**Requires Authentication** — draft the next version. **201**.
+
+**Request Body:**
+```json
+{
+  "rationale": "Evenings kept slipping; move to two mornings + Saturday",
+  "expectedWeeklyLoad": 150,
+  "copyRoutinesFrom": "active"
+}
+```
+
+`rationale` is **required** (1–2000 characters): PRD §80 wants "Changed Sep 12
+· Reason: 3 repeated evening misses" renderable for every change, and the
+moment the user knew why has passed by the time anybody notices it is missing.
+
+`copyRoutinesFrom` is `"active"` (default) or `"none"`. Copied routines are
+**clones** with new ids — the source version keeps its own.
+
+The new version is `DRAFT`, `userApproved: false`, `createdBy: USER`, with
+`previousVersionId` set to the currently active version (or the newest version
+when none is active). `createdBy` is never accepted from the body.
+
+**409** if a draft already exists — one draft at a time. This is a service
+rule about focus, not a database constraint; do not add a second partial index
+for it.
+
+Audit: `plan_version:create` with `meta: { planId, version, previousVersionId,
+createdBy, routinesCopied }`.
+
+---
+
+#### PATCH /plans/{id}/versions/{version}
+**Requires Authentication** — edit `rationale`, `expectedWeeklyLoad` or
+`fallbackStrategy`. **409 unless the version is still `DRAFT`**: a version that
+has been in force is a historical record, and editing its rationale rewrites
+why the user says they changed.
+
+---
+
+#### POST /plans/{id}/versions/{version}/activate
+**Requires Authentication** — put a draft in force. **200**.
+
+In one transaction: the current `ACTIVE` version becomes `SUPERSEDED` with
+`activeUntil` set, and the target becomes `ACTIVE` with `activeFrom` set and
+`userApproved: true`.
+
+**409** unless the target is a `DRAFT`. Also **409**, never 500, when another
+activation raced this one — the partial unique index rejects a second `ACTIVE`,
+and the loser of a race is told someone else changed the plan.
+
+Audit: `plan_version:activate` with `meta: { planId, version, supersededVersion }`.
+
+---
+
+#### POST /plans/{id}/versions/{version}/reject
+**Requires Authentication** — mark a draft `REJECTED`. **200**, **409** unless
+it is a `DRAFT`.
+
+**Request Body:** `{ "reason": "Too much for this month" }` (optional).
+
+The version's `rationale` is **kept**: a rejected version is part of the record
+of what the user considered and decided against.
+
+---
+
+#### Routines
+
+A routine is one repeatable behaviour belonging to one plan version: what
+starts it, how often, how long it ideally takes, and the shortest version that
+still counts.
+
+#### GET /routines
+**Requires Authentication** — the routines of one plan version.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `planVersionId` | uuid | **Required.** Routines are only meaningful inside one version; a cross-version listing would mix a superseded plan's behaviours with the live one's. |
+| `includeInactive` | boolean | Default `false`. |
+
+Ordered by `sortOrder`, then creation time.
+
+---
+
+#### POST /routines
+**Requires Authentication** — add a routine. **201**.
+
+**Request Body:**
+```json
+{
+  "planVersionId": "c4d8…",
+  "title": "Morning workout",
+  "triggerType": "EVENT",
+  "triggerValue": "after morning coffee",
+  "frequency": "WEEKDAYS",
+  "daysOfWeek": [],
+  "preferredTime": "06:30",
+  "estimatedDurationMin": 45,
+  "minimumDurationMin": 10,
+  "fallbackBehavior": "10-minute bodyweight circuit",
+  "sortOrder": 0
+}
+```
+
+Rules, all **400** when broken:
+
+| Field | Rule |
+|-------|------|
+| `title` | 1–200 characters |
+| `domain` | Optional; defaults to the outcome's |
+| `triggerType` | `TIME` (default) or `EVENT` |
+| `triggerValue` | `HH:mm` when `TIME`; **required** when `EVENT` — an implementation intention with no "when" is not one |
+| `frequency` | `DAILY` \| `WEEKDAYS` (default) \| `WEEKENDS` \| `WEEKLY` \| `CUSTOM` |
+| `daysOfWeek` | 0 = Sunday … 6 = Saturday, unique. Required non-empty for `CUSTOM`, must be empty otherwise |
+| `preferredTime` | `HH:mm`, optional |
+| `estimatedDurationMin` | 1–480 |
+| `minimumDurationMin` | 1–480 and **not greater than** `estimatedDurationMin` — the minimum version is the bad-day path (PRD §57), and a minimum longer than the ideal makes the bad day the harder one |
+| `fallbackBehavior` | ≤ 500 characters |
+
+**409** if the plan version is `SUPERSEDED` or `REJECTED`.
+
+---
+
+#### GET /routines/{id} · PATCH /routines/{id} · DELETE /routines/{id}
+**Requires Authentication.** `PATCH` accepts any subset of the create fields
+plus `active`; `DELETE` answers **204**.
+
+`planVersionId` cannot be patched: moving a routine between versions would
+rewrite the history of the version it left.
+
+The cross-field rules above are re-checked against the **merged** routine on a
+`PATCH`, so a patch setting only `minimumDurationMin: 90` on a 45-minute
+routine is rejected (**409**) even though 90 is valid in isolation.
+
+**409** on any write when the plan version is `SUPERSEDED` or `REJECTED` — its
+routines are the record of what the plan used to say.
+
+---
+
 #### EvolvePath errors
 
 | Status | Code | When |
@@ -1479,7 +1766,7 @@ Audit: `domain_mode:set` with `meta: { domain, from, to }`.
 | 400 | `BAD_REQUEST` | Zod rejected the body, query or path parameter. `details` carries the failing paths. |
 | 401 | `UNAUTHORIZED` | No bearer token, or an expired one. |
 | 404 | `NOT_FOUND` | The id is unknown **or** belongs to another user — deliberately indistinguishable. |
-| 409 | `CONFLICT` | An edit to an archived outcome. |
+| 409 | `CONFLICT` | A state-machine violation: an edit to an archived outcome, a second plan for one outcome, a second draft, an activate/edit/reject on the wrong version status, a write to a read-only version's routines, or a losing activation race. The message names the current status. |
 
 ---
 
