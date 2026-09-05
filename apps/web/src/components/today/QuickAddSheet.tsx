@@ -18,12 +18,15 @@ import FamilyRestroomIcon from '@mui/icons-material/FamilyRestroom';
 import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import RestaurantIcon from '@mui/icons-material/Restaurant';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 
 import type { CommitmentCard, Domain, Outcome } from '../../types';
 import type { CommitmentFormValues } from '../../utils/commitmentForm.schema';
 import { CommitmentEditorForm } from './CommitmentEditorForm';
 import { NutritionBehaviourList } from '../health/NutritionBehaviourList';
 import { useNutritionBehaviours } from '../../hooks/useNutritionBehaviours';
+import { MealCheckPanel } from './MealCheckPanel';
+import { WorkoutPickerPanel } from './WorkoutPickerPanel';
 
 interface QuickAddSheetProps {
   open: boolean;
@@ -45,10 +48,7 @@ interface KindOption {
 }
 
 /**
- * The things PRD §12.1 lists, plus E09's eating habits. Workout is rendered and
- * DISABLED rather than omitted: it is a real part of the product, and a user who
- * looks for it should learn that it is coming rather than conclude it does not
- * exist.
+ * The things PRD §12.1 lists, plus E09's health entries.
  *
  * "Nutrition behaviour" is the one kind that does not open the commitment form.
  * PRD §46's whole point is that the user picks a behaviour rather than writing
@@ -87,10 +87,16 @@ const KINDS: KindOption[] = [
   {
     key: 'workout',
     label: 'Workout',
-    helper: 'Coming with workout programs',
+    helper: 'Start a session from your program',
     domain: 'HEALTH',
     Icon: FitnessCenterIcon,
-    disabled: true,
+  },
+  {
+    key: 'meal_check',
+    label: 'Meal check',
+    helper: 'Habits, not calories',
+    domain: 'HEALTH',
+    Icon: PhotoCameraIcon,
   },
 ];
 
@@ -156,6 +162,10 @@ export function QuickAddSheet({
   const body =
     !isEdit && kind?.key === 'nutrition' ? (
       <NutritionBehaviourPicker onDone={onClose} />
+    ) : !isEdit && kind?.key === 'workout' ? (
+      <WorkoutPickerPanel onDone={onClose} />
+    ) : !isEdit && kind?.key === 'meal_check' ? (
+      <MealCheckPanel onDone={onClose} />
     ) : isEdit || kind ? (
       <CommitmentEditorForm
         mode={isEdit ? 'edit' : 'create'}

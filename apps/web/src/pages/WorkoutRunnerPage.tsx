@@ -26,6 +26,7 @@ import { RestTimer } from '../components/workouts/runner/RestTimer';
 import { RunnerHeader } from '../components/workouts/runner/RunnerHeader';
 import { SafetyCard } from '../components/workouts/runner/SafetyCard';
 import { SetInputs, type SetInputValues } from '../components/workouts/runner/SetInputs';
+import { FormCheckSheet } from '../components/workouts/media/FormCheckSheet';
 
 // =============================================================================
 // `/workout/:sessionId` — the runner (issue #109, epic E09)
@@ -65,6 +66,7 @@ export function WorkoutRunnerPage() {
   const [stopped, setStopped] = useState<string[]>([]);
   const [finishOpen, setFinishOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [formCheckFor, setFormCheckFor] = useState<{ id: string; name: string } | null>(null);
 
   const refresh = useCallback(async () => {
     if (!sessionId) return;
@@ -297,6 +299,9 @@ export function WorkoutRunnerPage() {
               const result = await explainProgression(session.id, exercise.exerciseId);
               return result.sentence;
             }}
+            onCheckForm={() =>
+              setFormCheckFor({ id: exercise.exerciseId, name: exercise.name })
+            }
           >
             {exercise.exerciseId === currentExercise?.exerciseId && !safety ? (
               <>
@@ -351,6 +356,20 @@ export function WorkoutRunnerPage() {
       >
         Finish workout
       </Button>
+
+      {formCheckFor ? (
+        <FormCheckSheet
+          open
+          sessionId={session.id}
+          exerciseId={formCheckFor.id}
+          exerciseName={formCheckFor.name}
+          setNumber={
+            session.exercises.find((row) => row.exerciseId === formCheckFor.id)?.logged.length ||
+            undefined
+          }
+          onClose={() => setFormCheckFor(null)}
+        />
+      ) : null}
 
       <FinishDialog
         open={finishOpen}
