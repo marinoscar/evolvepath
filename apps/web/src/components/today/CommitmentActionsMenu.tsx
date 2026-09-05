@@ -1,12 +1,19 @@
 import { Menu, MenuItem } from '@mui/material';
 
+import type { FamilyRowAction } from '../family/familyLabels';
 import { ACTION_LABELS, type RowAction } from './todayLabels';
 
 interface CommitmentActionsMenuProps {
   anchorEl: HTMLElement | null;
-  actions: RowAction[];
+  actions: FamilyRowAction[];
+  /**
+   * How to word each action. Defaults to the generic vocabulary; the Family
+   * domain passes one that says "Move it" where this says "Reschedule"
+   * (epic E08). LABELS only — the list itself still comes from the server.
+   */
+  labelFor?: (action: FamilyRowAction) => string;
   onClose: () => void;
-  onSelect: (action: RowAction) => void;
+  onSelect: (action: FamilyRowAction) => void;
 }
 
 /**
@@ -24,6 +31,7 @@ interface CommitmentActionsMenuProps {
 export function CommitmentActionsMenu({
   anchorEl,
   actions,
+  labelFor = (action) => ACTION_LABELS[action as RowAction],
   onClose,
   onSelect,
 }: CommitmentActionsMenuProps) {
@@ -37,7 +45,7 @@ export function CommitmentActionsMenu({
             onSelect(action);
           }}
         >
-          {ACTION_LABELS[action]}
+          {labelFor(action)}
         </MenuItem>
       ))}
     </Menu>
