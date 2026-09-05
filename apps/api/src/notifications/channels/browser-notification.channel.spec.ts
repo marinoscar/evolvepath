@@ -39,12 +39,81 @@ const recipient: NotificationRecipient = {
  * would carry. An event with no template ignores this entirely — the fallback
  * renders from the registry's own label and description.
  */
+const N = '22222222-2222-4222-8222-222222222222';
+const C = '11111111-1111-4111-8111-111111111111';
+
 const SAMPLE_PAYLOADS: Record<string, unknown> = {
   'security.role_changed': {
     recipientEmail: 'user@example.com',
     previousRoles: ['admin'],
     currentRoles: ['viewer'],
     changedAt: new Date('2026-01-01T00:00:00.000Z'),
+  },
+
+  // The nine coaching categories (#54). Every one of them VALIDATES its payload
+  // and throws otherwise, so `{}` would exercise the render-throw branch for
+  // all nine and the loop below would prove nothing about the happy path.
+  'coach.commitment_upcoming': {
+    sentInteractionId: N,
+    commitmentId: C,
+    domain: 'HEALTH',
+    commitmentTitle: 'Upper A',
+    scheduledStart: '2026-09-08T15:00:00.000Z',
+    minutesUntil: 20,
+    startMinutes: 38,
+  },
+  'coach.start_cue': {
+    sentInteractionId: N,
+    commitmentId: C,
+    domain: 'WORK',
+    commitmentTitle: 'Draft the storyline',
+    startMinutes: 25,
+  },
+  'coach.rescue': {
+    sentInteractionId: N,
+    commitmentId: C,
+    domain: 'WORK',
+    commitmentTitle: 'Draft the storyline',
+    rescheduleCount: 3,
+    level: 4,
+    minimumMinutes: 10,
+  },
+  'coach.fallback_offer': {
+    sentInteractionId: N,
+    commitmentId: C,
+    domain: 'HEALTH',
+    commitmentTitle: 'Upper A',
+    fullMinutes: 38,
+    shortMinutes: 20,
+    remainingMinutes: 25,
+  },
+  'coach.family_presence': {
+    sentInteractionId: N,
+    commitmentId: C,
+    commitmentTitle: 'Phone-free dinner',
+    minutesUntil: 15,
+  },
+  'coach.recovery': { sentInteractionId: N, comebackId: C, daysAway: 4 },
+  'coach.evidence': {
+    sentInteractionId: N,
+    commitmentId: C,
+    domain: 'HEALTH',
+    outcomeTitle: 'Train consistently',
+    count: 3,
+    windowDays: 8,
+    milestone: 'THIRD_IN_8_DAYS',
+  },
+  'coach.weekly_review_ready': {
+    sentInteractionId: N,
+    reviewId: C,
+    weekStart: '2026-08-31',
+  },
+  'coach.plan_issue': {
+    sentInteractionId: N,
+    proposalId: C,
+    planId: C,
+    summary: 'Three sessions a week is not landing',
+    sourceKind: 'PATTERN',
   },
 };
 
@@ -363,6 +432,105 @@ describe('BrowserNotificationChannel', () => {
       it('rejects undefined -> null', () => {
         expect(sanitizeLink(undefined)).toBeNull();
       });
+
+      // The coaching deep links (#54) carry a query string, and every one of
+      // them has to survive this function or the notification lands on Today
+      // with no commitment and no attribution.
+      it('keeps a coaching deep link, query string and all', () => {
+        const link = `/today?commitment=${C}&action=start&n=${N}`;
+
+        expect(sanitizeLink(link)).toBe(link);
+      });
+
+      it('still rejects a query string smuggled onto another origin', () => {
+        expect(sanitizeLink(`//evil.test/today?commitment=${C}`)).toBeNull();
+        expect(sanitizeLink(`javascript:void(0)?commitment=${C}`)).toBeNull();
+      });
+    });
+  });
+
+  // ==========================================================================
+  // The coaching categories (#54, epic E12)
+  // ==========================================================================
+
+  describe('coaching templates', () => {
+    beforeEach(() => {
+      mockPrisma.notification.create.mockResolvedValue({
+        id: 'notif-coach',
+        createdAt: new Date('2026-09-08T14:40:00.000Z'),
+      });
+      mockStream.publish.mockReturnValue(0);
+    });
+
+    const written = () => mockPrisma.notification.create.mock.calls[0]![0].data;
+    const published = () => mockStream.publish.mock.calls[0]![1];
+
+    it('renders the deterministic copy and the deep link', async () => {
+      await channel.deliver(
+        contextFor('coach.commitment_upcoming', SAMPLE_PAYLOADS['coach.commitment_upcoming']),
+        'user-1',
+      );
+
+      expect(written().title).toBe('Upper A starts in 20 minutes');
+      expect(written().link).toBe(`/today?commitment=${C}&action=start&n=${N}`);
+    });
+
+    // PRD §14.7: the copywriter personalises wording AFTER the policy said yes.
+    // Modelling it as an overlay is what makes a provider outage produce
+    // template copy rather than a missing message.
+    it('prefers the copywriter’s words when the payload carries them', async () => {
+      await channel.deliver(
+        contextFor('coach.commitment_upcoming', {
+          ...(SAMPLE_PAYLOADS['coach.commitment_upcoming'] as object),
+          copy: {
+            title: 'Upper A in twenty',
+            body: 'Shoes are by the door.',
+            actionLabel: 'Start workout',
+          },
+        }),
+        'user-1',
+      );
+
+      expect(written().title).toBe('Upper A in twenty');
+      expect(written().body).toBe('Shoes are by the door.');
+      // The link is still derived, never taken from the copy.
+      expect(written().link).toBe(`/today?commitment=${C}&action=start&n=${N}`);
+    });
+
+    it('publishes the buttons on the live event, with the precise labels', async () => {
+      await channel.deliver(
+        contextFor('coach.family_presence', SAMPLE_PAYLOADS['coach.family_presence']),
+        'user-1',
+      );
+
+      expect(published().actions.map((a: { action: string }) => a.action)).toEqual([
+        'in',
+        'move',
+        'skip',
+      ]);
+      expect(published().actions[0].label).toBe("I'm in");
+    });
+
+    it('publishes an empty action list for an event that has none', async () => {
+      await channel.deliver(
+        contextFor('coach.weekly_review_ready', SAMPLE_PAYLOADS['coach.weekly_review_ready']),
+        'user-1',
+      );
+
+      expect(published().actions).toEqual([]);
+      expect(written().link).toBe(`/progress/week?n=${N}`);
+    });
+
+    // A coaching message rendered from a half-built payload would show
+    // "undefined minutes" to a user; a recorded delivery failure is better.
+    it('fails the delivery rather than rendering a broken payload', async () => {
+      const result = await channel.deliver(
+        contextFor('coach.commitment_upcoming', { sentInteractionId: N }),
+        'user-1',
+      );
+
+      expect(result.success).toBe(false);
+      expect(mockPrisma.notification.create).not.toHaveBeenCalled();
     });
   });
 });

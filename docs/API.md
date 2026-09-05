@@ -1076,6 +1076,93 @@ If-Match: 1
 
 ---
 
+### Notifications
+
+The user's own inbox and the registry that drives their preferences page.
+
+#### GET /notifications/events
+
+Every event this application can raise, in preferences-page order: the three
+foundation events first, then the nine coaching categories.
+
+| Key | Label | Channels |
+|---|---|---|
+| `user.welcome` | Welcome | email |
+| `allowlist.invitation` | Invitation to join | email |
+| `security.role_changed` | Your roles changed | email, browser (**mandatory**) |
+| `coach.commitment_upcoming` | Upcoming commitment | browser |
+| `coach.start_cue` | Start cue | browser |
+| `coach.rescue` | Start rescue | browser |
+| `coach.fallback_offer` | Fallback offer | browser |
+| `coach.family_presence` | Family presence cue | browser |
+| `coach.recovery` | Recovery | browser |
+| `coach.evidence` | Evidence celebration | browser |
+| `coach.weekly_review_ready` | Weekly review ready | email, browser |
+| `coach.plan_issue` | Plan issue | browser |
+
+None of the coaching events is mandatory — every one can be silenced. Only the
+weekly review carries an email: the other eight are moment-bound, and an email
+that arrives twenty minutes after the moment has passed is noise.
+
+#### GET /notifications
+
+**Response 200:**
+
+```json
+{
+  "data": {
+    "items": [
+      {
+        "id": "uuid",
+        "eventKey": "coach.family_presence",
+        "title": "Phone-free dinner starts in 15 minutes",
+        "body": "You said this matters: Mia talks at dinner",
+        "link": "/today?commitment=<uuid>&action=in&n=<uuid>",
+        "actions": [
+          { "action": "in", "label": "I'm in", "link": "/today?commitment=<uuid>&action=in&n=<uuid>" },
+          { "action": "move", "label": "Move it", "link": "/today?commitment=<uuid>&action=move&n=<uuid>" },
+          { "action": "skip", "label": "Skip today", "link": "/today?commitment=<uuid>&action=skip&n=<uuid>" }
+        ],
+        "readAt": null,
+        "createdAt": "2026-09-08T14:40:00.000Z"
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "pageSize": 20,
+    "totalPages": 1
+  }
+}
+```
+
+`actions` is **always present** — `[]` for events that have none — so a client
+never has to distinguish "no actions" from "an older server".
+
+Two things about it are worth knowing before relying on it:
+
+- **It is derived, not stored.** The `notifications` table holds rendered text
+  and a link, deliberately without a payload column, so the buttons are rebuilt
+  from `(eventKey, link)` on every read. A button whose action no longer exists
+  simply stops appearing rather than 404ing.
+- **`?n=` is the attribution.** Every coaching link carries the id of the
+  decision that produced it. Following a link records an `OPENED` interaction,
+  and using a button records an `ACTIONED` one — which is how the independence
+  metric can tell a commitment completed on its own from one that needed a
+  reminder.
+
+The `link` on every row is root-relative and validated at write time
+(`sanitizeLink`); a client may hand it straight to its router.
+
+#### SSE `GET /notifications/stream`
+
+The same shape, live, carrying the same `actions` field so a newly arrived row
+renders its buttons without a refetch. The live event has the **precise** start
+label ("Start workout", "Start 38 min") because it still holds the payload; the
+same row re-read from `GET /notifications` says "Start", because a stored link
+does not record which domain the commitment was in.
+
+---
+
 ### Coaching Notification Policy (current user)
 
 How often, and when, the coach may interrupt the calling user. An own-resource

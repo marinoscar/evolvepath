@@ -150,6 +150,14 @@ function AppRoutes() {
                   }
                 >
                   <Route path="/" element={<TodayPage />} />
+                  {/* `/today` is the SAME screen, not a redirect (#54, epic
+                      E12). Every coaching deep link is written as
+                      `/today?commitment=…&action=…`, because a notification
+                      that reads "/?commitment=…" is a link nobody can sanity
+                      check by looking at it. A redirect would work but would
+                      cost a render and briefly show the bare Today screen
+                      before the action ran. */}
+                  <Route path="/today" element={<TodayPage />} />
                   <Route path="/path" element={<PathPage />} />
                   <Route path="/path/outcomes/:id" element={<OutcomeDetailPage />} />
                   <Route path="/path/family" element={<FamilyPage />} />

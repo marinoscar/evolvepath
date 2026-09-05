@@ -149,6 +149,26 @@ describe('destinations — segment-boundary matching', () => {
     expect(owns('/', '/anything')).toBe(false);
   });
 
+  // `/today` is the second spelling of the same screen (#54, epic E12): every
+  // coaching deep link is written that way, and it must light Today up exactly
+  // as `/` does. This is the test that catches "the notification worked but the
+  // navigation bar went blank".
+  it('activates Today on /today as well as on /', () => {
+    // The pathname only — the query string never reaches this resolver, which
+    // is why the deep link's `?commitment=…&action=…` costs it nothing.
+    expect(resolveActiveDestination('/today')).toBe('today');
+  });
+
+  it('lets no other destination claim /today', () => {
+    const owners = Object.keys(DESTINATION_ROUTES).filter((key) =>
+      DESTINATION_ROUTES[key as keyof typeof DESTINATION_ROUTES].some((prefix) =>
+        owns(prefix, '/today'),
+      ),
+    );
+
+    expect(owners).toEqual(['today']);
+  });
+
   // `/path/family` (epic E08) is a PRODUCT SURFACE under Path, not a sixth
   // destination: PRD §11 fixes the five, and prefix ownership means the Family
   // page needed no registry entry and no navigation change to be reachable.

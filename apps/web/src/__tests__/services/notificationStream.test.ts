@@ -50,6 +50,7 @@ describe('parseNotificationEvent', () => {
     body: 'You are now an Admin.',
     createdAt: '2026-01-01T00:00:00.000Z',
     link: '/settings',
+    actions: [],
   };
 
   it('parses a well-formed payload', () => {
@@ -112,6 +113,7 @@ describe('streamEventToNotification', () => {
       body: 'Body',
       createdAt: '2026-01-01T00:00:00.000Z',
       link: null,
+      actions: [],
     };
 
     expect(streamEventToNotification(event)).toEqual({ ...event, readAt: null });
@@ -194,6 +196,7 @@ describe('connectNotificationStream', () => {
       body: 'Body',
       createdAt: '2026-01-01T00:00:00.000Z',
       link: '/settings',
+      actions: [],
     };
     const frame: SseFrame = {
       event: NOTIFICATION_SSE_EVENT,
@@ -231,5 +234,52 @@ describe('connectNotificationStream', () => {
 
     expect(() => options.onFrame(frame)).not.toThrow();
     expect(onNotification).not.toHaveBeenCalled();
+  });
+});
+
+describe('parseNotificationEvent — actions (#54)', () => {
+  const base = {
+    id: 'n1',
+    eventKey: 'coach.family_presence',
+    title: 'Phone-free dinner starts in 15 minutes',
+    body: 'Phone down, people first.',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    link: '/today?commitment=c1&action=in&n=s1',
+  };
+
+  it('carries the buttons through', () => {
+    const actions = [
+      { action: 'in', label: "I'm in", link: '/today?commitment=c1&action=in&n=s1' },
+      { action: 'skip', label: 'Skip today', link: '/today?commitment=c1&action=skip&n=s1' },
+    ];
+
+    expect(parseNotificationEvent(JSON.stringify({ ...base, actions }))?.actions).toEqual(
+      actions,
+    );
+  });
+
+  // Additive, not required: a frame with no usable actions still produces a
+  // readable notification, because the five fields that make a row renderable
+  // are all present.
+  it('falls back to no buttons when the field is missing', () => {
+    expect(parseNotificationEvent(JSON.stringify(base))?.actions).toEqual([]);
+  });
+
+  it('falls back to no buttons when the field is not an array', () => {
+    expect(
+      parseNotificationEvent(JSON.stringify({ ...base, actions: 'nope' }))?.actions,
+    ).toEqual([]);
+  });
+
+  it('drops malformed entries rather than the whole notification', () => {
+    const actions = [
+      { action: 'in', label: "I'm in", link: '/today?commitment=c1&action=in&n=s1' },
+      { action: 'skip', label: 42 },
+    ];
+
+    const result = parseNotificationEvent(JSON.stringify({ ...base, actions }));
+
+    expect(result).not.toBeNull();
+    expect(result?.actions).toHaveLength(1);
   });
 });

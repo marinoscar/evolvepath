@@ -76,7 +76,10 @@ export function owns(prefix: string, path: string): boolean {
  * would fail it as "neither owned nor deliberately unowned".
  */
 export const DESTINATION_ROUTES: Record<DestinationKey, readonly string[]> = {
-  today: ['/'],
+  // Both spellings of the Today screen (#54): `/today` is the form every
+  // coaching deep link uses, and it must light this destination up exactly as
+  // `/` does — it is the same route element, not a redirect.
+  today: ['/', '/today'],
   path: ['/path'],
   coach: ['/coach'],
   progress: ['/progress'],

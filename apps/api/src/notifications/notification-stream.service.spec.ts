@@ -25,6 +25,7 @@ function makeEvent(overrides: Partial<NotificationStreamEvent> = {}): Notificati
   return {
     id: 'notif-1',
     eventKey: 'security.role_changed',
+    actions: [],
     title: 'Your roles changed',
     body: 'An administrator changed your roles.',
     link: '/settings',

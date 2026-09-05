@@ -181,4 +181,26 @@ describe('seeded events', () => {
     const event = findEvent('allowlist.invitation');
     expect(event?.channels).toEqual(['email']);
   });
+
+  // The nine coaching categories (#54, epic E12). The exhaustive assertions —
+  // one per key, per channel, per default — live in
+  // `coaching-notifications/coaching-events.spec.ts`, which is also where the
+  // both-directions agreement between this registry and the derived key tuple
+  // is enforced. What belongs HERE is the registry's own view of them.
+  it('carries nine coach.* events, none of them mandatory', () => {
+    const coaching = NOTIFICATION_EVENTS.filter((event) =>
+      event.key.startsWith('coach.'),
+    );
+
+    expect(coaching).toHaveLength(9);
+    expect(coaching.every((event) => event.mandatory !== true)).toBe(true);
+  });
+
+  it('coach.weekly_review_ready is the only coaching event with email', () => {
+    const withEmail = NOTIFICATION_EVENTS.filter(
+      (event) => event.key.startsWith('coach.') && event.channels.includes('email'),
+    ).map((event) => event.key);
+
+    expect(withEmail).toEqual(['coach.weekly_review_ready']);
+  });
 });

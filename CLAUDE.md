@@ -498,6 +498,10 @@ above. Don't restate any of that here; extend those three instead.
 - `GET /api/pat` - List current user's tokens
 - `DELETE /api/pat/{id}` - Revoke a token
 
+### Coaching Notifications (current user)
+- `GET /api/me/notification-policy` - Quiet hours, the three caps, muted categories and the current fatigue reduction
+- `PATCH /api/me/notification-policy` - Merge patch; `quietHours: null` clears. Audited as `notification_policy:update`
+
 ### AI Settings (Admin)
 - `GET /api/ai-settings` - Provider, models and the masked platform-key status
 - `PUT /api/ai-settings` - Replace settings (`If-Match`; `platformApiKey` is write-only)
@@ -823,6 +827,25 @@ settings hub makes on its own axis (epic #109, wired end to end by #128).
 Live examples of all three steps: `AuthService.handleGoogleLogin`
 (`user.welcome`), `AllowlistService.addEmail` (`allowlist.invitation`), and
 `UsersService.updateUserRoles` (`security.role_changed`, mandatory).
+
+**A COACHING event (`coach.*`) is the same three steps plus two declarations**,
+and both live in `apps/api/src/coaching-notifications/` — never a second event
+list. `coaching-events.spec.ts` fails the build if the two disagree in either
+direction.
+
+- Its **payload schema** in `coaching-events.ts`: add the key to
+  `COACHING_EVENT_KEYS`, its PRD letter to `COACHING_CATEGORY`, and a Zod schema
+  to `COACHING_PAYLOAD_SCHEMAS`. Every coaching payload extends the common base
+  — `sentInteractionId` (the E12-01 SENT row, minted before dispatch; it becomes
+  the `?n=` on every link and is the whole attribution chain) and the optional
+  `copy` overlay the copywriter fills in.
+- Its **actions and link** in `coaching-actions.ts` (`actionsFor`) and its
+  **deterministic wording** in `copy/copy-templates.ts` (`DEFAULT_COPY`). The
+  browser template itself is generated from those, so there is nothing to write
+  in `EVENT_BROWSER_TEMPLATES`. Labels come from PRD §63's vocabulary verbatim,
+  and `copy/banned-phrases.ts` is test-enforced against both the template and
+  the AI output — the deterministic copy ships on every provider outage, so a
+  shaming template would reach users silently and forever.
 
 ### Adding a Path resource
 
