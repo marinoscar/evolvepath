@@ -258,6 +258,11 @@ re-fire on the fourth, fifth and sixth session in eight days.
 
 ### 6a. The boundary
 
+The persona is `notification_copywriter` and the prompt version is
+`notification-copy.v1`. **Bump the version whenever the instructions change
+meaningfully** — nothing can detect that for you, and it is what makes "did the
+coach get worse after we changed the prompt?" answerable from `ai_invocations`.
+
 `copy/notification-copywriter.service.ts` is called **only** on a `send: true`
 decision, receives **none** of the inputs that decision was made from, and has no
 parameter through which it could express an opinion about sending. PRD §14.7 as
@@ -554,7 +559,7 @@ the one a user would notice contradicting itself.
 
 ### Lead-time buckets
 
-Sends are bucketed at 5, 10, 20 and 30 minutes rather than averaged: the question
+Sends are bucketed (`LEAD_BUCKETS` = 5, 10, 20, 30) rather than averaged: the question
 is "which lead time works best?", and a mean over a bimodal distribution answers
 a question nobody asked.
 

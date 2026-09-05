@@ -192,6 +192,7 @@ export function NotificationBell() {
       <Tooltip title="Notifications">
         <IconButton
           ref={anchorRef}
+          data-testid="notification-bell"
           onClick={handleOpen}
           color="inherit"
           aria-label={
@@ -303,6 +304,7 @@ export function NotificationBell() {
                   <Box component="li" key={notification.id} sx={{ listStyle: 'none' }}>
                     {index > 0 && <Divider component="div" />}
                     <ListItemButton
+                      data-testid={`notification-row-${notification.eventKey}`}
                       // `component="div"` + an explicit `role`/`tabIndex`: the
                       // row still behaves as a button, but it is no longer a
                       // real `<button>` element, so the action buttons inside it
@@ -415,6 +417,7 @@ export function NotificationBell() {
                             {(notification.actions ?? []).map((action, actionIndex) => (
                               <Button
                                 key={action.action}
+                                data-testid={`notification-action-${action.action}`}
                                 size="small"
                                 variant={actionIndex === 0 ? 'outlined' : 'text'}
                                 // The title is in the label because a screen

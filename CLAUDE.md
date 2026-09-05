@@ -742,7 +742,9 @@ The application uses an **email allowlist** to restrict access to pre-authorized
 - Frontend: component and hook tests
 - **E2E: every epic ships Playwright specs under `tests/e2e/specs/` proving its
   flow end to end — browser, API and database — against the fake OpenAI server
-  (`infra/compose/fake-openai.compose.yml`). They run on two projects,
+  (`infra/compose/fake-openai.compose.yml`). E12's `notifications.spec.ts`
+  drives the scheduler through `POST /api/auth/test/run-job` with a simulated
+  clock rather than waiting for the cron. They run on two projects,
   `chromium` and `mobile-chromium`, because the shell mounts different
   navigation components either side of the `sm` boundary. See
   `docs/TESTING.md` → "E2E Testing with Playwright".
