@@ -65,6 +65,7 @@ export function WeightLogForm({ onSave }: WeightLogFormProps) {
           onChange={(event) => setDateLocal(event.target.value)}
           slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: today() } }}
           size="small"
+          data-testid="weight-date"
         />
         <TextField
           label="Weight (kg)"
@@ -74,8 +75,9 @@ export function WeightLogForm({ onSave }: WeightLogFormProps) {
             htmlInput: { inputMode: 'decimal', 'aria-label': 'Weight in kilograms' },
           }}
           size="small"
+          data-testid="weight-value"
         />
-        <Button type="submit" variant="contained" disabled={saving || weight.trim() === ''}>
+        <Button type="submit" data-testid="weight-save" variant="contained" disabled={saving || weight.trim() === ''}>
           Save
         </Button>
       </Stack>

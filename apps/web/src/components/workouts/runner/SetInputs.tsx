@@ -101,6 +101,7 @@ export function SetInputs({
           }}
           size="small"
           sx={{ flex: 1 }}
+          data-testid="runner-weight"
         />
         <TextField
           label="Reps"
@@ -109,6 +110,7 @@ export function SetInputs({
           slotProps={{ htmlInput: { inputMode: 'numeric', 'aria-label': 'Reps' } }}
           size="small"
           sx={{ flex: 1 }}
+          data-testid="runner-reps"
         />
       </Stack>
 
@@ -166,6 +168,7 @@ export function SetInputs({
           fullWidth
           disabled={submitting}
           sx={{ mt: 2, minHeight: 56 }}
+          data-testid="runner-complete-set"
         >
           Complete set
         </Button>

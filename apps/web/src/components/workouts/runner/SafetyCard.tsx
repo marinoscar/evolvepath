@@ -16,7 +16,7 @@ interface SafetyCardProps {
  */
 export function SafetyCard({ copy, onStopExercise, onEndWorkout }: SafetyCardProps) {
   return (
-    <Alert severity="warning" sx={{ mt: 2 }} data-testid="safety-card">
+    <Alert severity="warning" sx={{ mt: 2 }} data-testid="runner-safety-card">
       <AlertTitle>Stop</AlertTitle>
       {copy}
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 2 }}>

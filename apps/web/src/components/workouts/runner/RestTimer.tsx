@@ -45,7 +45,7 @@ export function RestTimer({ startedAt, seconds, onSkip, onExtend }: RestTimerPro
   }, [done]);
 
   return (
-    <Box sx={{ mt: 2 }} data-testid="rest-timer">
+    <Box sx={{ mt: 2 }} data-testid="runner-rest-timer">
       <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
         <Typography variant="h6" component="p" aria-live="polite" sx={{ flex: 1 }}>
           {done ? 'Rest over' : `Rest ${remaining} s`}

@@ -932,6 +932,24 @@ turns a deterministic assertion into a race.
 cd tests/e2e && npm run test:weekly
 ```
 
+`specs/health.spec.ts` (epic E09) is the fourth, and the widest: eleven cases
+covering PRD §106 end to end — build a program and approve it, watch an unsafe
+draft fall back to the starter, run a session from Today, log sets **offline**
+and watch the outbox replay them without duplicates, read "last time" and a
+progression suggestion on the next session, report sharp pain, check a clip and
+a meal photograph, adapt after two skips and accept the proposal, log a weight,
+and confirm the runner mounts with no navigation at all on the mobile project.
+Run it with `WORKOUT_ADAPTATION_CRON_DISABLED=true` in `infra/compose/.env`, for
+the same reason the weekly sweep is disabled: a nightly job writing proposals
+for every seeded user turns a deterministic assertion into a race. The rules it
+asserts are written down in
+[`docs/specs/health-domain.md`](specs/health-domain.md), which carries the
+PRD §106 → spec-case table.
+
+```bash
+cd tests/e2e && npx playwright test specs/health.spec.ts
+```
+
 It runs against the compose stack **with the fake OpenAI overlay**, which
 `playwright.config.ts` already starts by default:
 
@@ -969,7 +987,8 @@ tests/e2e/
     ├── example.spec.ts        # Example feature tests
     ├── ai-key-gate.spec.ts    # The BYOK gate, setup page and key removal
     ├── admin-ai-settings.spec.ts  # Provider, platform key, model filter, test
-    └── coach.spec.ts          # E06: the coach, the mutation protocol, safety, memory
+    ├── coach.spec.ts          # E06: the coach, the mutation protocol, safety, memory
+    └── health.spec.ts         # E09: programs, the runner, the outbox, media, weight
 ```
 
 ### The fake OpenAI server
@@ -1029,6 +1048,13 @@ serialized input:
 | `safety_decision` | anything else | `allow` / `none` |
 | `insight_proposal` | — | two insights, each with its observation |
 | `weekly_review` | — | the PRD §14.6 six outputs, with one `move` proposal on the HEALTH plan |
+| `workout_program` | `shoulder` | five training days and an overhead press — the unsafe draft the rules reject |
+| `workout_program` | anything else | three FULL templates with SHORT and MINIMUM siblings, catalog names only |
+| `form_check` | `pain` / `SHARP_PAIN` | `riskFlags: ['pain_reported']`, **and still two cues** — so the spec proves the *server* withheld them |
+| `form_check` | anything else | two cues, `riskFlags: ['none']` |
+| `equipment_check` | — | `['DUMBBELL', 'BENCH']` |
+| `meal_check` | — | observations and behaviour keys, and no digit anywhere |
+| `progression_explanation` | — | one sentence carrying the suggested weight |
 | anything else | — | `null` → the generic schema-driven builder |
 
 **Keyed on the schema name, not on a header, and that is forced rather than

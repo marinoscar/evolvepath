@@ -184,6 +184,7 @@ export function QuickAddSheet({
             variant="outlined"
             disabled={option.disabled}
             onClick={() => setKind(option)}
+            data-testid={`quickadd-${option.key.replace(/_/g, '-')}`}
             startIcon={<option.Icon />}
             sx={{ justifyContent: 'flex-start', textAlign: 'left', p: 2, minHeight: 64 }}
           >

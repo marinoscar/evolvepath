@@ -91,7 +91,12 @@ export function ProgramProposalReview({
       </Typography>
 
       {fullTemplates.map((template) => (
-        <Box key={template.id} component="section" aria-label={template.name}>
+        <Box
+          key={template.id}
+          component="section"
+          aria-label={template.name}
+          data-testid={`program-template-${template.name}`}
+        >
           <Typography variant="subtitle1" component="h3" gutterBottom>
             {template.name}
           </Typography>
@@ -128,7 +133,12 @@ export function ProgramProposalReview({
       <Divider />
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        <Button variant="contained" onClick={onApprove} disabled={submitting}>
+        <Button
+          variant="contained"
+          onClick={onApprove}
+          disabled={submitting}
+          data-testid="program-approve"
+        >
           Approve
         </Button>
         <Button onClick={onRegenerate} disabled={submitting}>
