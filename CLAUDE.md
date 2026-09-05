@@ -598,12 +598,14 @@ Ten intent-named routes over the same matrix. Each returns a **commitment card**
 - `plans` - One per outcome; an identity only, everything mutable lives on its versions
 - `plan_versions` - Versioned plan content (rationale, expected weekly load, lineage); at most one ACTIVE per plan, enforced by a partial unique index
 - `routines` - Repeatable behaviours prescribed by a plan version (trigger, frequency, duration, fallback)
-- `commitments` - One intended action at one time, with its lifecycle status and reschedule lineage (+ execution fields, E05-02: `activeSince`/`activeSeconds`/`timerMinutes`, `versionUsed`, `minutesSpent`, `steps`, `decomposedFromId`, `skipNote`, and per-version minutes)
+- `commitments` - One intended action at one time, with its lifecycle status and reschedule lineage (+ execution fields, E05-02: `activeSince`/`activeSeconds`/`timerMinutes`, `versionUsed`, `minutesSpent`, `steps`, `decomposedFromId`, `skipNote`, and per-version minutes; + `ritual_id`, `family_member_id`, E08-01, both `SET NULL`, with a unique `(ritual_id, scheduled_start)` index that makes ritual materialization idempotent)
 - `evidence_items` - Facts about what actually happened; survives its commitment (`commitment_id` is SET NULL)
 - `reflections` - What the user made of a commitment, outcome, plan version or day
 - `domain_modes` - Per-domain posture (GROW, MAINTAIN, RECOVER, PAUSE); a missing row means GROW
 - `daily_check_ins` - "How does today feel?" — one row per user per local day, upserted; `date_local` is text in the user's own timezone, never a date column
 - `user_profiles` - Typed per-user preferences the product reasons about: `timezone` (what "today" means), `coachingStyle`, `weekdayMinutes`, quiet hours and onboarding progress; one row per user, created lazily (a missing row means onboarding has not finished)
+- `family_members` - Someone the user shares a ritual with. Exactly `nickname`, `relationship`, optional date-only `birthday` — and nothing else, by design (PRD §33, VISION §50: the people in it never consented to being modeled)
+- `rituals` - A recurring family behaviour the user is protecting: the recurrence rule (`weekdays`, `HH:mm`, `everyNWeeks`), ideal and minimum minutes, fallback text and the materialization horizon. A rule, not a schedule — the materializer turns it into ordinary `commitments`
 
 ## Access Control: Email Allowlist
 

@@ -316,7 +316,7 @@ live rows, by audit history, and by the specs above.
 | E05 Today | `daily_check_ins`, plus execution columns on `commitments` (`activeSince`, `activeSeconds`, `timerMinutes`, `versionUsed`, `minutesSpent`, `steps`, `decomposedFromId`, `skipNote`, per-version minutes) and the `CommitmentVersion` enum — **landed**, #40 | Widened the matrix (both copies, both tests); writes `APP_FLOW` evidence via `createFromFlow`'s rules |
 | E06 AI Coach | `coach_conversations`, `plan_change_proposals`, `memory_insights`, `obstacles` | Creates plan versions via `createDraft(…, 'AI')`; never writes `plan_versions` directly |
 | E07 Work/Focus | `focus_sessions` | Writes `TIMER` evidence via `createFromFlow`; reads `rescheduleCount` |
-| E08 Family | `family_members`, `rituals`, ritual links on commitments | May add a nullable column to `commitments`; may not change its status matrix without a test |
+| E08 Family | `family_members`, `rituals`, ritual links on commitments (`ritual_id`, `family_member_id`, both `SET NULL`, plus the unique `(ritual_id, scheduled_start)` index) — **landed**, #37. Contract: [`family-domain.md`](./family-domain.md) | May add a nullable column to `commitments`; may not change its status matrix without a test |
 | E09 Health | workout schema, exercise catalog | Writes `WORKOUT_LOG` evidence via `createFromFlow` |
 | E11 Momentum | consistency/momentum tables | Reads `evidence_items`; must not delete or rewrite them |
 
