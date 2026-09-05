@@ -116,6 +116,34 @@ describe('useCommitmentActions', () => {
     expect(getTodayState().commitments[0].status).toBe('RESCHEDULED');
   });
 
+  // The Start screen's "Continue another 15?" fires on a session that has passed
+  // its target but never paused.
+  it('extends a still-running session without losing the accumulated time', async () => {
+    const activeSince = '2026-03-02T09:00:00.000Z';
+    seedCommitments(
+      makeCard({
+        id: 'c1',
+        domain: 'WORK',
+        status: 'STARTED',
+        startedAt: activeSince,
+        timer: {
+          activeSince,
+          activeSeconds: 0,
+          elapsedSeconds: 300,
+          timerMinutes: 5,
+          remainingSeconds: 0,
+        },
+      }),
+    );
+
+    const { result } = renderHook(() => useCommitmentActions());
+
+    const card = await result.current.resume('c1', 15);
+
+    expect(card.timer?.timerMinutes).toBe(20);
+    expect(card.timer?.activeSince).toBe(activeSince);
+  });
+
   it('never writes anything when only asking for a proposal', async () => {
     seedCommitments(makeCard({ id: 'c1', domain: 'WORK' }));
 
