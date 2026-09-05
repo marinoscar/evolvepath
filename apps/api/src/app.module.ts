@@ -22,6 +22,7 @@ import { AiModule } from './ai/ai.module';
 import { PathModule } from './path/path.module';
 import { CommitmentsModule } from './commitments/commitments.module';
 import { TodayModule } from './today/today.module';
+import { FamilyModule } from './family/family.module';
 import { LoggerModule } from './common/logger/logger.module';
 import { TestAuthModule } from './test-auth/test-auth.module';
 
@@ -95,6 +96,11 @@ import configuration from './config/configuration';
     // written at volume by the flows E05/E07/E09 add.
     CommitmentsModule,
     TodayModule,
+
+    // The Family domain (epic E08): members, rituals and their materialized
+    // occurrences. Separate from PathModule because a ritual is a rule the
+    // materializer reads, not a layer of the outcome hierarchy.
+    FamilyModule,
 
     // Test modules (non-production only)
     ...(process.env.NODE_ENV !== 'production' ? [TestAuthModule] : []),
