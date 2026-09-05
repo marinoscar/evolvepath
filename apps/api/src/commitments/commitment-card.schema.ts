@@ -69,6 +69,16 @@ export const commitmentCardSchema = z.object({
   versionUsed: z.enum(['FULL', 'SHORT', 'MINIMUM']).nullable(),
   minutesSpent: z.number().int().nullable(),
   outcomeId: z.string().uuid().nullable(),
+  /**
+   * The family ritual this occurrence came from, and who it is with (epic E08).
+   *
+   * On the CARD rather than only on the full commitment because the client
+   * decides its action LABELS from them — a materialized ritual occurrence
+   * offers "I'm in", "Move it" and "Skip today" where a work commitment offers
+   * "Ready", "Reschedule" and "Skip". Same endpoints, same matrix, family words.
+   */
+  ritualId: z.string().uuid().nullable(),
+  familyMemberId: z.string().uuid().nullable(),
   /** Set when this commitment is the small version of a bigger one. */
   decomposedFromId: z.string().uuid().nullable(),
   steps: z.array(commitmentVersionSchema).nullable(),

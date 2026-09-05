@@ -55,6 +55,8 @@ describe('Check-in and day reflection (integration)', () => {
     minutesSpent: null,
     steps: null,
     decomposedFromId: null,
+    ritualId: null,
+    familyMemberId: null,
     createdAt: new Date(Date.now() - 86_400_000),
     updatedAt: new Date(Date.now() - 86_400_000),
     ...over,

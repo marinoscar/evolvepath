@@ -152,6 +152,8 @@ export function toCommitmentCard(row: Commitment, now: Date = new Date()): Commi
     versionUsed: row.versionUsed as CommitmentVersion | null,
     minutesSpent: row.minutesSpent,
     outcomeId: row.outcomeId,
+    ritualId: row.ritualId,
+    familyMemberId: row.familyMemberId,
     decomposedFromId: row.decomposedFromId,
     steps: stepsOf(row),
     timer,
