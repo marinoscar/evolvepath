@@ -38,6 +38,18 @@ export type ContraindicationTag = (typeof CONTRAINDICATION_TAGS)[number];
 
 export interface CatalogExercise {
   name: string;
+  /**
+   * EVERYTHING this movement needs, not a list of things it could use.
+   *
+   * The whole product reads it that way — the builder offers a movement only
+   * when the user has every item, the starter picks by the same rule, and the
+   * equipment check decides what a photographed room cannot do. A row that
+   * meant "dumbbells OR kettlebells" would be read as "dumbbells AND
+   * kettlebells" and would silently vanish from every catalog it appeared in.
+   *
+   * So a movement that genuinely works with either implement is listed under
+   * the commoner one, and the substitution group carries the alternative.
+   */
   equipment: Equipment[];
   movementPattern: MovementPattern;
   instructions: string;
@@ -145,7 +157,7 @@ export const EXERCISES: CatalogExercise[] = [
   // ---------------------------------------------------------------- horizontal pull
   {
     name: 'Seated Cable Row',
-    equipment: ['CABLE', 'MACHINE'],
+    equipment: ['CABLE'],
     movementPattern: 'PULL_H',
     instructions:
       'Sit tall with a slight bend in your knees and your chest up. Pull the handle to your lower ribs, leading with your elbows and letting your shoulder blades slide together at the end. Return under control, allowing your shoulder blades to travel forward but keeping your lower back from rounding. Do not rock your torso back and forth to move the weight.',
@@ -192,7 +204,7 @@ export const EXERCISES: CatalogExercise[] = [
   // ------------------------------------------------------------------ vertical pull
   {
     name: 'Lat Pulldown',
-    equipment: ['CABLE', 'MACHINE'],
+    equipment: ['CABLE'],
     movementPattern: 'PULL_V',
     instructions:
       'Set the thigh pad so you stay seated, grip the bar a little wider than your shoulders, and lean back only slightly. Pull the bar to your upper chest by driving your elbows down and back, then let it rise all the way until your arms are straight and your shoulder blades lift. Avoid pulling behind your neck.',
@@ -210,7 +222,7 @@ export const EXERCISES: CatalogExercise[] = [
   },
   {
     name: 'Assisted Pull-Up',
-    equipment: ['MACHINE', 'BAND'],
+    equipment: ['MACHINE'],
     movementPattern: 'PULL_V',
     instructions:
       'Use the assist machine or loop a band under your knee or foot. Take the same grip and shape as a pull-up and use the least assistance that lets you finish your reps with the chin clearing the bar and a full hang between reps. Reduce the assistance a little once you can hit the top of the rep range cleanly.',
@@ -230,7 +242,7 @@ export const EXERCISES: CatalogExercise[] = [
   // -------------------------------------------------------------------------- squat
   {
     name: 'Goblet Squat',
-    equipment: ['DUMBBELL', 'KETTLEBELL'],
+    equipment: ['DUMBBELL'],
     movementPattern: 'SQUAT',
     instructions:
       'Hold a single dumbbell or kettlebell against your chest with both hands, elbows tucked in. Stand about shoulder-width with your toes turned slightly out. Sit down between your hips, keeping your chest up and your knees tracking over your toes, until your thighs are at least parallel. Drive back up through your whole foot. The front-loaded weight makes it self-correcting: if you lean forward, the weight tells you.',
@@ -333,7 +345,7 @@ export const EXERCISES: CatalogExercise[] = [
   // -------------------------------------------------------------------------- lunge
   {
     name: 'Walking Lunge',
-    equipment: ['BODYWEIGHT', 'DUMBBELL'],
+    equipment: ['BODYWEIGHT'],
     movementPattern: 'LUNGE',
     instructions:
       'Step forward into a lunge, lowering until your back knee is just above the floor and your front shin is roughly vertical. Push through the front foot to stand and step straight into the next lunge with the other leg. Keep your torso upright. Add dumbbells at your sides once bodyweight sets feel steady.',
@@ -342,7 +354,7 @@ export const EXERCISES: CatalogExercise[] = [
   },
   {
     name: 'Reverse Lunge',
-    equipment: ['BODYWEIGHT', 'DUMBBELL'],
+    equipment: ['BODYWEIGHT'],
     movementPattern: 'LUNGE',
     instructions:
       'From standing, step backwards and lower until your back knee is just above the floor, then push through the front heel to return to standing. Stepping back rather than forward keeps the front knee travelling less, which is why this is the first lunge to try when knees complain.',
@@ -351,7 +363,7 @@ export const EXERCISES: CatalogExercise[] = [
   },
   {
     name: 'Bulgarian Split Squat',
-    equipment: ['BODYWEIGHT', 'DUMBBELL', 'BENCH'],
+    equipment: ['BODYWEIGHT', 'BENCH'],
     movementPattern: 'LUNGE',
     instructions:
       'Place the top of your back foot on a bench behind you and hop the front foot far enough forward that your front shin stays near vertical at the bottom. Lower until your back knee is close to the floor, then drive back up through the front foot. Hold the bench or a wall for balance while you learn the position.',
@@ -360,7 +372,7 @@ export const EXERCISES: CatalogExercise[] = [
   },
   {
     name: 'Step-Up',
-    equipment: ['BODYWEIGHT', 'DUMBBELL', 'BENCH'],
+    equipment: ['BODYWEIGHT', 'BENCH'],
     movementPattern: 'LUNGE',
     instructions:
       'Set a box or bench at about knee height. Put one whole foot on it and stand up by pushing through that foot, resisting the urge to push off the floor with the back leg. Lower yourself under control rather than dropping. Do all the reps on one side before switching, and lower the box if your knee caves inward.',
@@ -371,7 +383,7 @@ export const EXERCISES: CatalogExercise[] = [
   // -------------------------------------------------------------------------- carry
   {
     name: "Farmer's Carry",
-    equipment: ['DUMBBELL', 'KETTLEBELL'],
+    equipment: ['DUMBBELL'],
     movementPattern: 'CARRY',
     instructions:
       'Pick up a heavy weight in each hand, stand tall with your shoulders back and your ribs down, and walk in a straight line with short, controlled steps. Do not lean or shrug. Distance or time is the unit here, and grip is usually what runs out first.',
@@ -380,7 +392,7 @@ export const EXERCISES: CatalogExercise[] = [
   },
   {
     name: 'Suitcase Carry',
-    equipment: ['DUMBBELL', 'KETTLEBELL'],
+    equipment: ['DUMBBELL'],
     movementPattern: 'CARRY',
     instructions:
       'Carry a single weight in one hand and walk without letting your torso tip towards it. The whole point is the side of your midsection resisting the lean, so a moderate weight you can stay upright with beats a heavy one you cannot. Walk the same distance on both sides.',
@@ -418,7 +430,7 @@ export const EXERCISES: CatalogExercise[] = [
   },
   {
     name: 'Cable Pallof Press',
-    equipment: ['CABLE', 'BAND'],
+    equipment: ['CABLE'],
     movementPattern: 'CORE',
     instructions:
       'Stand side-on to a cable or anchored band set at chest height, holding the handle with both hands at your sternum. Press it straight out in front of you and resist the pull that tries to rotate you, then bring it back in. Stand further from the anchor for more of a challenge.',
@@ -438,7 +450,7 @@ export const EXERCISES: CatalogExercise[] = [
   // --------------------------------------------------------------------------- arms
   {
     name: 'Triceps Pressdown',
-    equipment: ['CABLE', 'BAND'],
+    equipment: ['CABLE'],
     movementPattern: 'ACCESSORY',
     instructions:
       'Stand facing a high cable or anchored band with your elbows pinned to your sides. Straighten your arms to push the handle down, pause briefly, and let it return until your forearms are just past parallel to the floor. Only the elbows move — if your shoulders start helping, drop the weight.',

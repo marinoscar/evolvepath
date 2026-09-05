@@ -65,6 +65,12 @@ export const THROTTLE_LIMITS = {
    * logged something they had forgotten — but not on a loop.
    */
   weekly_review: 5,
+  /**
+   * Media coaching (issue #92). Ten a minute: each call sends images — a video
+   * arrives as several frames — and a user legitimately checks two or three
+   * sets in a row, but nothing about a photograph rewards a loop.
+   */
+  media_check: 10,
 } as const;
 
 
