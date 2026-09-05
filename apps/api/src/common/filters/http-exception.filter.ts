@@ -78,6 +78,28 @@ export class HttpExceptionFilter implements ExceptionFilter {
         const resp = exceptionResponse as Record<string, unknown>;
         message = (resp.message as string) || message;
         details = resp.details;
+
+        // -------------------------------------------------------------------
+        // Zod issues are carried under `errors`, not `details` (issue #39)
+        // -------------------------------------------------------------------
+        //
+        // `ZodValidationException` (the global `ZodValidationPipe`'s rejection)
+        // builds `{ statusCode, message: 'Validation failed', errors: [...] }`.
+        // The line above reads only `details`, so every validation failure in
+        // this API used to arrive as a bare "Validation failed" with no
+        // indication of WHICH field was wrong — actionable for nobody, on any
+        // endpoint.
+        //
+        // The issues are copied into `details` rather than passed through as
+        // `errors` on purpose: `details` is the envelope's one published slot
+        // for machine-readable, endpoint-specific data (`common/dto/error.dto.ts`
+        // is the contract), and adding a second top-level key would change the
+        // shape of the error body for every consumer. `code` still comes from
+        // the status, unchanged — this adds information, it does not
+        // reclassify anything.
+        if (details === undefined && Array.isArray(resp.errors)) {
+          details = resp.errors;
+        }
       }
 
       // `code` is ALWAYS derived from the status, and a `code` on the thrown

@@ -248,6 +248,48 @@ describe('HttpExceptionFilter', () => {
       const response = mockResponse.send.mock.calls[0][0];
       expect(response.details).toBeUndefined();
     });
+
+    // ZodValidationException (the global pipe's rejection) carries its issues
+    // under `errors`, not `details`. Without this, every validation failure in
+    // the API arrives as a bare "Validation failed" that names no field.
+    it('surfaces Zod issues from `errors` under `details` (#39)', () => {
+      const issues = [
+        { code: 'too_big', path: ['importance'], message: 'Too big: expected number <= 5' },
+      ];
+      const exception = new HttpException(
+        { statusCode: 400, message: 'Validation failed', errors: issues },
+        HttpStatus.BAD_REQUEST,
+      );
+
+      filter.catch(exception, mockHost);
+
+      expect(mockResponse.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          statusCode: 400,
+          // `code` is still derived from the status — this adds information,
+          // it does not reclassify the error.
+          code: 'BAD_REQUEST',
+          message: 'Validation failed',
+          details: issues,
+        }),
+      );
+    });
+
+    it('prefers an explicit `details` over `errors` when an exception carries both', () => {
+      const exception = new HttpException(
+        {
+          message: 'Validation failed',
+          details: [{ property: 'email' }],
+          errors: [{ path: ['age'] }],
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+
+      filter.catch(exception, mockHost);
+
+      const response = mockResponse.send.mock.calls[0][0];
+      expect(response.details).toEqual([{ property: 'email' }]);
+    });
   });
 
   describe('Generic Error handling', () => {

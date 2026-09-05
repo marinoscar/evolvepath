@@ -136,6 +136,29 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
     ],
   },
   {
+    name: 'EvolvePath',
+    tags: [
+      {
+        name: 'Best Self',
+        description:
+          "The calling user's Best Self profile — who they are trying to become (PRD §10.2). " +
+          'One row per user, replaced whole.',
+      },
+      {
+        name: 'Outcomes',
+        description:
+          'Meaningful results per domain (Work, Family, Health). Every row is owned by the ' +
+          "caller; another user's outcome is indistinguishable from a missing one.",
+      },
+      {
+        name: 'Domain Modes',
+        description:
+          'Per-domain posture — GROW, MAINTAIN, RECOVER or PAUSE — that later epics use to ' +
+          'size the week.',
+      },
+    ],
+  },
+  {
     name: 'Storage',
     tags: [
       {
