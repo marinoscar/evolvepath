@@ -65,6 +65,7 @@ export function DomainSection({
             onClick={() => onAddOutcome(domain)}
             // Four "Add outcome" buttons on one screen need four names.
             aria-label={`Add ${DOMAIN_LABELS[domain]} outcome`}
+            data-testid={`add-outcome-${domain}`}
           >
             Add outcome
           </Button>

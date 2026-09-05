@@ -73,6 +73,11 @@ export function UserMenu() {
       <IconButton
         onClick={handleOpen}
         size="small"
+        // The e2e helpers (`isLoggedIn`, `logout`, and #62's phone-Console
+        // check) have always looked for this and never found it — `isLoggedIn`
+        // swallowed the timeout and answered `false`, so nothing failed and
+        // nothing worked either.
+        data-testid="user-menu"
         aria-controls={open ? 'user-menu' : undefined}
         aria-haspopup="true"
         aria-expanded={open ? 'true' : undefined}
@@ -126,7 +131,7 @@ export function UserMenu() {
         <Divider />
 
         {/* Logout */}
-        <MenuItem onClick={handleLogout}>
+        <MenuItem onClick={handleLogout} data-testid="logout-button">
           <ListItemIcon>
             <LogoutIcon fontSize="small" />
           </ListItemIcon>

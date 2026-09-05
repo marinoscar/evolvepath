@@ -171,7 +171,13 @@ export function RoutineList({
           </Box>
         )}
 
-        <Button size="small" startIcon={<AddIcon />} onClick={onAdd} disabled={!editable}>
+        <Button
+          size="small"
+          startIcon={<AddIcon />}
+          onClick={onAdd}
+          disabled={!editable}
+          data-testid="add-routine"
+        >
           Add routine
         </Button>
       </CardContent>

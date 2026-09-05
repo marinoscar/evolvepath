@@ -36,7 +36,12 @@ export function ArchiveOutcomeDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={onConfirm} color="warning" variant="contained">
+        <Button
+          onClick={onConfirm}
+          color="warning"
+          variant="contained"
+          data-testid="confirm-archive"
+        >
           Archive
         </Button>
       </DialogActions>

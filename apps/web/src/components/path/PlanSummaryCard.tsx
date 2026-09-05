@@ -31,7 +31,12 @@ export function PlanSummaryCard({
           <Typography color="text.secondary" sx={{ mb: 2 }}>
             A plan is how this outcome becomes something you actually do.
           </Typography>
-          <Button variant="contained" onClick={onCreatePlan} disabled={disabled}>
+          <Button
+            variant="contained"
+            onClick={onCreatePlan}
+            disabled={disabled}
+            data-testid="create-plan"
+          >
             Create plan
           </Button>
         </CardContent>
@@ -68,7 +73,13 @@ export function PlanSummaryCard({
           <Typography sx={{ mb: 2 }}>{activeVersion.rationale}</Typography>
         )}
 
-        <Button variant="outlined" onClick={onNewVersion} disabled={disabled} sx={{ mt: 1 }}>
+        <Button
+          variant="outlined"
+          onClick={onNewVersion}
+          disabled={disabled}
+          sx={{ mt: 1 }}
+          data-testid="new-plan-version"
+        >
           New version
         </Button>
       </CardContent>
