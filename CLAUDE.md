@@ -399,6 +399,39 @@ Three rules that are easy to break and expensive to rediscover:
   exactly the situation a model-written one would not — when the provider is
   down, or the user has no key.
 
+## The weekly loop
+
+Weekly review generation, the deterministic aggregation, the reviewer persona,
+the hourly sweep, materialisation and the PRD §48 load check have their own
+written contract in [`docs/specs/weekly-review.md`](docs/specs/weekly-review.md):
+every count definition, the time-window boundaries, the reviewer's six outputs
+and its guard, the template rules, the scheduling promise, the materialisation
+and load-check rules with their constants, the screens, and the rejected
+alternatives.
+
+Read it before changing anything under `apps/api/src/weekly/` or
+`apps/web/src/components/weekly/`.
+`apps/api/test/docs/weekly-review-doc.spec.ts` fails if a constant, an audit
+action or an output field changes without the document changing with it —
+including when only the VALUE moves, which is the realistic mistake.
+
+Three rules that are easy to break and expensive to rediscover:
+
+- **A rescheduled intention is counted once.** E02-04's reschedule closes the
+  original as `RESCHEDULED` and opens a new row carrying the count; both are in
+  the week. A naive `planned` reports two workouts where the user intended one,
+  and then a 50% completion rate for doing the only thing they meant to do.
+- **Nothing in `WeeklyModule` may write a `PlanVersion`.** The reviewer's
+  proposed changes become `plan_change_proposals` rows through
+  `ProposalsService.createFromSource` and stop there; the plan changes only when
+  the user calls `POST /proposals/:id/accept` (PRD §15, §89). `PathModule` is
+  imported for `DomainModesService` and it also exports `PlanVersionsService` —
+  do not inject it.
+- **A load warning is data, never an exception.** PRD §48 asks the product to
+  *recommend* replacing something. `approve` answers 422 until
+  `acknowledgeWarnings: true`, which means the user has read the warning — not
+  that the software agreed with them.
+
 ## The Family domain
 
 Family members, rituals, recurrence materialization, the behaviour lint and the
