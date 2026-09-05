@@ -1,15 +1,20 @@
 import { Card, CardContent, Chip, List, Typography, Box } from '@mui/material';
 
-import type { CommitmentActionName, CommitmentCard, Domain, DomainModeKind } from '../../types';
+import type { CommitmentCard, Domain, DomainModeKind } from '../../types';
 import { CommitmentRow } from './CommitmentRow';
-import { DOMAIN_EMPTY_COPY, DOMAIN_LABELS, DOMAIN_MODE_LABELS } from './todayLabels';
+import {
+  DOMAIN_EMPTY_COPY,
+  DOMAIN_LABELS,
+  DOMAIN_MODE_LABELS,
+  type RowAction,
+} from './todayLabels';
 
 interface DomainCardProps {
   domain: Domain;
   mode: DomainModeKind;
   commitments: CommitmentCard[];
   pendingId?: string | null;
-  onAction: (action: CommitmentActionName, commitment: CommitmentCard) => void;
+  onAction: (action: RowAction, commitment: CommitmentCard) => void;
 }
 
 /**

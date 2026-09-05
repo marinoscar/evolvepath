@@ -16,14 +16,14 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import CancelIcon from '@mui/icons-material/Cancel';
 import HistoryIcon from '@mui/icons-material/History';
 
-import type { CommitmentActionName, CommitmentCard, CommitmentStatus } from '../../types';
-import { ACTION_LABELS, formatTime } from './todayLabels';
+import type { CommitmentCard, CommitmentStatus } from '../../types';
+import { ACTION_LABELS, formatTime, type RowAction } from './todayLabels';
 import { CommitmentActionsMenu } from './CommitmentActionsMenu';
 
 interface CommitmentRowProps {
   commitment: CommitmentCard;
   disabled?: boolean;
-  onAction: (action: CommitmentActionName, commitment: CommitmentCard) => void;
+  onAction: (action: RowAction, commitment: CommitmentCard) => void;
 }
 
 function StatusIcon({ status }: { status: CommitmentStatus }) {
@@ -58,7 +58,17 @@ function StatusIcon({ status }: { status: CommitmentStatus }) {
 export function CommitmentRow({ commitment, disabled = false, onAction }: CommitmentRowProps) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
-  const [primary, ...rest] = commitment.availableActions;
+  // `edit` is a client-side action (PATCH, not an action endpoint), so it is
+  // appended here rather than expected back from the server — and only where
+  // the API would accept the patch.
+  const actions: RowAction[] = [
+    ...commitment.availableActions,
+    ...(commitment.status === 'PLANNED' || commitment.status === 'READY'
+      ? (['edit'] as RowAction[])
+      : []),
+  ];
+
+  const [primary, ...rest] = actions;
   const isTerminal = commitment.availableActions.length === 0;
 
   return (
