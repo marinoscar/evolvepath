@@ -557,6 +557,22 @@ Ten intent-named routes over the same matrix. Each returns a **commitment card**
 - `POST /api/reflections` - Note/tags/scores on a commitment, outcome, plan version or day
 - `GET /api/reflections` - Newest first, capped at 200
 
+### Family (epic E08)
+Own data only; a foreign or unknown id answers 404, never 403.
+- `GET /api/family/members` - List; items carry exactly `id`, `nickname`, `relationship`, `birthday`, `createdAt` — PRD §33 fixes the record and there is nothing else to return
+- `POST /api/family/members` - Add someone. `birthday` is a calendar date; `1900` is the placeholder year and nothing reads it
+- `PATCH /api/family/members/{id}` / `DELETE /api/family/members/{id}` - Update / remove (204). Rituals and past commitments keep their history
+- `GET /api/family/rituals?active=` - List; active first, then by title
+- `GET /api/family/rituals/{id}` - One ritual plus `upcoming`: the next 7 days as commitment cards
+- `POST /api/family/rituals` - Create, lint the title, and **materialize the next 7 days synchronously**
+- `PATCH /api/family/rituals/{id}` - Update. A material change cancels future `PLANNED`/`READY` occurrences **through the transition matrix** and rebuilds them
+- `DELETE /api/family/rituals/{id}` - Delete (204); future occurrences cancelled, past ones keep their place with `ritualId: null`
+- `POST /api/family/rituals/{id}/materialize` - Create any missing occurrences now. Idempotent via the unique `(ritual_id, scheduled_start)` index
+- `POST /api/family/lint` - Check a title, and optionally get a rewrite. **Always 200**; the verdict is deterministic and `source: 'none'` when AI is unavailable
+
+Completing, moving and skipping a ritual occurrence are the ordinary commitment
+actions — there are deliberately no family-specific lifecycle endpoints.
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)
