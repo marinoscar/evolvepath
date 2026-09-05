@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
+import { CoachModule } from '../coach/coach.module';
 import { CommitmentsModule } from '../commitments/commitments.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PathModule } from '../path/path.module';
@@ -13,6 +14,9 @@ import { WorkoutProgramGeneratorService } from './programs/workout-program-gener
 import { WorkoutProgramsController } from './programs/workout-programs.controller';
 import { WorkoutProgramsService } from './programs/workout-programs.service';
 import { ProgressionExplainerService } from './progression/progression-explainer.service';
+import { WorkoutAdaptationController } from './adaptation/workout-adaptation.controller';
+import { WorkoutAdaptationService } from './adaptation/workout-adaptation.service';
+import { WorkoutAdaptationTask } from './adaptation/workout-adaptation.task';
 import { WorkoutSessionsController } from './sessions/workout-sessions.controller';
 import { WorkoutSessionsService } from './sessions/workout-sessions.service';
 
@@ -27,6 +31,11 @@ import { WorkoutSessionsService } from './sessions/workout-sessions.service';
  * matrix, the timer and the APP_FLOW evidence live there; a second writer here
  * would be a second matrix.
  *
+ * `CoachModule` is imported for `ProposalsService`, which is the ONLY writer of
+ * plan-change proposals. The adaptation detector produces changes and hands
+ * them over; it never writes a plan version, and the effect that changes a
+ * template runs inside E06's own accept transaction.
+ *
  * `PathModule` is imported for `PlanVersionsService`, and unlike `WeeklyModule`
  * this epic DOES inject it: approving a workout program is the user's own
  * approval of an AI proposal, which is exactly the moment PRD §15 permits a plan
@@ -38,19 +47,32 @@ import { WorkoutSessionsService } from './sessions/workout-sessions.service';
     PrismaModule,
     AiModule,
     SafetyModule,
+    CoachModule,
     CommitmentsModule,
     PathModule,
     UserProfileModule,
     NotificationsModule,
   ],
-  controllers: [WorkoutProgramsController, ExercisesController, WorkoutSessionsController],
+  controllers: [
+    WorkoutProgramsController,
+    ExercisesController,
+    WorkoutSessionsController,
+    WorkoutAdaptationController,
+  ],
   providers: [
     ExerciseResolverService,
     WorkoutProgramGeneratorService,
     WorkoutProgramsService,
     WorkoutSessionsService,
     ProgressionExplainerService,
+    WorkoutAdaptationService,
+    WorkoutAdaptationTask,
   ],
-  exports: [WorkoutProgramsService, WorkoutSessionsService, ExerciseResolverService],
+  exports: [
+    WorkoutProgramsService,
+    WorkoutSessionsService,
+    ExerciseResolverService,
+    WorkoutAdaptationService,
+  ],
 })
 export class WorkoutsModule {}

@@ -50,6 +50,17 @@ const SAMPLE_PAYLOADS: Record<string, unknown> = {
     changedAt: new Date('2026-01-01T00:00:00.000Z'),
   },
 
+  // E09's two events. Both templates read a field off the payload, so `{}`
+  // would exercise the render-throw branch rather than the happy path.
+  'plan.proposal_created': {
+    summary: "You've skipped Upper A twice in two weeks. Shall we make it 25 minutes?",
+    proposalId: '11111111-1111-4111-8111-111111111111',
+  },
+  'health.program_activated': {
+    programName: 'Two-day upper/lower',
+    programId: '22222222-2222-4222-8222-222222222222',
+  },
+
   // The nine coaching categories (#54). Every one of them VALIDATES its payload
   // and throws otherwise, so `{}` would exercise the render-throw branch for
   // all nine and the loop below would prove nothing about the happy path.

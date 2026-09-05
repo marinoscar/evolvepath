@@ -212,6 +212,19 @@ export const EVENT_BROWSER_TEMPLATES: Partial<
     };
   },
 
+  // The summary IS the proposal's own sentence — the one the user will read on
+  // the card. Two wordings for one suggestion would make the notification and
+  // the page look like two different proposals.
+  'plan.proposal_created': (data: never): BrowserNotificationContent => {
+    const { summary } = data as { summary: string };
+
+    return {
+      title: 'Your coach has a suggestion',
+      body: summary,
+      link: '/coach',
+    };
+  },
+
   // The program is already live by the time this renders, so the copy confirms
   // rather than asks. The link goes to the program itself, not to a list.
   'health.program_activated': (data: never): BrowserNotificationContent => {

@@ -1,7 +1,9 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   Logger,
+  Optional,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Prisma, type ProposalSourceKind, type ProposalStatus } from '@prisma/client';
@@ -18,6 +20,7 @@ import {
   type PlanVersionSnapshot,
 } from './apply-changes';
 import { planChangeListSchema, type PlanChange } from './plan-change.schema';
+import { PROPOSAL_EFFECT, type ProposalEffect } from './proposal-effects';
 import type { ProposalDetailDto, ProposalSummaryDto } from './dto/proposal-response.dto';
 
 // =============================================================================
@@ -76,6 +79,15 @@ export class ProposalsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly versions: PlanVersionsService,
+    /**
+     * Domain effects, matched on `sourceKind` and run inside the accept
+     * transaction. Optional and empty by default: a deployment with no domain
+     * effects registered accepts proposals exactly as it did before the hook
+     * existed.
+     */
+    @Optional()
+    @Inject(PROPOSAL_EFFECT)
+    private readonly effects: ProposalEffect[] = [],
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -138,13 +150,14 @@ export class ProposalsService {
 
   async list(
     userId: string,
-    filter: { status?: ProposalStatus; planId?: string } = {},
+    filter: { status?: ProposalStatus; planId?: string; sourceKind?: ProposalSourceKind } = {},
   ): Promise<ProposalSummaryDto[]> {
     const rows = await this.prisma.planChangeProposal.findMany({
       where: {
         userId,
         ...(filter.status ? { status: filter.status } : {}),
         ...(filter.planId ? { planId: filter.planId } : {}),
+        ...(filter.sourceKind ? { sourceKind: filter.sourceKind } : {}),
       },
       orderBy: { createdAt: 'desc' },
       include: PROPOSAL_INCLUDE,
@@ -278,6 +291,19 @@ export class ProposalsService {
       );
 
       await this.applyEffects(tx, userId, applied.commitmentEffects);
+
+      // The domain's own half of the acceptance, inside the same transaction:
+      // a workout template that failed to change must take the plan version
+      // with it rather than leaving the user a plan that says 25 minutes and a
+      // workout that is still 40.
+      for (const effect of this.effects.filter((e) => e.sourceKind === existing.sourceKind)) {
+        await effect.apply(tx, {
+          userId,
+          planId: existing.planId,
+          planVersionId: version.id,
+          changes,
+        });
+      }
 
       await tx.planChangeProposal.update({
         where: { id: existing.id },

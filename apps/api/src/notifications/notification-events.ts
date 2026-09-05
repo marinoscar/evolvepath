@@ -332,6 +332,16 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
   // The Health domain (epic E09, issue #77)
   // ---------------------------------------------------------------------------
   {
+    key: 'plan.proposal_created',
+    label: 'A suggested plan change',
+    description: 'Your coach has proposed a change to a plan and is waiting on your answer.',
+    // Browser only. A proposal is an invitation to read a diff and decide — the
+    // opposite of a moment-bound cue, and a phone buzz would ask for attention
+    // it cannot use.
+    channels: ['browser'],
+    defaultEnabled: true,
+  },
+  {
     key: 'health.program_activated',
     label: 'Workout program started',
     description: 'Your training program is live and the first sessions are on your schedule.',

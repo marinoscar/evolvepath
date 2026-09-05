@@ -10,7 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
-import type { ProposalStatus } from '@prisma/client';
+import type { ProposalSourceKind, ProposalStatus } from '@prisma/client';
 
 import { Auth } from '../../auth/decorators/auth.decorator';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
@@ -42,13 +42,19 @@ export class ProposalsController {
   })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'planId', required: false, type: String, format: 'uuid' })
+  @ApiQuery({
+    name: 'sourceKind',
+    required: false,
+    description: 'Which service raised it — e.g. `WORKOUT` for the Health adaptation detector.',
+  })
   @ApiResponse({ status: 200, type: [ProposalSummaryDto] })
   async list(
     @CurrentUser('id') userId: string,
     @Query('status') status?: ProposalStatus,
     @Query('planId') planId?: string,
+    @Query('sourceKind') sourceKind?: ProposalSourceKind,
   ): Promise<ProposalSummaryDto[]> {
-    return this.proposals.list(userId, { status, planId });
+    return this.proposals.list(userId, { status, planId, sourceKind });
   }
 
   @Get(':id')

@@ -231,6 +231,17 @@ export default () => {
     cronDisabled: process.env.WEEKLY_REVIEW_CRON_DISABLED === 'true',
   },
 
+  // The Health domain (epic E09).
+  //
+  // `adaptationCronDisabled` stops the daily sweep, for the same reason the
+  // weekly one has a switch: a background job that raises plan-change proposals
+  // for every seeded user turns a deterministic assertion into a race, and an
+  // operator investigating "why did everyone get a suggestion overnight" needs
+  // to stop it in one restart.
+  workouts: {
+    adaptationCronDisabled: process.env.WORKOUT_ADAPTATION_CRON_DISABLED === 'true',
+  },
+
   logLevel: process.env.LOG_LEVEL || 'info',
   };
 };

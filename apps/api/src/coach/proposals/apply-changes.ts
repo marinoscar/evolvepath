@@ -217,11 +217,30 @@ export function applyChanges(
 
     const fields = fieldsOf(current, change.after ?? null);
 
-    if (fields.length === 0) {
+    // A workout exercise swap (E09-05) is a real change that no routine field
+    // can express: the routine still runs "Upper A" at the same time for the
+    // same length, and the movement inside it is different. Without this the
+    // pure diff would call it `nothing_changes` and refuse a proposal the user
+    // had just read and agreed to.
+    const swap = change.workout?.replaceExercise;
+
+    if (fields.length === 0 && !swap) {
       errors.push({
         index,
         code: 'nothing_changes',
         message: `${change.op} on ${current.title} would change nothing`,
+      });
+      continue;
+    }
+
+    if (fields.length === 0 && swap) {
+      diff.push({
+        op: change.op,
+        target: { type: 'routine', id: current.id, title: current.title },
+        reason: change.reason,
+        // Named, not valued: the ids mean nothing to a reader, and the reason
+        // is where the swap is actually described.
+        fields: [{ field: 'exercise', before: null, after: null }],
       });
       continue;
     }

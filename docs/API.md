@@ -4165,6 +4165,46 @@ The last row is deliberate: the user opened the app, changed their mind, and
 still has all of Today's vocabulary available. Marking it partial would be the
 product deciding they failed at something they never started.
 
+#### Adaptation
+
+```http
+POST /api/workouts/adaptation/run
+GET  /api/workouts/adaptation/candidates
+POST /api/workouts/templates/{templateId}/exercises/{id}/dislike
+```
+
+PRD §43's signals, detected deterministically over the last **14 days**:
+
+| Detector | Trigger | Proposes |
+|---|---|---|
+| `SKIPPED_TWICE` | ≥ 2 `SKIPPED`/`MISSED` days for one workout | `reduce` to 65% of the target, to the nearest 5, floored at 15 min |
+| `TOO_LONG` | ≥ 2 completed sessions running > target + 15 min | the same `reduce`, quoting the measured average |
+| `DISLIKED` | the user marked a movement "not this one" | `replace` with the first alternative |
+| `EXERCISE_SKIPPED` | a movement absent from the last 3 completed sessions | `replace` with the first alternative |
+
+"Has this been skipped twice in a fortnight?" is counting, and it is counted
+rather than asked of a model: the answer decides whether somebody is shown a
+proposal about their own failure, which is the one place in this product where a
+false positive is actively unkind.
+
+**At most one proposal per workout per fortnight**, and **nothing is changed**.
+The detector writes a `plan_change_proposals` row with `sourceKind: WORKOUT` and
+stops; the template changes when — and only when — the user calls
+`POST /proposals/{id}/accept` (PRD §15). `GET /proposals?sourceKind=WORKOUT`
+filters to them.
+
+Accepting runs the Health domain's own effect **inside E06's accept
+transaction**: the template's `targetMinutes`, the minutes on future `PLANNED`
+days, the swapped exercise on the full **and** short versions, and the
+re-pointing of `workout_templates.routine_id` at the routine on the version that
+was just activated. Without that last step the 1:1 link would still point at a
+routine on a superseded version, and the next run would target a routine nothing
+schedules.
+
+The daily sweep runs at 04:00 and can be stopped with
+`WORKOUT_ADAPTATION_CRON_DISABLED=true`. A failure for one user is logged and
+the loop continues.
+
 #### List, read, archive, delete
 
 ```http

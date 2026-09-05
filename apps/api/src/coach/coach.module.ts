@@ -14,6 +14,8 @@ import { MemoryInsightsService } from './memory/memory-insights.service';
 import { PatternAnalysisService } from './memory/pattern-analysis.service';
 import { ProposalsController } from './proposals/proposals.controller';
 import { ProposalsService } from './proposals/proposals.service';
+import { PROPOSAL_EFFECT } from './proposals/proposal-effects';
+import { WorkoutProposalEffect } from '../workouts/adaptation/workout-proposal-effects';
 import { SafetyModule } from './safety/safety.module';
 
 /**
@@ -39,6 +41,21 @@ import { SafetyModule } from './safety/safety.module';
     CoachConversationsService,
     CoachService,
     ProposalsService,
+    // The Health domain's half of accepting a workout proposal (issue #88).
+    // Registered HERE rather than in WorkoutsModule because the effect is
+    // consumed by ProposalsService: having WorkoutsModule provide it would put
+    // a module cycle between the two, for a class that needs nothing but the
+    // transaction it is handed.
+    //
+    // Nest has no multi-provider, so the token IS the array. A second domain
+    // effect is one more entry in this factory — which is a smaller change than
+    // the `case 'WORKOUT'` in `accept` that this exists to avoid.
+    WorkoutProposalEffect,
+    {
+      provide: PROPOSAL_EFFECT,
+      useFactory: (workout: WorkoutProposalEffect) => [workout],
+      inject: [WorkoutProposalEffect],
+    },
     MemoryInsightsService,
     PatternAnalysisService,
   ],
