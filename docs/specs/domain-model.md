@@ -335,5 +335,6 @@ Two changes need more than a migration:
 
 - [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) §6.3 — where this sits in the data architecture
 - [`docs/API.md`](../API.md) — the EvolvePath endpoints, request and response shapes
+- [`docs/specs/today-and-nba.md`](./today-and-nba.md) — the next-best-action engine, the commitment actions and the Start flow, all built on this model
 - [`docs/specs/settings-ui.md`](./settings-ui.md) — the navigation and settings rules the Path screen lives inside
 - `apps/api/prisma/schema.prisma` — the schema itself, with the same rationale in its header
