@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
+import type { SafetyDecision } from '../../coach/safety/safety.types';
+
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiKeyRedactor } from './ai-key-redactor';
 
@@ -59,6 +61,8 @@ export interface AiInvocationRecord {
   attachmentCount: number;
   input: unknown;
   output: unknown;
+  /** The safety decision that governed this call, when one was made (#82). */
+  safetyDecision?: SafetyDecision | null;
   /** Registered with the redactor so an echoed key cannot survive into the row. */
   secrets?: Array<string | null | undefined>;
 }
@@ -100,6 +104,12 @@ export class AiInvocationLogService {
           attachmentCount: record.attachmentCount,
           input: this.prepareJson(record.input, redactor),
           output: this.prepareJson(record.output, redactor),
+          // Not redacted or capped: a SafetyDecision is a closed shape of
+          // enums, a rule id and constant copy — there is no free text in it
+          // for a key to hide in, and the copy is ours.
+          safetyDecision: record.safetyDecision
+            ? (record.safetyDecision as unknown as Prisma.InputJsonValue)
+            : undefined,
         },
       });
     } catch (err) {
