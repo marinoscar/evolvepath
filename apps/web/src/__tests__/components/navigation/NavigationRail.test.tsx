@@ -51,6 +51,9 @@ function setPrefs(railCollapsed: boolean) {
 
 const ADMIN_PERMISSIONS = ['users:read', 'system_settings:read'];
 
+/** The five PRD §11 destinations, in navigation order. Console is pinned below. */
+const PRODUCT_ROWS = ['Today', 'Path', 'Coach', 'Progress', 'Profile'];
+
 describe('NavigationRail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -59,27 +62,30 @@ describe('NavigationRail', () => {
   });
 
   describe('Destinations', () => {
-    it('renders all three destinations for a fully permitted user', () => {
-      // THREE, not four: issue #92 merged `User Management` and `System
-      // Settings` into one `Console` row, because two rows both matching
-      // `/admin/*` give the rail two active candidates on every admin route.
+    it('renders the five product destinations plus Console, in order', () => {
+      // Unlike the bottom bar, the rail DOES carry Console — it has a foot to
+      // pin it to (#105). Order is asserted because DOM order is focus order.
       setPermissions(ADMIN_PERMISSIONS, true);
 
       render(<NavigationRail />, { wrapperOptions: { user: mockAdminUser } });
 
       const nav = screen.getByRole('navigation', { name: /main navigation/i });
-      expect(within(nav).getAllByRole('link')).toHaveLength(3);
-      expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'User Settings' })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'Console' })).toBeInTheDocument();
+      expect(
+        within(nav)
+          .getAllByRole('link')
+          .map((link) => link.getAttribute('aria-label')),
+      ).toEqual([...PRODUCT_ROWS, 'Console']);
     });
 
     it('hides Console from a user holding neither admin permission', () => {
       render(<NavigationRail />);
 
-      expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'User Settings' })).toBeInTheDocument();
-      expect(screen.queryByRole('link', { name: 'Console' })).not.toBeInTheDocument();
+      const nav = screen.getByRole('navigation', { name: /main navigation/i });
+      expect(
+        within(nav)
+          .getAllByRole('link')
+          .map((link) => link.getAttribute('aria-label')),
+      ).toEqual([...PRODUCT_ROWS]);
     });
 
     it('gates on PERMISSION, not on the admin role', () => {
@@ -113,8 +119,9 @@ describe('NavigationRail', () => {
 
       render(<NavigationRail />, { wrapperOptions: { user: mockAdminUser } });
 
-      expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/');
-      expect(screen.getByRole('link', { name: 'User Settings' })).toHaveAttribute(
+      expect(screen.getByRole('link', { name: 'Today' })).toHaveAttribute('href', '/');
+      expect(screen.getByRole('link', { name: 'Path' })).toHaveAttribute('href', '/path');
+      expect(screen.getByRole('link', { name: 'Profile' })).toHaveAttribute(
         'href',
         '/settings',
       );
@@ -128,10 +135,10 @@ describe('NavigationRail', () => {
       const user = userEvent.setup();
       render(<NavigationRail />, { wrapperOptions: { route: '/' } });
 
-      await user.click(screen.getByRole('link', { name: 'User Settings' }));
+      await user.click(screen.getByRole('link', { name: 'Path' }));
 
       await waitFor(() => {
-        expect(screen.getByRole('link', { name: 'User Settings' })).toHaveAttribute(
+        expect(screen.getByRole('link', { name: 'Path' })).toHaveAttribute(
           'aria-current',
           'page',
         );
@@ -143,11 +150,11 @@ describe('NavigationRail', () => {
     it('marks the active destination with aria-current="page"', () => {
       render(<NavigationRail />, { wrapperOptions: { route: '/settings' } });
 
-      expect(screen.getByRole('link', { name: 'User Settings' })).toHaveAttribute(
+      expect(screen.getByRole('link', { name: 'Profile' })).toHaveAttribute(
         'aria-current',
         'page',
       );
-      expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current');
+      expect(screen.getByRole('link', { name: 'Today' })).not.toHaveAttribute('aria-current');
     });
 
     it('marks exactly one row active on a nested admin route', () => {
@@ -185,22 +192,36 @@ describe('NavigationRail', () => {
   });
 
   describe('Two treatments', () => {
-    it('shows full labels as visible text at >= lg', () => {
+    // WHY THESE ASSERT ON *HOW* THE TEXT RENDERS, NOT ON *WHICH* TEXT.
+    //
+    // These tests used to tell the two tiers apart by the strings "User
+    // Settings" (expanded) and "Settings" (collapsed). Since #51 every product
+    // destination's `compactLabel` EQUALS its `label` — all five are 8
+    // characters or fewer — so no string distinguishes the tiers any more.
+    //
+    // The real, durable difference is structural: the expanded tier renders a
+    // `ListItemText`, and the collapsed tier renders an `aria-hidden` caption
+    // whose accessible name still comes from the row's `aria-label`. That is
+    // the property the rail actually promises, so that is what is asserted.
+    const isCollapsedCaption = (text: HTMLElement) =>
+      text.closest('[aria-hidden="true"]') !== null;
+
+    it('shows full labels in a visible ListItemText at >= lg', () => {
       render(<NavigationRail />);
 
-      expect(screen.getByText('User Settings')).toBeInTheDocument();
-      expect(screen.queryByText('Settings')).not.toBeInTheDocument();
+      const label = screen.getByText('Profile');
+      expect(isCollapsedCaption(label)).toBe(false);
+      expect(label.closest('.MuiListItemText-root')).not.toBeNull();
     });
 
-    it('shows compact captions below lg, with the full label still accessible', async () => {
+    it('shows an aria-hidden caption below lg, with the full label still accessible', async () => {
       render(<NavigationRail />);
 
       await act(async () => setViewportWidth(800));
 
-      // The caption is aria-hidden; the accessible name is still the full label,
-      // so the row is findable by it either way.
-      expect(screen.getByText('Settings')).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'User Settings' })).toBeInTheDocument();
+      expect(isCollapsedCaption(screen.getByText('Profile'))).toBe(true);
+      // The accessible name is unaffected, so the row stays findable by it.
+      expect(screen.getByRole('link', { name: 'Profile' })).toBeInTheDocument();
     });
 
     it('stays collapsed below lg even when the stored preference says expanded', async () => {
@@ -211,8 +232,7 @@ describe('NavigationRail', () => {
 
       await act(async () => setViewportWidth(800));
 
-      expect(screen.getByText('Settings')).toBeInTheDocument();
-      expect(screen.queryByText('User Settings')).not.toBeInTheDocument();
+      expect(isCollapsedCaption(screen.getByText('Profile'))).toBe(true);
     });
 
     it('honours the stored collapse preference at >= lg', () => {
@@ -220,8 +240,7 @@ describe('NavigationRail', () => {
 
       render(<NavigationRail />);
 
-      expect(screen.getByText('Settings')).toBeInTheDocument();
-      expect(screen.queryByText('User Settings')).not.toBeInTheDocument();
+      expect(isCollapsedCaption(screen.getByText('Profile'))).toBe(true);
     });
   });
 
@@ -275,6 +294,9 @@ describe('NavigationRail', () => {
 
       expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
         '/',
+        '/path',
+        '/coach',
+        '/progress',
         '/settings',
         '/admin/settings',
       ]);
@@ -477,10 +499,10 @@ describe('NavigationRail', () => {
   });
 
   describe('Pinned foot section (#105)', () => {
-    // Console is a MODE, not a third library destination, and its position at
+    // Console is a MODE, not a sixth product destination, and its position at
     // the rail's foot is what says so. The old inline render — Console folded
-    // into `visibleDestinations.map(...)` as the third row — put all three
-    // links in ONE <ul>, which a naive "all three links exist" assertion
+    // into `visibleDestinations.map(...)` as the last row — put every link in
+    // ONE <ul>, which a naive "all the links exist" assertion
     // cannot tell apart from the fix. Every test below asserts the STRUCTURE
     // (a separate list, preceded by its own divider) rather than mere
     // presence, so it fails against that inline render.
@@ -491,16 +513,16 @@ describe('NavigationRail', () => {
       return list as HTMLElement;
     }
 
-    it('renders Console in a different list than Home and Settings, preceded by a divider', () => {
+    it('renders Console in a different list than the product rows, preceded by a divider', () => {
       setPermissions(ADMIN_PERMISSIONS, true);
       render(<NavigationRail />, { wrapperOptions: { user: mockAdminUser } });
 
       const nav = screen.getByRole('navigation', { name: /main navigation/i });
-      const homeList = within(nav).getByRole('link', { name: 'Home' }).closest('ul');
+      const productList = within(nav).getByRole('link', { name: 'Today' }).closest('ul');
       const footList = pinnedList(nav);
 
-      expect(homeList).not.toBeNull();
-      expect(footList).not.toBe(homeList);
+      expect(productList).not.toBeNull();
+      expect(footList).not.toBe(productList);
       // A divider sits immediately above the foot list specifically — not
       // just somewhere on the page. The collapse toggle below the foot
       // section has its own divider too, so "a divider exists" alone would
@@ -518,6 +540,9 @@ describe('NavigationRail', () => {
 
       expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
         '/',
+        '/path',
+        '/coach',
+        '/progress',
         '/settings',
         '/admin/settings',
       ]);
@@ -530,10 +555,10 @@ describe('NavigationRail', () => {
       await act(async () => setViewportWidth(800));
 
       const nav = screen.getByRole('navigation', { name: /main navigation/i });
-      const homeList = within(nav).getByRole('link', { name: 'Home' }).closest('ul');
+      const productList = within(nav).getByRole('link', { name: 'Today' }).closest('ul');
       const footList = pinnedList(nav);
 
-      expect(footList).not.toBe(homeList);
+      expect(footList).not.toBe(productList);
       expect(footList.previousElementSibling?.tagName).toBe('HR');
     });
 
@@ -619,14 +644,14 @@ describe('NavigationRail', () => {
 
       // Queried by the row's accessible name (the full label) — the visible
       // caption is aria-hidden, so it cannot be found by accessible name.
-      const settingsRow = screen.getByRole('link', { name: 'User Settings' });
+      const profileRow = screen.getByRole('link', { name: 'Profile' });
       const consoleRow = screen.getByRole('link', { name: 'Console' });
 
-      expect(horizontalChrome(settingsRow)).toBeCloseTo(8, 5);
+      expect(horizontalChrome(profileRow)).toBeCloseTo(8, 5);
       expect(horizontalChrome(consoleRow)).toBeCloseTo(8, 5);
       // RAIL_WIDTH_COLLAPSED (56) minus that chrome is the 48px box the fix's
       // comment measures the captions against.
-      expect(RAIL_WIDTH_COLLAPSED - horizontalChrome(settingsRow)).toBe(48);
+      expect(RAIL_WIDTH_COLLAPSED - horizontalChrome(profileRow)).toBe(48);
     });
 
     it('renders the collapsed captions as full text content, not an abbreviation', async () => {
@@ -638,7 +663,11 @@ describe('NavigationRail', () => {
       // The caption is aria-hidden; query by literal text rather than by
       // accessible name, which stays the full label either way and would not
       // distinguish a full caption from a shortened one.
-      expect(screen.getByText('Settings')).toBeInTheDocument();
+      //
+      // "Progress" is the longest of the five product captions at 8
+      // characters, so it is the one that would be truncated first if the
+      // chrome regressed. "Console" is the widest overall.
+      expect(screen.getByText('Progress')).toBeInTheDocument();
       expect(screen.getByText('Console')).toBeInTheDocument();
     });
   });

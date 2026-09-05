@@ -47,6 +47,9 @@ describe('destinations — route ownership', () => {
     expect(paths).toEqual(
       expect.arrayContaining([
         '/',
+        '/path',
+        '/coach',
+        '/progress',
         '/settings',
         '/settings/ai-key',
         '/admin',
@@ -135,19 +138,30 @@ describe('destinations — segment-boundary matching', () => {
     expect(resolveActiveDestination('/admin/users-archive')).toBe('console');
   });
 
-  it('activates Home on / only, never on any other path', () => {
-    // Every path starts with '/', so without the exact-match rule Home would
+  it('activates Today on / only, never on any other path', () => {
+    // Every path starts with '/', so without the exact-match rule Today would
     // own the entire app and beat nothing only by prefix length.
-    expect(resolveActiveDestination('/')).toBe('home');
-    expect(resolveActiveDestination('/settings')).not.toBe('home');
-    expect(resolveActiveDestination('/admin/settings')).not.toBe('home');
+    expect(resolveActiveDestination('/')).toBe('today');
+    expect(resolveActiveDestination('/path')).not.toBe('today');
+    expect(resolveActiveDestination('/settings')).not.toBe('today');
+    expect(resolveActiveDestination('/admin/settings')).not.toBe('today');
     expect(owns('/', '/anything')).toBe(false);
   });
 
   it('activates a destination for its child routes', () => {
-    expect(resolveActiveDestination('/settings/profile')).toBe('settings');
+    // `/settings/*` highlights PROFILE: the destination is labelled Profile but
+    // keeps the settings hub route, so every existing settings URL still
+    // lights the right tab (#51).
+    expect(resolveActiveDestination('/settings/profile')).toBe('profile');
+    expect(resolveActiveDestination('/settings/tokens')).toBe('profile');
+    // The drill-down #56 adds, resolving through its parent prefix.
+    expect(resolveActiveDestination('/path/outcomes/abc')).toBe('path');
     expect(resolveActiveDestination('/admin/settings/users')).toBe('console');
     expect(resolveActiveDestination('/admin/settings/users/abc-123')).toBe('console');
+  });
+
+  it('leaves the AI-key gate unowned — it renders outside the shell', () => {
+    expect(resolveActiveDestination('/setup/ai-key')).toBeNull();
   });
 
   it('gives Console the whole /admin subtree, bare path included', () => {
@@ -177,15 +191,25 @@ describe('destinations — reachability regression', () => {
     }
   });
 
-  it('offers three destinations, with the two admin rows merged into Console', () => {
-    // NOT four any more (#92). `/admin/users` stops being a destination PATH
-    // while staying a resolvable route — it redirects to
-    // `/admin/settings/users`, and the assertion above is what proves the
-    // merge cost no reachability.
-    expect(DESTINATIONS.map((destination) => destination.path).sort()).toEqual([
+  it('offers the five product destinations plus Console, in PRD §11 order', () => {
+    // Order is asserted, not just membership: declaration order IS navigation
+    // order on every surface, and PRD §11 fixes it. Today first because VISION
+    // Part VII §27 calls it the most important screen.
+    expect(DESTINATIONS.map((destination) => destination.key)).toEqual([
+      'today',
+      'path',
+      'coach',
+      'progress',
+      'profile',
+      'console',
+    ]);
+    expect(DESTINATIONS.map((destination) => destination.path)).toEqual([
       '/',
-      '/admin/settings',
+      '/path',
+      '/coach',
+      '/progress',
       '/settings',
+      '/admin/settings',
     ]);
   });
 });
@@ -233,21 +257,23 @@ describe('destinations — the table itself', () => {
     expect(isDestinationVisible(both, holding(['users:write', 'users:read']))).toBe(true);
   });
 
-  it('leaves the non-admin destinations open to any authenticated user', () => {
-    const byKey = Object.fromEntries(DESTINATIONS.map((d) => [d.key, d]));
-    expect(byKey.home.permission).toBeUndefined();
-    expect(byKey.settings.permission).toBeUndefined();
+  it('leaves the five product destinations open to any authenticated user', () => {
+    // Console is the only permission-gated destination, and must stay so: the
+    // five product destinations are the app, and gating any of them would hide
+    // the product from the roles it is for.
+    for (const destination of DESTINATIONS.filter((d) => d.key !== 'console')) {
+      expect(destination.permission, `${destination.key} permission`).toBeUndefined();
+      expect(destination.anyPermission, `${destination.key} anyPermission`).toBeUndefined();
+    }
   });
 
-  it('marks Console pinned and leaves Home and Settings as ordinary list rows (#105)', () => {
-    // The rail's foot section is driven entirely by this flag — see
-    // `NavigationRail`'s `listDestinations`/`pinnedDestinations` split — so a
-    // console row that stops being flagged `pinned` silently falls back to
-    // rendering inline as a third library destination, with no other signal.
-    const byKey = Object.fromEntries(DESTINATIONS.map((d) => [d.key, d]));
-    expect(byKey.console.pinned).toBe(true);
-    expect(byKey.home.pinned).toBeFalsy();
-    expect(byKey.settings.pinned).toBeFalsy();
+  it('marks Console as the only pinned destination (#105, #51)', () => {
+    // Two surfaces read this flag and neither says `key === 'console'` in its
+    // render: the rail lifts pinned rows to its foot, and the bottom bar omits
+    // them entirely so the five-tab budget holds. A console row that stopped
+    // being flagged `pinned` would silently become a sixth bottom tab.
+    const pinned = DESTINATIONS.filter((d) => d.pinned).map((d) => d.key);
+    expect(pinned).toEqual(['console']);
   });
 
   it('declares Icon as a component, never as a rendered element', () => {
@@ -271,8 +297,13 @@ describe('destinations — the table itself', () => {
     }
   });
 
-  it('caps the destination set at four — the bottom bar ceiling', () => {
-    expect(DESTINATIONS.length).toBeLessThanOrEqual(4);
+  it('keeps the bottom bar at Material 3\'s five-destination ceiling', () => {
+    // The bar renders the UNPINNED destinations, and five labelled tabs is the
+    // most that fits a 360px viewport (see `BottomNav`'s header). Console is
+    // excluded by being pinned, which is why the total may exceed five.
+    const barDestinations = DESTINATIONS.filter((destination) => !destination.pinned);
+    expect(barDestinations).toHaveLength(5);
+    expect(barDestinations.length).toBeLessThanOrEqual(5);
   });
 });
 

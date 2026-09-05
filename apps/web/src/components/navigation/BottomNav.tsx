@@ -6,10 +6,21 @@
  * Material 3 acknowledges it has no recommended drawer replacement at this
  * size, which is why the answer is a bottom bar and nothing else.
  *
- * FOUR ACTIONS IS THE CEILING, and this app has exactly four destinations —
- * which is what lets `showLabels` stay on. Five labelled tabs do not fit at
- * 360px, so a fifth destination would force a choice between labels and the
- * tab; do not add one here without resolving that first.
+ * THREE TO FIVE DESTINATIONS, which is Material 3's range for a bottom bar,
+ * and this app has exactly five (PRD §11: Today, Path, Coach, Progress,
+ * Profile). That is the ceiling, not a coincidence: `showLabels` stays on, and
+ * a sixth tab would force a choice between labels and fit.
+ *
+ * PINNED DESTINATIONS ARE OMITTED, NOT PINNED (#51). Console is `pinned` in
+ * `config/destinations.ts` because the rail lifts it to its foot — but a
+ * bottom bar has no foot to pin to, it IS the foot, and Console as a sixth tab
+ * would break the five-tab budget for a surface an admin visits rarely from a
+ * phone. `UserMenu` still lists it, so it stays reachable.
+ *
+ * Five labelled tabs DO fit at 360px, but only with `minWidth: 0` on each
+ * action: MUI defaults `BottomNavigationAction` to `minWidth: 80`, and five of
+ * those is 400px of content in a 360px bar. `tests/visual/specs/bottom-nav.spec.ts`
+ * holds the pixel baseline that keeps this true.
  *
  * ACTIVE STATE COMES FROM THE DESTINATION MODEL, NOT A PATH PREFIX
  * (`config/destinations.ts`). The `startsWith` chain this replaces would have
@@ -45,8 +56,8 @@ export function BottomNav() {
 
   if (!isCompactWindow) return null;
 
-  const visibleDestinations = DESTINATIONS.filter((destination) =>
-    isDestinationVisible(destination, hasPermission),
+  const visibleDestinations = DESTINATIONS.filter(
+    (destination) => !destination.pinned && isDestinationVisible(destination, hasPermission),
   );
 
   const resolved = resolveActiveDestination(location.pathname);
@@ -84,9 +95,19 @@ export function BottomNav() {
           <BottomNavigationAction
             key={destination.key}
             value={destination.key}
-            // The COMPACT label: a 4-up bar at 360px gives each tab ~90px, and
-            // "User Management" does not fit in it. The full label is the
-            // accessible name, so nothing is lost to assistive technology.
+            // `minWidth: 0` overrides MUI's 80px default so five labelled
+            // actions fit a 360px bar; see the header. `px` keeps a little
+            // breathing room between them at that width.
+            sx={{ minWidth: 0, px: 0.5 }}
+            // SET EXPLICITLY. MUI's `selected` prop drives the visual state
+            // and the `Mui-selected` class, but emits no `aria-current` — so
+            // without this a screen-reader user gets five identical tabs with
+            // no indication of where they are. The rail sets it the same way.
+            aria-current={active === destination.key ? 'page' : undefined}
+            // The COMPACT label. All five product destinations are 8 characters
+            // or fewer, so it equals the full label today — the distinction is
+            // kept because the full label is the accessible name and the two
+            // may diverge again.
             label={destination.compactLabel}
             aria-label={destination.label}
             icon={<destination.Icon />}

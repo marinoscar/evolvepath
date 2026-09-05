@@ -17,7 +17,12 @@ import { LoadingSpinner } from './components/common/LoadingSpinner';
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'));
 const ActivateDevicePage = lazy(() => import('./pages/ActivateDevicePage'));
-const HomePage = lazy(() => import('./pages/HomePage'));
+// The five product destinations (PRD §11, #51). Today, Coach and Progress are
+// placeholders until E05, E06 and E11; Path is replaced wholesale by #56.
+const TodayPage = lazy(() => import('./pages/TodayPage'));
+const PathPage = lazy(() => import('./pages/PathPage'));
+const CoachPage = lazy(() => import('./pages/CoachPage'));
+const ProgressPage = lazy(() => import('./pages/ProgressPage'));
 // User settings — the hub (#96) plus one route per card in
 // `config/userSettingsSections.tsx` (#91, epic #90). These replace the single
 // stacked `UserSettingsPage`, which is deleted rather than left unrouted.
@@ -127,7 +132,10 @@ function AppRoutes() {
                     </NotificationProvider>
                   }
                 >
-                  <Route path="/" element={<HomePage />} />
+                  <Route path="/" element={<TodayPage />} />
+                  <Route path="/path" element={<PathPage />} />
+                  <Route path="/coach" element={<CoachPage />} />
+                  <Route path="/progress" element={<ProgressPage />} />
                   {/* The per-user settings surface (#96, epic #90) — the same
                       hub component `/admin/settings` renders, over
                       `USER_SETTINGS_SECTIONS`, plus one route per card.

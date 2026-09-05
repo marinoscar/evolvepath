@@ -278,6 +278,11 @@ This section states the rules; that file explains why.
    4. `SettingsHub.tsx`'s `isCompactWindow` (`down('sm')`)
    5. `AppBar.tsx`'s `isCompactWindow` (`down('sm')`)
 
+   Related but NOT a sixth gate: the bottom bar renders only the **unpinned**
+   destinations (#51), so Console never becomes a sixth tab. That is a
+   destination-model rule, not a breakpoint one — see
+   `docs/specs/settings-ui.md` §5a.
+
    The boundary is `sm` (600px), never `md` (900px) — gating at 900px hands
    the phone treatment to 600–899px tablets, foldables, and landscape
    phones. There is deliberately no shared constant binding these five: see
