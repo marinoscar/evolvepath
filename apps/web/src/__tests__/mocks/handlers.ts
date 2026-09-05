@@ -588,6 +588,41 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 });
   }),
 
+  // Coaching interactions and policy (#68, epic E12).
+  http.post(`${API_BASE}/notifications/interactions`, () => {
+    return HttpResponse.json({ data: { id: 'interaction-1', kind: 'OPENED' } }, { status: 201 });
+  }),
+
+  http.get(`${API_BASE}/me/notification-policy`, () => {
+    return HttpResponse.json({
+      data: {
+        timezone: 'America/Costa_Rica',
+        quietHours: null,
+        dailyCap: 4,
+        weeklyCap: 20,
+        perCommitmentMax: 2,
+        mutedCategories: [],
+        fatigue: { active: false, effectiveDailyCap: 4 },
+      },
+    });
+  }),
+
+  http.patch(`${API_BASE}/me/notification-policy`, async ({ request }) => {
+    const patch = (await request.json()) as Record<string, unknown>;
+    return HttpResponse.json({
+      data: {
+        timezone: 'America/Costa_Rica',
+        quietHours: null,
+        dailyCap: 4,
+        weeklyCap: 20,
+        perCommitmentMax: 2,
+        mutedCategories: [],
+        fatigue: { active: false, effectiveDailyCap: 4 },
+        ...patch,
+      },
+    });
+  }),
+
   // The EvolvePath product domain (#56, epic #33), in its own file: a stateful
   // store with the transition matrix enforced, rather than canned responses.
   ...pathHandlers,

@@ -36,6 +36,12 @@ import TodayPage from '../../pages/TodayPage';
 
 const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 
+/** A coaching decision id, for the `?n=` attribution (#68). */
+const N = '22222222-2222-4222-8222-222222222222';
+
+/** Every interaction the page posted during a test. */
+let interactions: Record<string, unknown>[] = [];
+
 function renderToday(route = '/', user = mockAdminUser) {
   return render(
     <Routes>
@@ -76,6 +82,19 @@ function seedThreeDomains() {
 }
 
 describe('TodayPage', () => {
+  beforeEach(() => {
+    interactions = [];
+    // Captured rather than mocked: the point is what the PAGE decides to post,
+    // and a handler that records the bodies asserts that directly.
+    server.use(
+      http.post('*/api/notifications/interactions', async ({ request }) => {
+        interactions.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json({ data: { id: 'i1' } }, { status: 201 });
+      }),
+      ...todayWriteHandlers,
+    );
+  });
+
   it('renders the greeting, the state line and the recommendation', async () => {
     seedThreeDomains();
     renderToday();
@@ -247,6 +266,117 @@ describe('TodayPage', () => {
       renderToday('/?commitment=work-1&action=skip');
 
       expect(await screen.findByRole('dialog')).toHaveTextContent(/Skip/);
+    });
+
+    // =========================================================================
+    // The coaching vocabulary (#68, epic E12)
+    // =========================================================================
+    //
+    // These action names are the NOTIFICATION's (PRD §63), not the commitment
+    // menu's, and the two deliberately do not match one-to-one — translating at
+    // the boundary keeps "Move it" in the copy and "Reschedule" in the menu.
+
+    it('turns ?action=in into the PLANNED → READY transition', async () => {
+      seedCommitments(
+        makeCard({
+          id: 'family-1',
+          domain: 'FAMILY',
+          title: 'Phone-free dinner',
+          status: 'PLANNED',
+        }),
+      );
+      renderToday(`/?commitment=family-1&action=in&n=${N}`);
+
+      await waitFor(() =>
+        expect(
+          getTodayState().commitments.find((row) => row.id === 'family-1')?.status,
+        ).toBe('READY'),
+      );
+    });
+
+    it('turns ?action=move into the reschedule dialog', async () => {
+      seedCommitments(makeCard({ id: 'work-1', domain: 'WORK', title: 'Draft it' }));
+      renderToday(`/?commitment=work-1&action=move&n=${N}`);
+
+      expect(await screen.findByRole('dialog')).toHaveTextContent(/Move|Reschedule/i);
+    });
+
+    it('turns ?action=short into a fallback and then the Start screen', async () => {
+      seedCommitments(makeCard({ id: 'work-1', domain: 'WORK', title: 'Draft it' }));
+      renderToday(`/?commitment=work-1&action=short&n=${N}`);
+
+      await waitFor(() =>
+        expect(
+          getTodayState().commitments.find((row) => row.id === 'work-1')?.versionUsed,
+        ).toBe('SHORT'),
+      );
+      expect(await screen.findByTestId('start-screen')).toBeInTheDocument();
+    });
+
+    it('turns ?action=skip into the skip dialog', async () => {
+      seedCommitments(makeCard({ id: 'work-1', domain: 'WORK', title: 'Draft it' }));
+      renderToday(`/?commitment=work-1&action=skip&n=${N}`);
+
+      expect(await screen.findByRole('dialog')).toHaveTextContent(/Skip/);
+    });
+
+    describe('attribution', () => {
+      it('records an open as soon as the link is followed', async () => {
+        seedCommitments(makeCard({ id: 'work-1', domain: 'WORK', title: 'Draft it' }));
+        renderToday(`/?commitment=work-1&action=skip&n=${N}`);
+
+        await waitFor(() =>
+          expect(interactions).toContainEqual({ sentInteractionId: N, kind: 'OPENED' }),
+        );
+      });
+
+      it('records the action once an immediate one has actually happened', async () => {
+        seedCommitments(
+          makeCard({ id: 'family-1', domain: 'FAMILY', title: 'Dinner', status: 'PLANNED' }),
+        );
+        renderToday(`/?commitment=family-1&action=in&n=${N}`);
+
+        await waitFor(() =>
+          expect(interactions).toContainEqual({
+            sentInteractionId: N,
+            kind: 'ACTIONED',
+            action: 'in',
+          }),
+        );
+      });
+
+      // The user has not moved or skipped anything until they confirm, and
+      // recording at open time would count every dialog somebody closed again
+      // as an action taken.
+      it('does not record an action merely for opening a dialog', async () => {
+        seedCommitments(makeCard({ id: 'work-1', domain: 'WORK', title: 'Draft it' }));
+        renderToday(`/?commitment=work-1&action=skip&n=${N}`);
+
+        await screen.findByRole('dialog');
+
+        expect(interactions.some((row) => row.kind === 'ACTIONED')).toBe(false);
+      });
+
+      it('records nothing when the link carries no attribution', async () => {
+        seedCommitments(makeCard({ id: 'work-1', domain: 'WORK', title: 'Draft it' }));
+        renderToday('/?commitment=work-1&action=skip');
+
+        await screen.findByRole('dialog');
+
+        expect(interactions).toHaveLength(0);
+      });
+
+      // Otherwise a back navigation re-fires the same dialog and records a
+      // second open for one message.
+      it('strips the attribution params after handling them', async () => {
+        seedCommitments(makeCard({ id: 'work-1', domain: 'WORK', title: 'Draft it' }));
+        renderToday(`/?commitment=work-1&action=skip&n=${N}`);
+
+        await screen.findByRole('dialog');
+
+        expect(window.location.search).not.toContain('n=');
+        expect(window.location.search).not.toContain('commitment=');
+      });
     });
   });
 

@@ -271,6 +271,44 @@ export type NotificationPreferencesPatch = Partial<
  */
 export type NotificationActionKey = 'start' | 'in' | 'move' | 'short' | 'skip';
 
+/** What a recorded interaction says happened (#68, epic E12). */
+export type NotificationInteractionKind = 'OPENED' | 'ACTIONED' | 'DISMISSED';
+
+export interface NotificationInteractionInput {
+  /** The `?n=` a deep link carries. */
+  sentInteractionId?: string;
+  /** The inbox row id, which the bell has instead. */
+  notificationId?: string;
+  kind: NotificationInteractionKind;
+  /** Required when `kind` is `ACTIONED`, meaningless otherwise. */
+  action?: NotificationActionKey;
+}
+
+/**
+ * The coaching policy, as `/settings/notifications` renders it (#68).
+ *
+ * `fatigue` is REPORTED, not settable: it is the automatic reduction of PRD §61,
+ * and the page shows it so a lower-than-configured cap reads as a deliberate
+ * behaviour rather than as a bug.
+ */
+export interface NotificationPolicy {
+  timezone: string;
+  quietHours: { start: string; end: string } | null;
+  dailyCap: number;
+  weeklyCap: number;
+  perCommitmentMax: number;
+  mutedCategories: string[];
+  fatigue: { active: boolean; effectiveDailyCap: number };
+}
+
+export interface NotificationPolicyPatch {
+  quietHours?: { start: string; end: string } | null;
+  dailyCap?: number;
+  weeklyCap?: number;
+  perCommitmentMax?: number;
+  mutedCategories?: string[];
+}
+
 export interface NotificationAction {
   action: NotificationActionKey;
   /** PRD §63's vocabulary, rendered verbatim: "I'm in", "Skip today". */

@@ -263,6 +263,9 @@ export const api = new ApiService();
 
 // Import types
 import type {
+  NotificationInteractionInput,
+  NotificationPolicy,
+  NotificationPolicyPatch,
   PushSubscriptionSummary,
   FamilyMember,
   FamilyMemberInput,
@@ -775,6 +778,34 @@ export async function deletePushSubscription(endpoint: string): Promise<void> {
     body: JSON.stringify({ endpoint }),
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+// -----------------------------------------------------------------------------
+// Coaching interactions and policy (#68, epic E12)
+// -----------------------------------------------------------------------------
+
+/**
+ * Record what the user did with a notification.
+ *
+ * CALLERS DO NOT AWAIT THIS before navigating. A metric must never be able to
+ * delay or block the action it is measuring, so every call site fires it and
+ * moves on; the failure is a console warning and one missing row.
+ */
+export async function recordNotificationInteraction(
+  body: NotificationInteractionInput,
+): Promise<{ id: string }> {
+  return api.post<{ id: string }>('/notifications/interactions', body);
+}
+
+export async function getNotificationPolicy(): Promise<NotificationPolicy> {
+  return api.get<NotificationPolicy>('/me/notification-policy');
+}
+
+/** A merge patch: an absent field is left alone, `quietHours: null` clears. */
+export async function updateNotificationPolicy(
+  patch: NotificationPolicyPatch,
+): Promise<NotificationPolicy> {
+  return api.patch<NotificationPolicy>('/me/notification-policy', patch);
 }
 
 /** Re-exported for consumers that only import from this module. */

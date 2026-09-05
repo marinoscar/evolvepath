@@ -1,9 +1,38 @@
-import { Body, Controller, HttpCode, HttpStatus, Ip, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Ip,
+  NotFoundException,
+  Post,
+} from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
+import { Auth } from '../../auth/decorators/auth.decorator';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { Public } from '../../auth/decorators/public.decorator';
 import { DismissInteractionDto } from './dto/dismiss-interaction.dto';
+import {
+  RecordInteractionDto,
+  RecordInteractionResponseDto,
+  type RecordInteractionResponse,
+} from './dto/record-interaction.dto';
 import { NotificationInteractionsService } from './notification-interactions.service';
+
+/**
+ * The client's lowercase action names, mapped to the enum the column stores.
+ *
+ * Two spellings on purpose: a URL reads `action=start`, and a Postgres enum
+ * reads `START`. Neither should have to become the other's convention.
+ */
+const ACTION_KINDS = {
+  start: 'START',
+  in: 'IN',
+  move: 'MOVE',
+  short: 'SHORT',
+  skip: 'SKIP',
+} as const;
 
 /** Dismissals per minute, per address. Generous: a real device sends a handful. */
 const DISMISS_LIMIT_PER_MINUTE = 30;
@@ -32,6 +61,52 @@ export class NotificationInteractionsController {
   private readonly dismissHits = new Map<string, number[]>();
 
   constructor(private readonly interactions: NotificationInteractionsService) {}
+
+  /**
+   * What the user did with a notification (issue #68).
+   *
+   * FIRE AND FORGET FROM THE CLIENT'S POINT OF VIEW: the bell and the deep-link
+   * handlers post this and navigate without waiting, because a metric must never
+   * be able to delay or block the action it is measuring. That is why the
+   * response is small and why every failure mode here is a status code rather
+   * than something the client has to handle.
+   */
+  @Post()
+  @Auth()
+  @ApiOperation({
+    summary: 'Record that a notification was opened, acted on or dismissed',
+    description:
+      'Name the message either by its inbox row (`notificationId`, which the bell has) or ' +
+      'by the `?n=` a deep link carries (`sentInteractionId`). `action` is required for ' +
+      '`ACTIONED` — "they did something" with no record of what cannot answer the only ' +
+      'question the row exists for. A second `OPENED` for the same message returns the ' +
+      'first: opening twice is one open, and counting re-reads would measure how often ' +
+      'somebody revisits their inbox.',
+  })
+  @ApiResponse({ status: 201, type: RecordInteractionResponseDto })
+  @ApiResponse({ status: 404, description: 'No such notification for this user' })
+  async record(
+    @CurrentUser('id') userId: string,
+    @Body() body: RecordInteractionDto,
+  ): Promise<RecordInteractionResponse> {
+    const recorded = await this.interactions.recordResponse({
+      userId,
+      kind: body.kind,
+      sentInteractionId: body.sentInteractionId ?? null,
+      notificationId: body.notificationId ?? null,
+      action: body.action ? ACTION_KINDS[body.action] : null,
+    });
+
+    // 404, never 403 — the same rule the rest of the product follows, and the
+    // same answer an id that never existed gets.
+    if (!recorded) throw new NotFoundException('Notification not found');
+
+    return {
+      id: recorded.id,
+      sentInteractionId: body.sentInteractionId ?? null,
+      kind: body.kind,
+    };
+  }
 
   /**
    * ALWAYS 204, including for an id that does not exist. A different answer for

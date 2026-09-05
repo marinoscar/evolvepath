@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -19,6 +19,7 @@ import {
   createCommitment,
   getOutcomes,
   postDayReflection,
+  recordNotificationInteraction,
   transitionCommitment,
   updateCommitment,
 } from '../services/api';
@@ -27,8 +28,13 @@ import type {
   CommitmentCard,
   DecompositionProposal,
   NextBestAction,
+  NotificationActionKey,
   Outcome,
 } from '../types';
+import {
+  parseSentInteractionId,
+  stripAttributionParams,
+} from '../utils/notificationLinks';
 import type { CommitmentFormValues } from '../utils/commitmentForm.schema';
 import { toCommitmentInput } from '../utils/commitmentForm.schema';
 import { CheckInChips } from '../components/today/CheckInChips';
@@ -207,20 +213,134 @@ export default function TodayPage() {
     [actions, navigate, openDialogFor, refresh, runDecomposition],
   );
 
+  /**
+   * Record an interaction without waiting for it (#68).
+   *
+   * Never awaited by any caller: a metric must not be able to delay or block the
+   * action it is measuring. A failure costs one row.
+   */
+  const recordInteraction = useCallback(
+    (sentInteractionId: string, input: { kind: 'OPENED' | 'ACTIONED'; action?: NotificationActionKey }) => {
+      void recordNotificationInteraction({ sentInteractionId, ...input }).catch(() => {
+        console.warn('Could not record a notification interaction');
+      });
+    },
+    [],
+  );
+
+  /**
+   * Perform one notification action on a commitment.
+   *
+   * The two immediate ones (`in`, `short`) record ACTIONED here, because they
+   * are complete when they return. The two that open a dialog (`move`, `skip`)
+   * do NOT: the user has not moved or skipped anything until they confirm, and
+   * recording at open time would count every dialog somebody closed again as an
+   * action taken.
+   */
+  const runDeepLinkAction = useCallback(
+    async (
+      action: string | null,
+      commitment: CommitmentCard,
+      sentInteractionId: string | null,
+    ) => {
+      const acted = (name: NotificationActionKey) => {
+        if (sentInteractionId) recordInteraction(sentInteractionId, { kind: 'ACTIONED', action: name });
+      };
+
+      switch (action) {
+        case 'in':
+          await handleAction('ready', commitment);
+          acted('in');
+          return;
+
+        case 'short': {
+          // The size the notification offered, and the Start screen right
+          // after — the whole point of the button is fewer steps, and a
+          // fallback that left the user back on Today would have added one.
+          const version = commitment.versions.short ? 'short' : 'minimum';
+          await actions.fallback(commitment.id, version).catch(() => undefined);
+          acted('short');
+          navigate(`/start/${commitment.id}`);
+          return;
+        }
+
+        case 'move':
+          void handleAction('reschedule', commitment);
+          return;
+
+        case 'skip':
+          void handleAction('skip', commitment);
+          return;
+
+        default:
+          // Includes the E05-04 names (`complete`, `fallback`, `reschedule`,
+          // `skip`) that predate this vocabulary and still work.
+          if (action && ['complete', 'fallback', 'skip', 'reschedule'].includes(action)) {
+            void handleAction(action as CommitmentActionName, commitment);
+          }
+      }
+    },
+    [actions, handleAction, navigate, recordInteraction],
+  );
+
   // ---------------------------------------------------------------------------
-  // Deep links from E12's notifications: /?commitment=<id>&action=start
+  // Deep links from the coaching notifications (#46, extended by #68)
   // ---------------------------------------------------------------------------
+  //
+  // `/today?commitment=<id>&action=<name>&n=<sentInteractionId>`.
+  //
+  // The `action` names here are the NOTIFICATION's vocabulary (PRD §63), not the
+  // commitment menu's, and the two deliberately do not match one-to-one:
+  //
+  //   in     -> the PLANNED -> READY transition ("I'm in", E08)
+  //   move   -> the reschedule dialog
+  //   short  -> the fallback endpoint, then the Start screen
+  //   skip   -> the skip dialog
+  //
+  // Translating at the boundary rather than renaming either side keeps the
+  // notification copy free to say "Move it" while the menu keeps saying
+  // "Reschedule", and keeps the API's action names out of user-facing URLs.
+  //
+  // `n` is the attribution. OPENED is recorded as soon as the link is followed —
+  // the user has demonstrably seen the message — and ACTIONED only once the
+  // action is actually performed, which for a dialog means when it is
+  // confirmed, not when it opens.
+  //
+  // HANDLED EXACTLY ONCE per link, guarded by a ref. Without the guard the
+  // effect re-runs whenever its callback dependencies change identity, and the
+  // consequences are not subtle: a second OPENED for one message, and — for an
+  // action that navigates away — a `setSearchParams` firing after the
+  // navigation and replacing the destination URL, yanking the user straight
+  // back to Today.
+  const handledLink = useRef<string | null>(null);
+
   useEffect(() => {
     const commitmentId = searchParams.get('commitment');
     const action = searchParams.get('action');
+    const sentInteractionId = parseSentInteractionId(`?${searchParams.toString()}`);
     if (!commitmentId || !today) return;
+
+    const linkKey = `${commitmentId}|${action ?? ''}|${sentInteractionId ?? ''}`;
+    if (handledLink.current === linkKey) return;
+    handledLink.current = linkKey;
 
     // Params are stripped BEFORE acting, so a back navigation returns to a
     // clean `/` rather than re-firing the same dialog.
-    setSearchParams({}, { replace: true });
+    setSearchParams(stripAttributionParams(searchParams), { replace: true });
+
+    // Following the link IS the open, whatever happens next — including the
+    // case where the commitment has since gone.
+    if (sentInteractionId) recordInteraction(sentInteractionId, { kind: 'OPENED' });
 
     if (action === 'start') {
-      navigate(`/start/${commitmentId}`, { replace: true });
+      // The Start screen reads `?n=` itself and records the ACTIONED when the
+      // timer actually begins, which is the honest moment for a start.
+      navigate(
+        sentInteractionId
+          ? `/start/${commitmentId}?n=${sentInteractionId}`
+          : `/start/${commitmentId}`,
+        { replace: true },
+      );
       return;
     }
 
@@ -230,10 +350,16 @@ export default function TodayPage() {
       return;
     }
 
-    if (action && ['complete', 'fallback', 'skip', 'reschedule'].includes(action)) {
-      void handleAction(action as CommitmentActionName, commitment);
-    }
-  }, [searchParams, today, allCommitments, navigate, setSearchParams, handleAction]);
+    void runDeepLinkAction(action, commitment, sentInteractionId);
+  }, [
+    searchParams,
+    today,
+    allCommitments,
+    navigate,
+    setSearchParams,
+    runDeepLinkAction,
+    recordInteraction,
+  ]);
 
   const submitQuickAdd = useCallback(
     async (values: CommitmentFormValues) => {

@@ -434,17 +434,39 @@ read the clock aloud continuously — the thing a silent timer exists to avoid
 
 ## 12. The deep-link contract (for E12)
 
-`/?commitment=<uuid>&action=<verb>`:
+`/?commitment=<uuid>&action=<verb>&n=<uuid>`, also reachable as
+`/today?…` — the same route element, not a redirect (E12-02), because a
+notification link that reads `/?commitment=…` is one nobody can sanity check by
+looking at it.
 
 | `action` | Effect |
 |---|---|
-| `start` | navigates to `/start/<id>` |
-| `complete`, `fallback`, `skip`, `reschedule` | opens that dialog on the matching row |
+| `start` | navigates to `/start/<id>`, carrying `?n=` on |
+| `in` | the `PLANNED → READY` transition ("I'm in", E08) |
+| `short` | the fallback endpoint, then `/start/<id>` |
+| `move` | opens the reschedule dialog |
+| `skip` | opens the skip dialog |
+| `complete`, `fallback`, `skip`, `reschedule` | the original E05-04 names; opens that dialog |
 | anything else | ignored |
 | an id not on today's board | a message: "That commitment is no longer on today's path" |
 
+The `in`/`move`/`short`/`skip` names are the **notification's** vocabulary (PRD
+§63), translated here rather than renamed on either side — the copy stays free to
+say "Move it" while the menu keeps saying "Reschedule", and the API's action
+names stay out of user-facing URLs.
+
+`n` is the coaching attribution: the id of the decision that produced the
+notification. Following the link records an `OPENED`; an action that completes
+immediately (`in`, `short`) records an `ACTIONED`, while one that opens a dialog
+records nothing until the dialog is confirmed — the user has not moved or skipped
+anything yet. Full contract in
+[`coaching-notifications.md`](coaching-notifications.md) §7b.
+
 **The params are stripped with `replace: true` before the action runs**, so a back
-navigation returns to a clean `/` rather than re-firing the same dialog.
+navigation returns to a clean `/` rather than re-firing the same dialog. The
+effect is additionally guarded by a ref keyed on `(commitment, action, n)`:
+without it, a re-run's `setSearchParams` can fire *after* a navigation and
+replace the destination URL, yanking the user back to Today.
 
 ---
 
