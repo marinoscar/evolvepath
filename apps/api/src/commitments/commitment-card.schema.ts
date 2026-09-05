@@ -82,3 +82,16 @@ export const commitmentCardSchema = z.object({
 });
 
 export type CommitmentCard = z.infer<typeof commitmentCardSchema>;
+
+/**
+ * The card plus the one thing an execution screen needs that is not on it: WHY.
+ *
+ * PRD §27 puts "why it matters" on the Start screen deliberately — a timer with
+ * no reason attached is a stopwatch. The motivation lives on the outcome, so it
+ * is joined here rather than denormalised onto every commitment.
+ */
+export const startContextSchema = commitmentCardSchema.extend({
+  whyItMatters: z.string().nullable(),
+});
+
+export type StartContext = z.infer<typeof startContextSchema>;

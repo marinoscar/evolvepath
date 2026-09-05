@@ -120,6 +120,62 @@ describe('Commitment actions (integration)', () => {
     runTransaction();
   });
 
+  describe('GET /api/commitments/:id/actions', () => {
+    it('returns the card with the outcome’s motivation joined', async () => {
+      context.prismaMock.commitment.findFirst.mockResolvedValue({
+        ...commitment(),
+        outcome: { motivation: 'Free my evenings', successDefinition: null },
+      });
+
+      const res = await request(context.app.getHttpServer())
+        .get(`/api/commitments/${id}/actions`)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(commitmentCardSchema.safeParse(res.body.data).success).toBe(true);
+      expect(res.body.data.whyItMatters).toBe('Free my evenings');
+    });
+
+    // The definition of done is still the user's own statement of what this is
+    // for, so it is a usable answer when no motivation was written.
+    it('falls back to the definition of done', async () => {
+      context.prismaMock.commitment.findFirst.mockResolvedValue({
+        ...commitment(),
+        outcome: { motivation: null, successDefinition: 'The proposal is sent' },
+      });
+
+      const res = await request(context.app.getHttpServer())
+        .get(`/api/commitments/${id}/actions`)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(res.body.data.whyItMatters).toBe('The proposal is sent');
+    });
+
+    it('is null for a commitment that serves no outcome', async () => {
+      context.prismaMock.commitment.findFirst.mockResolvedValue({
+        ...commitment(),
+        outcome: null,
+      });
+
+      const res = await request(context.app.getHttpServer())
+        .get(`/api/commitments/${id}/actions`)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(res.body.data.whyItMatters).toBeNull();
+    });
+
+    it('answers 404 for another user’s commitment', async () => {
+      context.prismaMock.commitment.findFirst.mockResolvedValue(null);
+
+      await request(context.app.getHttpServer())
+        .get(`/api/commitments/${id}/actions`)
+        .set(authHeader(user.accessToken))
+        .expect(404);
+    });
+  });
+
   describe('start → complete', () => {
     it('returns a card that satisfies the published schema', async () => {
       context.prismaMock.commitment.findFirst.mockResolvedValue(commitment());

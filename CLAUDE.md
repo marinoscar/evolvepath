@@ -509,9 +509,10 @@ request on boot. Reading `onboarding` never creates a `user_profiles` row.
 ### Commitment actions
 Ten intent-named routes over the same matrix. Each returns a **commitment card**
 (the shape `GET /today` uses) and answers 404, never 403, for a foreign id.
+- `GET /api/commitments/{id}/actions` - The card an execution screen reads, plus `whyItMatters`
 - `POST /api/commitments/{id}/actions/start` - Timer on; `APP_FLOW started`. Resumes a paused row; pauses any other running timer
 - `POST /api/commitments/{id}/actions/pause` - Banks the seconds; status stays STARTED (paused is `activeSince: null`)
-- `POST /api/commitments/{id}/actions/continue` - Timer back on; `extraMinutes` extends the target
+- `POST /api/commitments/{id}/actions/continue` - Timer back on; `extraMinutes` extends the target. Accepted while still running ("Continue another 15?"), keeping the anchor
 - `POST /api/commitments/{id}/actions/complete` - Legal without a start; `minutesSpent` defaults to the timer
 - `POST /api/commitments/{id}/actions/partial` - Same, to PARTIALLY_COMPLETED
 - `POST /api/commitments/{id}/actions/fallback` - Which size is being attempted; no status change; 400 `VERSION_NOT_DEFINED`

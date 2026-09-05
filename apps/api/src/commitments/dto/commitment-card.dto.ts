@@ -158,3 +158,14 @@ export class DecompositionProposalDto {
   })
   source!: string;
 }
+
+export class StartContextDto extends CommitmentCardDto {
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      "The outcome's motivation, in the user's own words. Null when the commitment serves no " +
+      'outcome or the outcome states no motivation.',
+  })
+  whyItMatters!: string | null;
+}

@@ -20,6 +20,7 @@ const ActivateDevicePage = lazy(() => import('./pages/ActivateDevicePage'));
 // The five product destinations (PRD §11, #51). Today, Coach and Progress are
 // placeholders until E05, E06 and E11; Path is replaced wholesale by #56.
 const TodayPage = lazy(() => import('./pages/TodayPage'));
+const StartFlowPage = lazy(() => import('./pages/StartFlowPage'));
 const PathPage = lazy(() => import('./pages/PathPage'));
 // The outcome drill-down (#56). Its own route at every width — see the page's
 // header for why a master/detail split above `sm` was rejected.
@@ -128,6 +129,16 @@ function AppRoutes() {
                   signed in?" question and the "do they have a key?" question
                   stay one component each. */}
               <Route element={<RequireAiKey />}>
+                {/* The Start flow (#48, epic E05). INSIDE the gate — a session
+                    can end with "Make it smaller", which is a coach call — but
+                    OUTSIDE `Layout`, like `/activate` above. PRD §11 lets an
+                    execution screen replace the navigation, and this is the one
+                    screen where every other affordance is a way out of the thing
+                    the user just committed to. `'/start'` is in
+                    `UNOWNED_ROUTES` for the same reason: there is no rail or
+                    bottom bar on it to highlight. */}
+                <Route path="/start/:commitmentId" element={<StartFlowPage />} />
+
                 <Route
                   element={
                     <NotificationProvider>

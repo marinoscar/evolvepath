@@ -50,6 +50,8 @@ interface TodayState {
   /** Set to make the coach unavailable, so `decompose` answers a template. */
   coachDown: boolean;
   dateLocal: string;
+  /** What the Start screen shows under the title. */
+  whyItMatters: string | null;
   sequence: number;
 }
 
@@ -69,6 +71,7 @@ function emptyState(): TodayState {
     insightFails: false,
     coachDown: false,
     dateLocal: '2026-03-02',
+    whyItMatters: 'Free my evenings',
     sequence: 0,
   };
 }
@@ -287,6 +290,14 @@ const ok = <T,>(data: T) => HttpResponse.json({ data });
 export const todayHandlers = [
   http.get(`${API_BASE}/today`, () => ok(buildToday())),
 
+  // The Start screen's read: the card plus why it matters (#48).
+  http.get(`${API_BASE}/commitments/:id/actions`, ({ params }) => {
+    const card = find(String(params.id));
+    if (!card) return HttpResponse.json({ message: 'Not found' }, { status: 404 });
+
+    return ok({ ...card, whyItMatters: state.whyItMatters });
+  }),
+
   http.get(`${API_BASE}/today/insight`, () => {
     // A transport failure, not a coach failure — the endpoint itself never
     // returns non-200 for an unavailable model. The page must survive it.
@@ -359,11 +370,13 @@ export const todayHandlers = [
     );
   }),
 
+  // Accepted while still running, like the API: "Continue another 15?" fires on
+  // a session that has passed its target but never paused.
   http.post(`${API_BASE}/commitments/:id/actions/continue`, async ({ params, request }) => {
     const card = find(String(params.id));
     if (!card) return HttpResponse.json({ message: 'Not found' }, { status: 404 });
-    if (card.status !== 'STARTED' || card.timer?.activeSince) {
-      return conflict('Cannot continue a commitment that is not paused');
+    if (card.status !== 'STARTED') {
+      return conflict(`Cannot continue a ${card.status} commitment`);
     }
 
     const body = (await request.json().catch(() => ({}))) as { extraMinutes?: number | null };
@@ -375,7 +388,8 @@ export const todayHandlers = [
       replace({
         ...card,
         timer: {
-          activeSince: new Date().toISOString(),
+          // Already running: keep the anchor, or no accumulated time survives.
+          activeSince: card.timer?.activeSince ?? new Date().toISOString(),
           activeSeconds: card.timer?.activeSeconds ?? 0,
           elapsedSeconds: card.timer?.elapsedSeconds ?? 0,
           timerMinutes,

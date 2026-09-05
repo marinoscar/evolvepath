@@ -9,7 +9,7 @@ import { Prisma, type Commitment, type CommitmentStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { findOwnedOrThrow } from '../../path/owned-resource';
 import { availableActionsFor, type CommitmentAction } from '../commitment-actions';
-import type { CommitmentCard } from '../commitment-card.schema';
+import type { CommitmentCard, StartContext } from '../commitment-card.schema';
 import { toCommitmentCard, versionsOf } from '../commitment-card.mapper';
 import { CommitmentsService } from '../commitments.service';
 import {
@@ -62,6 +62,36 @@ export class CommitmentActionsService {
     private readonly commitments: CommitmentsService,
     private readonly decomposition: DecompositionService,
   ) {}
+
+  // ---------------------------------------------------------------------------
+  // Reading
+  // ---------------------------------------------------------------------------
+
+  /**
+   * The card an execution screen renders, with the outcome's motivation joined.
+   *
+   * Deliberately NOT `CommitmentsService.get`: that returns the record — every
+   * column, plus evidence and reflections — and a Start screen that read one
+   * shape and then received another from every action it fires would drift from
+   * the API one field at a time.
+   */
+  async getCard(userId: string, id: string): Promise<StartContext> {
+    const row = await findOwnedOrThrow(
+      () =>
+        this.prisma.commitment.findFirst({
+          where: { id, userId },
+          include: { outcome: { select: { motivation: true, successDefinition: true } } },
+        }),
+      'Commitment',
+    );
+
+    return {
+      ...toCommitmentCard(row),
+      // The definition of done is a usable answer to "why" when no motivation
+      // was written — it is still the user's own statement of what this is for.
+      whyItMatters: row.outcome?.motivation ?? row.outcome?.successDefinition ?? null,
+    };
+  }
 
   // ---------------------------------------------------------------------------
   // Timer
@@ -171,14 +201,32 @@ export class CommitmentActionsService {
     return toCommitmentCard(row, now);
   }
 
-  /** Restart the clock, optionally extending the target ("another 15?"). */
+  /**
+   * Restart the clock, optionally extending the target ("Continue another 15?").
+   *
+   * ACCEPTED WHILE THE TIMER IS STILL RUNNING, which is the one place this
+   * deviates from `availableActionsFor`. A session that has passed its target is
+   * still `STARTED` with `activeSince` set, and that is exactly when the Start
+   * screen offers "another 15" — refusing it would leave the user's only way to
+   * keep going a pause followed by a continue, which writes a `paused` evidence
+   * row for a pause that never happened (PRD §10.9).
+   *
+   * When it is already running, `activeSince` is left alone so no accumulated
+   * time is lost; only the target moves.
+   */
   async continue(
     userId: string,
     id: string,
     dto: ContinueActionDto,
   ): Promise<CommitmentCard> {
     const existing = await this.findOwned(userId, id);
-    this.assertAction(existing, 'continue');
+
+    if (existing.status !== 'STARTED') {
+      throw new ConflictException({
+        message: `Cannot continue a ${existing.status} commitment`,
+        details: { reason: 'INVALID_TRANSITION', status: existing.status, action: 'continue' },
+      });
+    }
 
     return this.resume(userId, existing, dto.extraMinutes ?? null, new Date(), 'commitment:continue');
   }
@@ -513,7 +561,11 @@ export class CommitmentActionsService {
 
       const updated = await tx.commitment.update({
         where: { id: existing.id },
-        data: { activeSince: now, timerMinutes },
+        // Already running: move the target, keep the clock. Re-anchoring
+        // `activeSince` would silently discard the seconds since it was set.
+        data: existing.activeSince
+          ? { timerMinutes }
+          : { activeSince: now, timerMinutes },
       });
 
       await tx.evidence.create({
