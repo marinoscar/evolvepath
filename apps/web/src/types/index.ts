@@ -1175,3 +1175,193 @@ export interface DomainMode {
   /** Null for a domain the user has never set — no row exists for it. */
   effectiveFrom: string | null;
 }
+
+// ===========================================================================
+// The Today screen (epic E05)
+// ===========================================================================
+//
+// Hand-maintained mirrors of the API's Zod schemas (`apps/api/src/today/`
+// and `apps/api/src/commitments/commitment-card.schema.ts`). Generating them
+// would put the API's build output on this app's critical path for values that
+// change about once an epic; the reconciliation surface is these types plus the
+// EvolvePath block at the bottom of `services/api.ts`, and nothing else.
+// ===========================================================================
+
+/** One of the three sizes of an intention, with its cost. */
+export interface CommitmentVersionView {
+  title: string;
+  minutes: number;
+}
+
+export type CommitmentActionName =
+  | 'start'
+  | 'pause'
+  | 'continue'
+  | 'complete'
+  | 'partial'
+  | 'fallback'
+  | 'reschedule'
+  | 'skip'
+  | 'decompose';
+
+export type CommitmentVersionUsed = 'FULL' | 'SHORT' | 'MINIMUM';
+
+/**
+ * Server-derived timer state. Null for a commitment nobody has started.
+ *
+ * `activeSeconds` is what was banked at the last pause, NOT the total — a
+ * screen counting seconds adds `now − activeSince` itself rather than polling.
+ * `elapsedSeconds` is the server's own arithmetic at read time, which is what a
+ * reloaded page resumes from.
+ */
+export interface CommitmentTimer {
+  activeSince: string | null;
+  activeSeconds: number;
+  elapsedSeconds: number;
+  timerMinutes: number | null;
+  remainingSeconds: number | null;
+}
+
+/**
+ * The shape every actionable surface renders: Today's domain sections and the
+ * body every `/commitments/:id/actions/*` route returns.
+ *
+ * Distinct from `Commitment` (the record, every column). This is the view — what
+ * to show, how long it takes, and what the server will accept next.
+ */
+export interface CommitmentCard {
+  id: string;
+  title: string;
+  domain: Domain;
+  status: CommitmentStatus;
+  scheduledStart: string;
+  scheduledEnd: string | null;
+  durationMinutes: number;
+  versions: {
+    full: CommitmentVersionView;
+    short: CommitmentVersionView | null;
+    minimum: CommitmentVersionView | null;
+  };
+  importance: number;
+  rescheduleCount: number;
+  startedAt: string | null;
+  completedAt: string | null;
+  versionUsed: CommitmentVersionUsed | null;
+  minutesSpent: number | null;
+  outcomeId: string | null;
+  decomposedFromId: string | null;
+  steps: CommitmentVersionView[] | null;
+  timer: CommitmentTimer | null;
+  /**
+   * What the server will accept next. THE UI RENDERS THIS LIST — it does not
+   * compute one. A bundle running yesterday's rules would otherwise offer a
+   * move this API refuses.
+   */
+  availableActions: CommitmentActionName[];
+}
+
+export type InterventionMode =
+  | 'ACT'
+  | 'CLARIFY'
+  | 'REDUCE'
+  | 'DIAGNOSE'
+  | 'RECONNECT'
+  | 'CHALLENGE_PLAN'
+  | 'RECOVER'
+  | 'REINFORCE';
+
+export interface NextBestAction {
+  commitmentId: string;
+  title: string;
+  domain: Domain;
+  durationMinutes: number;
+  version: 'full' | 'short' | 'minimum';
+  /** Deterministic and server-built. Present even when the coach is down. */
+  rationale: string;
+  fallback: { title: string; durationMinutes: number };
+  interventionMode: InterventionMode;
+  confidence: number;
+}
+
+export type CheckInFeel = 'NORMAL' | 'PACKED' | 'LOW_ENERGY' | 'UNEXPECTED_PROBLEM';
+
+export interface DailyCheckIn {
+  dateLocal: string;
+  feel: CheckInFeel;
+  updatedAt: string;
+}
+
+export interface TodayDomainSection {
+  domain: Domain;
+  mode: DomainModeKind;
+  commitments: CommitmentCard[];
+}
+
+export interface TodayResponse {
+  greeting: 'morning' | 'afternoon' | 'evening';
+  stateLine: string;
+  dateLocal: string;
+  timeZone: string;
+  checkIn: { feel: CheckInFeel } | null;
+  /** Null when there is nothing to recommend. An empty day is not a failure. */
+  nextBestAction: NextBestAction | null;
+  /** Always three, in canonical order, including the empty and the paused. */
+  domains: TodayDomainSection[];
+  /**
+   * `null` until E11 and E05-01 respectively fill them. Typed here rather than
+   * omitted so those epics change one line in one place.
+   */
+  momentum: null;
+  coachInsight: null;
+}
+
+export interface TodayInsight {
+  text: string;
+  /** `template` means the coach was unavailable — not an error state. */
+  source: 'ai' | 'template';
+  generatedAt: string;
+}
+
+export type ReflectionQuickOption =
+  | 'PLAN_WORKED'
+  | 'TOO_MUCH'
+  | 'BAD_TIMING'
+  | 'UNEXPECTED_CONFLICT'
+  | 'LOW_ENERGY'
+  | 'AVOIDED'
+  | 'OTHER';
+
+export interface DayReflection {
+  id: string;
+  dateLocal: string;
+  quickOption: ReflectionQuickOption;
+  text: string | null;
+  createdAt: string;
+}
+
+/** PRD §74's options minus `PLAN_WORKED`, which is not a reason to skip. */
+export type SkipReason =
+  | 'TOO_MUCH'
+  | 'BAD_TIMING'
+  | 'UNEXPECTED_CONFLICT'
+  | 'LOW_ENERGY'
+  | 'AVOIDED'
+  | 'OTHER';
+
+export interface DecompositionStep {
+  title: string;
+  minutes: number;
+}
+
+export interface DecompositionProposal {
+  steps: DecompositionStep[];
+  /** At most 15 minutes: the whole point is to make starting cheap. */
+  firstStep: DecompositionStep;
+  message: string;
+  source: 'ai' | 'template';
+}
+
+export interface CompleteCommitmentInput {
+  notes?: string | null;
+  minutesSpent?: number | null;
+}

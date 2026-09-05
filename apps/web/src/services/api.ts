@@ -287,6 +287,17 @@ import type {
   UnreadCountResponse,
   // EvolvePath product domain (epic #33)
   BestSelfProfile,
+  // The Today screen (epic E05)
+  CheckInFeel,
+  CommitmentCard,
+  CompleteCommitmentInput,
+  DailyCheckIn,
+  DayReflection,
+  DecompositionProposal,
+  ReflectionQuickOption,
+  SkipReason,
+  TodayInsight,
+  TodayResponse,
   BestSelfInput,
   Domain,
   DomainMode,
@@ -888,4 +899,120 @@ export async function transitionCommitment(
   body: TransitionInput,
 ): Promise<TransitionResult> {
   return api.post<TransitionResult>(`/commitments/${id}/transition`, body);
+}
+
+// --- Today (epic E05) -------------------------------------------------------
+
+/**
+ * The day. Deterministic and AI-free on the server, so this call succeeds even
+ * when the provider is down — the coach's sentence is a separate request below.
+ */
+export async function getToday(): Promise<TodayResponse> {
+  return api.get<TodayResponse>('/today');
+}
+
+/**
+ * The coach's sentence. Always 200: `source: 'template'` means the coach was
+ * unavailable, which is a caption on the card and not an error to handle.
+ */
+export async function getTodayInsight(): Promise<TodayInsight> {
+  return api.get<TodayInsight>('/today/insight');
+}
+
+export async function getCheckIn(): Promise<DailyCheckIn | null> {
+  return api.get<DailyCheckIn | null>('/today/check-in');
+}
+
+export async function postCheckIn(feel: CheckInFeel): Promise<DailyCheckIn> {
+  return api.post<DailyCheckIn>('/today/check-in', { feel });
+}
+
+export async function getDayReflection(): Promise<DayReflection | null> {
+  return api.get<DayReflection | null>('/today/reflection');
+}
+
+export async function postDayReflection(input: {
+  quickOption: ReflectionQuickOption;
+  text?: string | null;
+}): Promise<DayReflection> {
+  return api.post<DayReflection>('/today/reflection', input);
+}
+
+// --- Commitment actions (epic E05) ------------------------------------------
+//
+// Every one of these returns a `CommitmentCard`, so a caller replaces the row it
+// acted on with the server's own answer rather than reasoning about what the
+// action implied.
+
+export async function startCommitment(
+  id: string,
+  body: { minutes?: number | null } = {},
+): Promise<CommitmentCard> {
+  return api.post<CommitmentCard>(`/commitments/${id}/actions/start`, body);
+}
+
+export async function pauseCommitment(id: string): Promise<CommitmentCard> {
+  return api.post<CommitmentCard>(`/commitments/${id}/actions/pause`, {});
+}
+
+export async function continueCommitment(
+  id: string,
+  body: { extraMinutes?: number | null } = {},
+): Promise<CommitmentCard> {
+  return api.post<CommitmentCard>(`/commitments/${id}/actions/continue`, body);
+}
+
+export async function completeCommitment(
+  id: string,
+  body: CompleteCommitmentInput = {},
+): Promise<CommitmentCard> {
+  return api.post<CommitmentCard>(`/commitments/${id}/actions/complete`, body);
+}
+
+export async function partialCommitment(
+  id: string,
+  body: CompleteCommitmentInput = {},
+): Promise<CommitmentCard> {
+  return api.post<CommitmentCard>(`/commitments/${id}/actions/partial`, body);
+}
+
+export async function useCommitmentFallback(
+  id: string,
+  version: 'short' | 'minimum',
+): Promise<CommitmentCard> {
+  return api.post<CommitmentCard>(`/commitments/${id}/actions/fallback`, { version });
+}
+
+/**
+ * Moving a commitment CLOSES it and returns a NEW one — `RESCHEDULED` is
+ * terminal. Callers must use the returned card's id from here on.
+ */
+export async function rescheduleCommitment(
+  id: string,
+  body: { scheduledStart: string; scheduledEnd?: string | null },
+): Promise<CommitmentCard> {
+  return api.post<CommitmentCard>(`/commitments/${id}/actions/reschedule`, body);
+}
+
+export async function skipCommitment(
+  id: string,
+  body: { reason: SkipReason; text?: string | null },
+): Promise<CommitmentCard> {
+  return api.post<CommitmentCard>(`/commitments/${id}/actions/skip`, body);
+}
+
+/** Asks the coach for smaller steps. Writes nothing until `applyDecomposition`. */
+export async function proposeDecomposition(
+  id: string,
+  body: { hint?: string | null } = {},
+): Promise<DecompositionProposal> {
+  return api.post<DecompositionProposal>(`/commitments/${id}/actions/decompose`, body);
+}
+
+/** Creates a new commitment from the proposal's first step. Returns its card. */
+export async function applyDecomposition(
+  id: string,
+  proposal: DecompositionProposal,
+): Promise<CommitmentCard> {
+  return api.post<CommitmentCard>(`/commitments/${id}/actions/decompose/apply`, proposal);
 }
