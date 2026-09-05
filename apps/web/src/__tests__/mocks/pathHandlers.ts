@@ -92,6 +92,57 @@ export function getPathState(): Readonly<PathState> {
   return state;
 }
 
+/**
+ * Insert a commitment into the SAME store `/commitments` reads.
+ *
+ * The family handlers materialize occurrences through this rather than keeping
+ * their own list: a ritual whose occurrences did not appear on
+ * `GET /commitments` would be a mock of an API that does not exist.
+ */
+export function insertCommitment(partial: Partial<Commitment>): Commitment {
+  const created: Commitment = {
+    id: nextId('commitment'),
+    domain: 'FAMILY',
+    title: 'Commitment',
+    outcomeId: null,
+    planVersionId: null,
+    routineId: null,
+    ritualId: null,
+    familyMemberId: null,
+    scheduledStart: now(),
+    scheduledEnd: null,
+    importance: 3,
+    commitmentType: null,
+    fullVersion: null,
+    shortVersion: null,
+    minimumVersion: null,
+    fullMinutes: null,
+    shortMinutes: null,
+    minimumMinutes: null,
+    status: 'PLANNED',
+    allowedTransitions: [],
+    rescheduleCount: 0,
+    rescheduledFromId: null,
+    rescheduledToId: null,
+    skipReason: null,
+    userConfirmed: false,
+    startedAt: null,
+    completedAt: null,
+    evidenceCount: 0,
+    createdAt: now(),
+    updatedAt: now(),
+    ...partial,
+  };
+
+  state.commitments.push(created);
+  return created;
+}
+
+/** The commitments currently in the store, for the family summary handler. */
+export function allCommitments(): readonly Commitment[] {
+  return state.commitments;
+}
+
 // --- Builders ---------------------------------------------------------------
 
 export function makeOutcome(overrides: Partial<Outcome> = {}): Outcome {
@@ -523,9 +574,11 @@ export const pathHandlers = [
     const from = new Date(url.searchParams.get('from') ?? 0);
     const to = new Date(url.searchParams.get('to') ?? 0);
     const outcomeId = url.searchParams.get('outcomeId');
+    const domain = url.searchParams.get('domain');
 
     const rows = state.commitments
       .filter((commitment) => !outcomeId || commitment.outcomeId === outcomeId)
+      .filter((commitment) => !domain || commitment.domain === domain)
       .filter((commitment) => {
         const start = new Date(commitment.scheduledStart);
         return start >= from && start <= to;
@@ -547,6 +600,8 @@ export const pathHandlers = [
       outcomeId: body.outcomeId ?? null,
       planVersionId: body.planVersionId ?? null,
       routineId: body.routineId ?? null,
+      ritualId: body.ritualId ?? null,
+      familyMemberId: body.familyMemberId ?? null,
       scheduledStart: body.scheduledStart ?? now(),
       scheduledEnd: body.scheduledEnd ?? null,
       importance: body.importance ?? 3,

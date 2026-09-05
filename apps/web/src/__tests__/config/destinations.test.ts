@@ -149,6 +149,21 @@ describe('destinations — segment-boundary matching', () => {
     expect(owns('/', '/anything')).toBe(false);
   });
 
+  // `/path/family` (epic E08) is a PRODUCT SURFACE under Path, not a sixth
+  // destination: PRD §11 fixes the five, and prefix ownership means the Family
+  // page needed no registry entry and no navigation change to be reachable.
+  it('lets Path own /path/family, and nothing else claim it', () => {
+    expect(owns('/path', '/path/family')).toBe(true);
+
+    const owners = Object.keys(DESTINATION_ROUTES).filter((key) =>
+      DESTINATION_ROUTES[key as keyof typeof DESTINATION_ROUTES].some((prefix) =>
+        owns(prefix, '/path/family'),
+      ),
+    );
+
+    expect(owners).toEqual(['path']);
+  });
+
   it('activates a destination for its child routes', () => {
     // `/settings/*` highlights PROFILE: the destination is labelled Profile but
     // keeps the settings hub route, so every existing settings URL still

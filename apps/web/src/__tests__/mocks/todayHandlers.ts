@@ -117,6 +117,8 @@ export function makeCard(overrides: Partial<CommitmentCard> = {}): CommitmentCar
     versionUsed: null,
     minutesSpent: null,
     outcomeId: null,
+    ritualId: null,
+    familyMemberId: null,
     decomposedFromId: null,
     steps: null,
     timer: null,

@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw';
 
+import { familyHandlers } from './familyHandlers';
 import { pathHandlers } from './pathHandlers';
 import { todayHandlers } from './todayHandlers';
 
@@ -572,4 +573,5 @@ export const handlers = [
   // store with the transition matrix enforced, rather than canned responses.
   ...pathHandlers,
   ...todayHandlers,
+  ...familyHandlers,
 ];
