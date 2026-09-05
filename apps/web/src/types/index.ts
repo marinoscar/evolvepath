@@ -1072,6 +1072,9 @@ export interface Commitment {
   outcomeId: string | null;
   planVersionId: string | null;
   routineId: string | null;
+  /** The family ritual that materialized this occurrence, and who it is with. */
+  ritualId: string | null;
+  familyMemberId: string | null;
   scheduledStart: string;
   scheduledEnd: string | null;
   importance: number;
@@ -1256,6 +1259,15 @@ export interface CommitmentCard {
   versionUsed: CommitmentVersionUsed | null;
   minutesSpent: number | null;
   outcomeId: string | null;
+  /**
+   * The family ritual this occurrence came from, and who it is with (epic E08).
+   *
+   * The row reads them to pick action LABELS — "I'm in" / "Move it" /
+   * "Skip today" instead of "Ready" / "Reschedule" / "Skip" — over the same
+   * endpoints and the same matrix. Labels only; nothing else changes.
+   */
+  ritualId: string | null;
+  familyMemberId: string | null;
   decomposedFromId: string | null;
   steps: CommitmentVersionView[] | null;
   timer: CommitmentTimer | null;
@@ -1381,4 +1393,129 @@ export interface StartContext extends CommitmentCard {
 export interface CompleteCommitmentInput {
   notes?: string | null;
   minutesSpent?: number | null;
+}
+
+// =============================================================================
+// The Family domain (epic E08)
+// =============================================================================
+//
+// Mirrors `apps/api/src/family/*.schema.ts` field for field. Hand-maintained on
+// purpose: generating them would put the API's build output on this app's
+// critical path for values that change about once an epic.
+// =============================================================================
+
+export type FamilyRelationship =
+  | 'PARTNER'
+  | 'CHILD'
+  | 'PARENT'
+  | 'SIBLING'
+  | 'FRIEND'
+  | 'OTHER';
+
+/**
+ * Exactly five fields, and there is no sixth to add.
+ *
+ * PRD §33 fixes the record and VISION §50 explains it: the people in it never
+ * consented to being modeled. The card renders these and requests nothing else.
+ */
+export interface FamilyMember {
+  id: string;
+  nickname: string;
+  relationship: FamilyRelationship;
+  /** `YYYY-MM-DD`. The year may be the 1900 placeholder and is never shown. */
+  birthday: string | null;
+  createdAt: string;
+}
+
+export interface FamilyMemberInput {
+  nickname: string;
+  relationship: FamilyRelationship;
+  birthday?: string | null;
+}
+
+export interface RitualRecurrence {
+  /** `0 = Sunday … 6 = Saturday`. Display order is Monday-first; values are not. */
+  weekdays: number[];
+  /** `HH:mm` in the user's own timezone. */
+  time: string;
+  everyNWeeks: 1 | 2 | 4;
+}
+
+export interface Ritual {
+  id: string;
+  title: string;
+  purpose: string | null;
+  familyMemberId: string | null;
+  recurrence: RitualRecurrence;
+  idealMinutes: number;
+  minimumMinutes: number;
+  fallbackBehavior: string | null;
+  active: boolean;
+  lastMaterializedThrough: string | null;
+  routineId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RitualWithUpcoming extends Ritual {
+  upcoming: CommitmentCard[];
+}
+
+export interface RitualInput {
+  title?: string;
+  purpose?: string | null;
+  familyMemberId?: string | null;
+  recurrence?: RitualRecurrence;
+  idealMinutes?: number;
+  minimumMinutes?: number;
+  fallbackBehavior?: string | null;
+  outcomeId?: string | null;
+  active?: boolean;
+}
+
+/**
+ * The answer from `POST /family/lint`, and from a 400's `details` — the two
+ * carry the same three fields, so one type serves the debounced check and the
+ * server's refusal alike.
+ */
+export interface LintResult {
+  ok: boolean;
+  code: 'TARGETS_OTHER_PERSON' | null;
+  match: string | null;
+  /** Offered, never applied. `null` when AI is unavailable. */
+  suggestion: string | null;
+  source: 'ai' | 'none';
+}
+
+export interface MaterializeResult {
+  created: number;
+  skipped: number;
+  through: string;
+}
+
+/** Integers only. There is no ratio here, and adding one is not a small change. */
+export interface RitualWeekCounts {
+  /** `null` groups the ad-hoc family commitments. */
+  ritualId: string | null;
+  title: string;
+  planned: number;
+  kept: number;
+  partial: number;
+  moved: number;
+  skipped: number;
+  missed: number;
+  open: number;
+}
+
+export interface FamilySummaryWeek {
+  weekStart: string;
+  rituals: RitualWeekCounts[];
+  totals: Omit<RitualWeekCounts, 'ritualId' | 'title'>;
+}
+
+export interface FamilySummary {
+  timezone: string;
+  /** Newest first. */
+  weeks: FamilySummaryWeek[];
+  coachNote: { text: string; source: 'ai' | 'template' } | null;
 }
