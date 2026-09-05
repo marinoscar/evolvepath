@@ -200,6 +200,7 @@ export function CoachingPolicySection({
                 type="time"
                 label="From"
                 size="small"
+                data-testid="policy-quiet-start"
                 value={start}
                 disabled={isSaving}
                 onChange={(event) => setStart(event.target.value)}
@@ -210,6 +211,7 @@ export function CoachingPolicySection({
                 type="time"
                 label="Until"
                 size="small"
+                data-testid="policy-quiet-end"
                 value={end}
                 disabled={isSaving}
                 onChange={(event) => setEnd(event.target.value)}
@@ -239,6 +241,7 @@ export function CoachingPolicySection({
                   {cap.label}
                 </Typography>
                 <Slider
+                  data-testid={`policy-${cap.key}`}
                   value={caps[cap.key]}
                   min={0}
                   max={cap.max}

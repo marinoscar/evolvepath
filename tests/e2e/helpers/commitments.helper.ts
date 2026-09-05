@@ -65,6 +65,8 @@ export interface SeededCommitment {
   domain: Domain;
   title: string;
   status: string;
+  /** Which size was actually attempted, once a fallback has been chosen (#75). */
+  versionUsed?: 'FULL' | 'SHORT' | 'MINIMUM' | null;
   rescheduleCount: number;
   rescheduledFromId: string | null;
   rescheduledToId: string | null;
@@ -92,6 +94,12 @@ export interface CommitmentSeed {
   title: string;
   /** ISO instant. Use `todayAt` so it lands inside the local day window. */
   scheduledStart: string;
+  /**
+   * ISO instant. Optional, and only worth setting when a test cares about how
+   * much room is left — E12's fallback offer is the case: it fires only while a
+   * smaller version still fits before the commitment's own end (#75).
+   */
+  scheduledEnd?: string | null;
   importance?: number;
   outcomeId?: string | null;
   fullVersion?: string;
@@ -110,6 +118,7 @@ export async function createCommitment(
     domain: seed.domain,
     title: seed.title,
     scheduledStart: seed.scheduledStart,
+    scheduledEnd: seed.scheduledEnd ?? null,
     importance: seed.importance ?? 3,
     outcomeId: seed.outcomeId ?? null,
     fullVersion: seed.fullVersion ?? seed.title,

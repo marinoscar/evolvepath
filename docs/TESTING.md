@@ -1169,6 +1169,63 @@ The contract these cases hold is written down in
 `apps/api/test/docs/family-domain-doc.spec.ts` fails if a constant, a prompt
 version or the coach's sentence changes without that document changing too.
 
+### Running the E12 coaching notifications spec
+
+E12 (epic #44) ships `specs/notifications.spec.ts`. It needs the **fake OpenAI
+overlay**, because the copywriter runs on every send, and one case deliberately
+points the provider at an unreachable port to prove the notification still goes
+out with the deterministic copy (PRD §120).
+
+```bash
+cd infra/compose && docker compose \
+  -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up
+
+cd tests/e2e && npx playwright test specs/notifications.spec.ts
+```
+
+**The job is invoked, never waited for.** The scheduler ticks every five minutes;
+a spec that waited for it would be a five-minute spec that still raced the tick.
+Every case calls the non-production test hook
+
+```bash
+curl -X POST -H "Authorization: Bearer $T" -H 'content-type: application/json' \
+  -d '{"job":"coaching-notifications","now":"<ISO instant>"}' \
+  http://localhost:3535/api/auth/test/run-job
+```
+
+which runs **the same `runOnce` the cron calls**, not a stand-in. The optional
+`now` moves the whole run, which is the only reason a case can assert what
+happens "at the scheduled start" without sleeping. It returns
+`{ scanned, sent, suppressed, skipped }`.
+
+Twelve cases on both projects, covering PRD §108's acceptance list: the reminder
+→ deep link → Start → completion path with its `SENT`/`OPENED`/`ACTIONED` rows;
+one decision per commitment however often the job runs; `ALREADY_DONE`,
+`QUIET_HOURS` (set through the settings UI), `SKIPPED` and `PER_COMMITMENT_MAX`
+suppressions read back through the metrics endpoint; the fallback offer starting
+the short version; "I'm in" on a family cue; a banned-phrase sweep over every
+notification produced; the independence metric counting an unprompted
+completion; the push subscription contract; and the coach-unreachable case,
+which is the one place exact wording is asserted — the template is what ships on
+every provider outage.
+
+**Push itself is not driven here.** The Vite dev server registers no service
+worker at all, so there is nothing to deliver a push to. The worker's handlers
+are covered by Vitest (`src/__tests__/pwa/appShellServiceWorker.test.ts`) and by
+the production-build step in the epic's manual script:
+
+```bash
+cd infra/compose && docker compose \
+  -f base.compose.yml -f prod.compose.yml -f fake-openai.compose.yml up --build
+```
+
+The contract these cases hold is written down in
+[`specs/coaching-notifications.md`](specs/coaching-notifications.md), and
+`apps/api/test/docs/coaching-notifications-doc.spec.ts` fails if a constant, a
+suppress reason, the prompt version or a candidate window changes without that
+document changing too — **including when only the value moves**, which is the
+realistic mistake.
+
 ### Security Note
 
 The test authentication endpoint (`/api/auth/test/login`) and the test login page (`/testing/login`) are **completely disabled in production** through multiple security layers. See [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md#13-test-authentication-development-only) for details.
