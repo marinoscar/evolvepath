@@ -569,6 +569,7 @@ Own data only; a foreign or unknown id answers 404, never 403.
 - `DELETE /api/family/rituals/{id}` - Delete (204); future occurrences cancelled, past ones keep their place with `ritualId: null`
 - `POST /api/family/rituals/{id}/materialize` - Create any missing occurrences now. Idempotent via the unique `(ritual_id, scheduled_start)` index
 - `POST /api/family/lint` - Check a title, and optionally get a rewrite. **Always 200**; the verdict is deterministic and `source: 'none'` when AI is unavailable
+- `GET /api/family/summary?weekStart=&weeks=` - Planned versus kept, per ritual, per week. Integers only: **no ratio, percentage, streak or score anywhere**, and a test fails the build if one appears (VISION §12, PRD §105)
 
 Completing, moving and skipping a ritual occurrence are the ordinary commitment
 actions — there are deliberately no family-specific lifecycle endpoints.
