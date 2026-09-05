@@ -3013,7 +3013,50 @@ relationship is discarded for the template. `source` says which you got.
 
 ### Storage Objects
 
-The storage system provides file upload and management capabilities with support for large files (GB scale) through resumable multipart uploads.
+The storage system provides file upload and management capabilities with support for large files through resumable multipart uploads.
+
+#### Upload limits (epic #67, issue #71)
+
+Both upload paths enforce two configured limits that used to be declared and
+read by nobody:
+
+| Limit | Env var | Default | Enforced where |
+|---|---|---|---|
+| Allowed content types | `ALLOWED_MIME_TYPES` | `image/*,video/*` | `upload/init` from `mimeType`; simple upload from the multipart part's type, **before** a byte reaches the provider |
+| Maximum size | `MAX_FILE_SIZE` | `524288000` (500 MiB) | `upload/init` from the declared `size`; simple upload from the bytes that actually flow |
+
+A rejected upload answers **400** with a message naming what was wrong:
+
+```
+File type "text/plain" is not allowed. Allowed: image/*, video/*
+File is 600000000 bytes; the limit is 524288000 bytes (500 MiB)
+```
+
+An oversize simple upload is aborted mid-stream, the partial object key is
+deleted, and the response is the same 400. A successful simple upload now
+records the real byte length in `size` — it used to persist `"0"` permanently.
+
+#### Access to another user's objects
+
+Every storage route is plain `@Auth()`; **uploads are deliberately not gated on
+`storage:write`**, because Viewer is the default EvolvePath role and every user
+uploads media. Reads and writes are owner-scoped, with three admin overrides:
+
+| Route | Override permission |
+|---|---|
+| `GET /storage/objects/:id`, `GET /storage/objects/:id/download` | `storage:read_any` |
+| `PATCH /storage/objects/:id/metadata` | `storage:write_any` |
+| `DELETE /storage/objects/:id` | `storage:delete_any` |
+
+All three are seeded to **admin only**. A non-owner without the relevant
+permission gets **403** — not 404. The storage API is generic and
+permission-based, so "you may not" is the honest answer; media attachments
+(`/api/media/attachments`) are a private product resource and answer 404
+instead. That difference is deliberate.
+
+An admin acting on somebody else's object writes `meta.actedAsAdmin: true` on
+the audit row. `GET /storage/objects` (the listing) and the in-flight upload
+routes stay owner-only.
 
 #### Initialize Resumable Upload
 
@@ -3024,11 +3067,14 @@ The storage system provides file upload and management capabilities with support
 **Request Body:**
 ```json
 {
-  "name": "document.pdf",
+  "name": "set-of-squats.mp4",
   "size": 104857600,
-  "mimeType": "application/pdf"
+  "mimeType": "video/mp4"
 }
 ```
+
+**Errors:** `400` when the MIME type is not allowed or `size` exceeds
+`MAX_FILE_SIZE`. Nothing is created and no multipart session is opened.
 
 **Response:**
 ```json

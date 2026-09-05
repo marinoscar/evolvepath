@@ -17,7 +17,7 @@ function config(overrides: Record<string, unknown> = {}) {
 }
 
 describe('AiAttachmentResolverService', () => {
-  let objects: { getById: jest.Mock };
+  let objects: { getOwnedById: jest.Mock };
   let storage: ReturnType<typeof createMockStorageProvider>;
   let prisma: { storageObject: { findUnique: jest.Mock } };
 
@@ -35,7 +35,7 @@ describe('AiAttachmentResolverService', () => {
   }
 
   beforeEach(() => {
-    objects = { getById: jest.fn() };
+    objects = { getOwnedById: jest.fn() };
     storage = createMockStorageProvider();
     storage.download.mockResolvedValue(Readable.from([Buffer.from('ABC')]));
     prisma = {
@@ -48,17 +48,17 @@ describe('AiAttachmentResolverService', () => {
   it('returns nothing for an absent or empty attachment list', async () => {
     await expect(build().resolve(USER_ID, undefined)).resolves.toEqual([]);
     await expect(build().resolve(USER_ID, [])).resolves.toEqual([]);
-    expect(objects.getById).not.toHaveBeenCalled();
+    expect(objects.getOwnedById).not.toHaveBeenCalled();
   });
 
   it('inlines an image with its real mime type and requested detail', async () => {
-    objects.getById.mockResolvedValue(imageObject('obj-1'));
+    objects.getOwnedById.mockResolvedValue(imageObject('obj-1'));
 
     const parts = await build().resolve(USER_ID, [
       { storageObjectId: 'obj-1', detail: 'high' },
     ]);
 
-    expect(objects.getById).toHaveBeenCalledWith('obj-1', USER_ID);
+    expect(objects.getOwnedById).toHaveBeenCalledWith('obj-1', USER_ID);
     expect(parts).toEqual([
       {
         type: 'image',
@@ -70,7 +70,7 @@ describe('AiAttachmentResolverService', () => {
   });
 
   it('refuses an object the caller does not own, without saying whether it exists', async () => {
-    objects.getById.mockRejectedValue(new NotFoundException());
+    objects.getOwnedById.mockRejectedValue(new NotFoundException());
 
     await expect(
       build().resolve(USER_ID, [{ storageObjectId: 'someone-elses' }]),
@@ -82,7 +82,7 @@ describe('AiAttachmentResolverService', () => {
   });
 
   it('refuses an object that is not ready', async () => {
-    objects.getById.mockResolvedValue({
+    objects.getOwnedById.mockResolvedValue({
       ...imageObject('obj-1'),
       status: 'processing',
     });
@@ -96,7 +96,7 @@ describe('AiAttachmentResolverService', () => {
   });
 
   it('refuses an oversize image, stopping the download early', async () => {
-    objects.getById.mockResolvedValue(imageObject('obj-1'));
+    objects.getOwnedById.mockResolvedValue(imageObject('obj-1'));
     // Two chunks: the limit is passed on the first, so the second must never
     // be pulled.
     const second = jest.fn();
@@ -120,7 +120,7 @@ describe('AiAttachmentResolverService', () => {
   });
 
   it('refuses an unsupported mime type', async () => {
-    objects.getById.mockResolvedValue({
+    objects.getOwnedById.mockResolvedValue({
       id: 'obj-1',
       mimeType: 'text/plain',
       status: 'ready',
@@ -136,7 +136,7 @@ describe('AiAttachmentResolverService', () => {
   });
 
   it('expands a video into its sampled frames, in timestamp order', async () => {
-    objects.getById.mockImplementation(async (id: string) => {
+    objects.getOwnedById.mockImplementation(async (id: string) => {
       if (id === 'video-1') {
         return {
           id,
@@ -178,12 +178,12 @@ describe('AiAttachmentResolverService', () => {
     );
     // The ownership check runs for the video AND for each frame: a forged
     // _processing blob must not become a read primitive.
-    expect(objects.getById).toHaveBeenCalledWith('frame-a', USER_ID);
-    expect(objects.getById).toHaveBeenCalledWith('frame-b', USER_ID);
+    expect(objects.getOwnedById).toHaveBeenCalledWith('frame-a', USER_ID);
+    expect(objects.getOwnedById).toHaveBeenCalledWith('frame-b', USER_ID);
   });
 
   it('refuses a video that has not been processed yet', async () => {
-    objects.getById.mockResolvedValue({
+    objects.getOwnedById.mockResolvedValue({
       id: 'video-1',
       mimeType: 'video/mp4',
       status: 'ready',
@@ -199,7 +199,7 @@ describe('AiAttachmentResolverService', () => {
   });
 
   it('refuses more images than one call may carry', async () => {
-    objects.getById.mockImplementation(async (id: string) => imageObject(id));
+    objects.getOwnedById.mockImplementation(async (id: string) => imageObject(id));
 
     await expect(
       build({ 'ai.attachments.maxImagesPerCall': 10 }).resolve(
@@ -213,7 +213,7 @@ describe('AiAttachmentResolverService', () => {
   });
 
   it('turns a storage read failure into an attachment error', async () => {
-    objects.getById.mockResolvedValue(imageObject('obj-1'));
+    objects.getOwnedById.mockResolvedValue(imageObject('obj-1'));
     storage.download.mockRejectedValue(new Error('S3 is down'));
 
     await expect(

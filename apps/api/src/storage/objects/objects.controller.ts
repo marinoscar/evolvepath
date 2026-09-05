@@ -57,6 +57,7 @@ import {
 import {
   DownloadUrlResponseDto,
 } from './dto/download-url-response.dto';
+import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
 
 @ApiTags('Storage')
 @Controller('storage/objects')
@@ -105,13 +106,14 @@ export class ObjectsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Access denied - you do not own this object',
+    description:
+      'Access denied - you do not own this object and hold no storage:*_any permission',
   })
   async getById(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: RequestUser,
   ): Promise<{ data: ObjectResponseDto }> {
-    const result = await this.objectsService.getById(id, userId);
+    const result = await this.objectsService.getById(id, user);
     return { data: result };
   }
 
@@ -138,14 +140,15 @@ export class ObjectsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Access denied - you do not own this object',
+    description:
+      'Access denied - you do not own this object and hold no storage:*_any permission',
   })
   async getDownloadUrl(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('expiresIn') expiresIn: number | undefined,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: RequestUser,
   ): Promise<{ data: DownloadUrlResponseDto }> {
-    const result = await this.objectsService.getDownloadUrl(id, userId, expiresIn);
+    const result = await this.objectsService.getDownloadUrl(id, user, expiresIn);
     return { data: result };
   }
 
@@ -169,13 +172,14 @@ export class ObjectsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Access denied - you do not own this object',
+    description:
+      'Access denied - you do not own this object and hold no storage:*_any permission',
   })
   async deleteObject(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: RequestUser,
   ): Promise<void> {
-    await this.objectsService.delete(id, userId);
+    await this.objectsService.delete(id, user);
   }
 
   /**
@@ -195,14 +199,15 @@ export class ObjectsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Access denied - you do not own this object',
+    description:
+      'Access denied - you do not own this object and hold no storage:*_any permission',
   })
   async updateMetadata(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(updateMetadataSchema)) dto: UpdateMetadataDto,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: RequestUser,
   ): Promise<{ data: ObjectResponseDto }> {
-    const result = await this.objectsService.updateMetadata(id, dto, userId);
+    const result = await this.objectsService.updateMetadata(id, dto, user);
     return { data: result };
   }
 
@@ -218,6 +223,10 @@ export class ObjectsController {
   @ApiDataResponse(InitUploadResponseDto, {
     status: 201,
     description: 'Upload initialized successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'MIME type not allowed or file too large',
   })
   async initUpload(
     @Body(new ZodValidationPipe(initUploadSchema)) dto: InitUploadDto,
@@ -314,12 +323,28 @@ export class ObjectsController {
     status: 201,
     description: 'File uploaded successfully',
   })
+  @ApiResponse({
+    status: 400,
+    description: 'MIME type not allowed or file too large',
+  })
   async simpleUpload(
     @Req() req: FastifyRequest,
     @CurrentUser('id') userId: string,
   ): Promise<{ data: ObjectResponseDto }> {
-    // Get multipart file from request
-    const data = await req.file();
+    // Get multipart file from request. Fastify's plugin cap can trip before
+    // the service's byte counter does; the user must read the same sentence
+    // either way, not a 500.
+    let data: Awaited<ReturnType<FastifyRequest['file']>>;
+    try {
+      data = await req.file();
+    } catch (error) {
+      if ((error as { code?: string })?.code === 'FST_REQ_FILE_TOO_LARGE') {
+        throw new BadRequestException(
+          'File is larger than the upload limit for this endpoint',
+        );
+      }
+      throw error;
+    }
 
     if (!data) {
       throw new BadRequestException('No file provided');

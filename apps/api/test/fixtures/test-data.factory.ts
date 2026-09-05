@@ -59,6 +59,24 @@ export const mockPermissions = {
     name: 'allowlist:write',
     description: 'Modify allowlist',
   },
+  // The three admin overrides on storage (issue #71). `read_any` and
+  // `write_any` were documented and never seeded; all three are now real,
+  // seeded to admin only, and consulted by ObjectsService.
+  storageReadAny: {
+    id: randomUUID(),
+    name: 'storage:read_any',
+    description: "Admin: read any object's metadata and download URL",
+  },
+  storageWriteAny: {
+    id: randomUUID(),
+    name: 'storage:write_any',
+    description: "Admin: update any object's metadata",
+  },
+  storageDeleteAny: {
+    id: randomUUID(),
+    name: 'storage:delete_any',
+    description: 'Admin: delete any object',
+  },
 };
 
 export const mockRoles = {
@@ -350,6 +368,9 @@ export const rolePermissionsMap = {
     mockPermissions.rbacManage,
     mockPermissions.allowlistRead,
     mockPermissions.allowlistWrite,
+    mockPermissions.storageReadAny,
+    mockPermissions.storageWriteAny,
+    mockPermissions.storageDeleteAny,
   ],
   contributor: [
     mockPermissions.userSettingsRead,

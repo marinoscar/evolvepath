@@ -367,7 +367,7 @@ export class MediaCheckService {
   /** Owned, and finished uploading. 404 for a foreign id; 409 while it lands. */
   private async assertReady(userId: string, storageObjectId: string): Promise<void> {
     // Throws 404 for anything that is not this user's.
-    const object = await this.objects.getById(storageObjectId, userId);
+    const object = await this.objects.getOwnedById(storageObjectId, userId);
 
     if (object.status !== 'ready') {
       throw new ConflictException({

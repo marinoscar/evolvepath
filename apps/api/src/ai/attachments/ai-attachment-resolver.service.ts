@@ -146,7 +146,7 @@ export class AiAttachmentResolverService {
     let object;
 
     try {
-      object = await this.objects.getById(id, userId);
+      object = await this.objects.getOwnedById(id, userId);
     } catch {
       // NotFoundException and ForbiddenException are collapsed into ONE message
       // on purpose: distinguishing them tells a caller whether an id they do not

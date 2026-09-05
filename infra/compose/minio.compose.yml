@@ -1,0 +1,77 @@
+# =============================================================================
+# Docker Compose - MinIO object store (epic #67, issue #71)
+# =============================================================================
+# Usage:
+#   docker compose -f base.compose.yml -f dev.compose.yml -f minio.compose.yml up
+#
+# Why this exists: the storage module has been S3-only since it was written and
+# compose never had an object store, so nothing storage-related could be
+# verified from a clean clone. Media attachments make that the critical path.
+#
+# Set the MinIO block in .env (see .env.example) before bringing this up.
+# Console: http://localhost:9001 (minioadmin / minioadmin by default)
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # API - wait for the bucket, not just for MinIO
+  # ---------------------------------------------------------------------------
+  # This overlay deliberately touches nothing on `api` but depends_on and
+  # environment. An overlay that redefines build, command or ports fights the
+  # dev overlay it is stacked on.
+  api:
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+
+  # ---------------------------------------------------------------------------
+  # MinIO - S3-compatible object store
+  # ---------------------------------------------------------------------------
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      # The picker PUTs parts straight to MinIO from the browser, so the
+      # object store — not nginx — is the origin that has to allow it. ETag has
+      # to come back to the page too; MinIO exposes it by default, AWS S3 needs
+      # an explicit bucket CORS rule (documented in docs/deployment/vps.md).
+      MINIO_API_CORS_ALLOW_ORIGIN: ${APP_URL:-http://localhost:3535}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # minio-init - create the bucket, then exit
+  # ---------------------------------------------------------------------------
+  # A one-shot rather than a startup step in the API: creating a bucket is an
+  # operator action, and an API that creates its own bucket on boot needs
+  # credentials that can create buckets in production.
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: ${S3_BUCKET:-evolvepath-dev}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 \"$${MINIO_ROOT_USER}\" \"$${MINIO_ROOT_PASSWORD}\" &&
+      mc mb -p local/\"$${S3_BUCKET}\" &&
+      echo \"bucket $${S3_BUCKET} ready\"
+      "
+
+volumes:
+  minio-data:

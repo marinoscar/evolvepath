@@ -4,7 +4,12 @@ import { z } from 'zod';
 export const initUploadSchema = z.object({
   name: z.string().min(1).max(255),
   size: z.number().int().positive(),
-  mimeType: z.string().min(1),
+  // `type/subtype` only. A free-form string reaches the allowlist matcher and
+  // the storage provider's Content-Type header; neither wants a sentence.
+  mimeType: z
+    .string()
+    .min(1)
+    .regex(/^[\w.+-]+\/[\w.+-]+$/, 'mimeType must look like "type/subtype"'),
 });
 
 export type InitUploadDto = z.infer<typeof initUploadSchema>;
