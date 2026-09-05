@@ -430,6 +430,21 @@ above. Don't restate any of that here; extend those three instead.
 Note: `GET /api/auth/me` also carries `aiKey: { configured, hint }`, so the web
 app can gate its shell without a second request on boot.
 
+### Best Self (current user)
+- `GET /api/me/best-self` - The caller's Best Self profile; `data: null` until saved
+- `PUT /api/me/best-self` - Replace it whole and stamp `lastReviewedAt` (no PATCH by design)
+
+### Outcomes
+- `GET /api/outcomes` - List own outcomes (`domain`, `state`, `includeArchived`)
+- `POST /api/outcomes` - Create an outcome
+- `GET /api/outcomes/{id}` - Get one (404 for another user's, never 403)
+- `PATCH /api/outcomes/{id}` - Update (`domain` immutable; 409 if archived)
+- `POST /api/outcomes/{id}/archive` - Archive; idempotent
+
+### Domain Modes (current user)
+- `GET /api/me/domain-modes` - Always three entries; an unset domain reports GROW
+- `PUT /api/me/domain-modes/{domain}` - Set one domain's posture
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)

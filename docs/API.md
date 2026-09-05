@@ -1259,6 +1259,230 @@ response shape is identical to `POST /ai-settings/test`.
 
 ---
 
+### EvolvePath
+
+The product domain: who the user is trying to become, what they are trying to
+achieve, and what posture each life domain is in. Every endpoint here requires
+authentication only — no permission — because every row belongs to the caller.
+
+**Ownership is answered with 404, never 403.** A resource that belongs to
+another user is byte-identical to one that never existed: same status, same
+message, same body shape. A 403 would confirm that a guessed id is real.
+
+#### GET /me/best-self
+**Requires Authentication** — the caller's Best Self profile (PRD §10.2).
+
+Answers **200** with `"data": null` until the profile has been saved once — an
+unsaved profile is an empty card on the Path screen, not a missing resource.
+
+**Response:**
+```json
+{
+  "data": {
+    "id": "8c1e…",
+    "identityStatement": "Focused, present, healthy",
+    "workIdentity": null,
+    "familyIdentity": null,
+    "healthIdentity": null,
+    "sixMonthVision": null,
+    "motivations": ["family"],
+    "reasons": [],
+    "lastReviewedAt": "2026-02-01T10:00:00.000Z",
+    "createdAt": "2026-02-01T10:00:00.000Z",
+    "updatedAt": "2026-02-01T10:00:00.000Z"
+  },
+  "meta": { "timestamp": "2026-02-01T10:00:05.000Z" }
+}
+```
+
+---
+
+#### PUT /me/best-self
+**Requires Authentication** — replace the profile whole and stamp
+`lastReviewedAt`. There is deliberately no `PATCH`: a Best Self statement is
+one thought, and a half-updated one is not a state the user asked for. Omitted
+fields are **cleared**.
+
+**Request Body:**
+```json
+{
+  "identityStatement": "Focused, present, healthy",
+  "sixMonthVision": "Training three times a week without negotiating with myself",
+  "motivations": ["family", "energy"],
+  "reasons": ["I want to be around for them"]
+}
+```
+
+Every string field is optional and nullable. `identityStatement`,
+`workIdentity`, `familyIdentity` and `healthIdentity` cap at 500 characters,
+`sixMonthVision` at 2000; `motivations` and `reasons` are up to 10 entries of
+up to 200 characters each. Violations are **400**.
+
+Audit: `best_self:replace`, whose `meta` records **which fields were filled in
+and nothing they contain** — `audit_events` is admin-readable.
+
+---
+
+#### GET /outcomes
+**Requires Authentication** — the caller's outcomes, ordered by domain, then
+importance (descending), then creation time.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `domain` | enum | `WORK` \| `FAMILY` \| `HEALTH` |
+| `state` | enum | `ACTIVE` \| `PAUSED` \| `COMPLETED` \| `ARCHIVED` |
+| `includeArchived` | boolean | Default `false`. Archived outcomes are excluded unless this is `true` or `state=ARCHIVED` is passed. |
+
+**Response:** `data` is an array of the object shown under `GET /outcomes/{id}`.
+
+---
+
+#### POST /outcomes
+**Requires Authentication** — create an outcome. **201**.
+
+**Request Body:**
+```json
+{
+  "domain": "HEALTH",
+  "title": "Three strength workouts per week",
+  "description": null,
+  "targetDate": "2026-04-15",
+  "importance": 4,
+  "motivation": "I want my energy back",
+  "successDefinition": "Three sessions logged, every week, for six weeks",
+  "userConfidence": 3
+}
+```
+
+`domain` and `title` are required; `importance` defaults to `3`. `importance`
+and `userConfidence` are integers 1–5. `targetDate` is a plain `YYYY-MM-DD`
+date with no time of day — it is stored as a `date`, not a timestamp, so it
+cannot shift by a day across timezones.
+
+Audit: `outcome:create` with `meta: { domain, importance }`.
+
+---
+
+#### GET /outcomes/{id}
+**Requires Authentication** — one outcome. **404** if unknown *or* not owned by
+the caller.
+
+**Response:**
+```json
+{
+  "data": {
+    "id": "3f2a…",
+    "domain": "HEALTH",
+    "title": "Three strength workouts per week",
+    "description": null,
+    "targetDate": "2026-04-15",
+    "importance": 4,
+    "motivation": null,
+    "state": "ACTIVE",
+    "successDefinition": null,
+    "userConfidence": null,
+    "archivedAt": null,
+    "planId": "9b71…",
+    "activePlanVersion": { "id": "c4d8…", "version": 2 },
+    "createdAt": "2026-02-01T10:00:00.000Z",
+    "updatedAt": "2026-02-01T10:00:00.000Z"
+  }
+}
+```
+
+`planId` is `null` until a plan is created, and `activePlanVersion` is `null`
+while the plan has only drafts.
+
+---
+
+#### PATCH /outcomes/{id}
+**Requires Authentication** — update an outcome. At least one field is
+required.
+
+`domain` is **immutable** and is rejected: an outcome's domain is what files it
+under Work, Family or Health, and moving it would orphan the plan, routines and
+commitments sized for that domain's mode. `state` accepts `ACTIVE`, `PAUSED` or
+`COMPLETED` only — archiving goes through the endpoint below, which also stamps
+`archivedAt`.
+
+Editing an archived outcome is **409 `CONFLICT`**: the user archived it
+deliberately, and an edit is not the gesture that should bring it back.
+
+Audit: `outcome:update` with `meta: { changed: [...] }` — field names, not
+values.
+
+---
+
+#### POST /outcomes/{id}/archive
+**Requires Authentication** — archive an outcome. **200**.
+
+Sets `state` to `ARCHIVED` and stamps `archivedAt`. **Idempotent**: archiving
+an already-archived outcome answers 200, writes nothing and produces no second
+audit row, so a double-tap on a phone is harmless.
+
+Audit: `outcome:archive`.
+
+---
+
+#### GET /me/domain-modes
+**Requires Authentication** — the caller's per-domain posture (PRD §49).
+
+Always exactly three entries, in the order `WORK`, `FAMILY`, `HEALTH`. A domain
+the user has never set has **no stored row** and is reported as `GROW` with a
+null `effectiveFrom`; nothing is seeded at sign-up, so "has the user chosen a
+posture?" stays answerable.
+
+**Response:**
+```json
+{
+  "data": [
+    { "domain": "WORK", "mode": "GROW", "reason": null, "effectiveFrom": null },
+    { "domain": "FAMILY", "mode": "GROW", "reason": null, "effectiveFrom": null },
+    {
+      "domain": "HEALTH",
+      "mode": "RECOVER",
+      "reason": "Back strain",
+      "effectiveFrom": "2026-02-01T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+#### PUT /me/domain-modes/{domain}
+**Requires Authentication** — set the posture for one domain. **200**.
+
+`{domain}` must be `WORK`, `FAMILY` or `HEALTH`; anything else is **400**, not
+404 — an unknown domain is a malformed request, not a missing resource.
+
+**Request Body:**
+```json
+{ "mode": "RECOVER", "reason": "Back strain" }
+```
+
+`mode` is `GROW` \| `MAINTAIN` \| `RECOVER` \| `PAUSE`; `reason` is optional,
+up to 500 characters. `effectiveFrom` moves **only when the mode actually
+changes**, so re-saving the same mode with a new reason does not reset "since
+when".
+
+Audit: `domain_mode:set` with `meta: { domain, from, to }`.
+
+---
+
+#### EvolvePath errors
+
+| Status | Code | When |
+|--------|------|------|
+| 400 | `BAD_REQUEST` | Zod rejected the body, query or path parameter. `details` carries the failing paths. |
+| 401 | `UNAUTHORIZED` | No bearer token, or an expired one. |
+| 404 | `NOT_FOUND` | The id is unknown **or** belongs to another user — deliberately indistinguishable. |
+| 409 | `CONFLICT` | An edit to an archived outcome. |
+
+---
+
 ### Storage Objects
 
 The storage system provides file upload and management capabilities with support for large files (GB scale) through resumable multipart uploads.
