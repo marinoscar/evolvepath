@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link as RouterLink, useLocation, useParams } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 
 import { useWorkoutProgram } from '../hooks/useWorkoutProgram';
-import { listExercises } from '../services/api';
+import { listExercises, startWorkoutSession } from '../services/api';
 import { NON_EQUIVALENCE_CAPTION, TemplateTable } from '../components/workouts/TemplateTable';
 import { WeeklyStructure } from '../components/workouts/WeeklyStructure';
 
@@ -32,6 +32,7 @@ import { WeeklyStructure } from '../components/workouts/WeeklyStructure';
 export function WorkoutProgramPage() {
   const { programId } = useParams<{ programId: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const { program, proposals, isLoading, notFound, error, archive } =
     useWorkoutProgram(programId);
 
@@ -40,6 +41,28 @@ export function WorkoutProgramPage() {
     (location.state as { notice?: string } | null)?.notice ?? null,
   );
   const [instructions, setInstructions] = useState<Record<string, string>>({});
+  const [starting, setStarting] = useState(false);
+
+  /**
+   * Start this workout now, outside its scheduled day.
+   *
+   * An ad-hoc session by `templateId`, with no commitment attached — the user
+   * is doing the workout, not keeping today's intention, and pretending
+   * otherwise would complete a commitment they never made.
+   */
+  const startWorkout = async (templateId: string) => {
+    setStarting(true);
+
+    try {
+      const session = await startWorkoutSession({ templateId });
+      navigate(`/workout/${session.id}`);
+    } catch (err) {
+      const openId = (err as { details?: { sessionId?: string } }).details?.sessionId;
+
+      if (openId) navigate(`/workout/${openId}`);
+      else setStarting(false);
+    }
+  };
 
   // The catalog text, fetched once and shared by every table on the page. A
   // per-exercise request would be an N+1 on a screen that shows twenty.
@@ -144,9 +167,20 @@ export function WorkoutProgramPage() {
       <Stack spacing={4}>
         {fullTemplates.map((template) => (
           <Box key={template.id} component="section" aria-label={template.name}>
-            <Typography variant="subtitle1" component="h2" gutterBottom>
-              {template.name}
-            </Typography>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+              <Typography variant="subtitle1" component="h2" sx={{ flex: 1 }}>
+                {template.name}
+              </Typography>
+              {program.status === 'ACTIVE' ? (
+                <Button
+                  size="small"
+                  disabled={starting}
+                  onClick={() => void startWorkout(template.id)}
+                >
+                  Start this workout
+                </Button>
+              ) : null}
+            </Stack>
             <TemplateTable
               variants={program.templates.filter((row) => row.name === template.name)}
               instructions={instructions}

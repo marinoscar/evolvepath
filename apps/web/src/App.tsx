@@ -35,6 +35,7 @@ const HealthPage = lazy(() => import('./pages/HealthPage'));
 const WorkoutProgramsPage = lazy(() => import('./pages/WorkoutProgramsPage'));
 const ProgramBuilderPage = lazy(() => import('./pages/ProgramBuilderPage'));
 const WorkoutProgramPage = lazy(() => import('./pages/WorkoutProgramPage'));
+const WorkoutRunnerPage = lazy(() => import('./pages/WorkoutRunnerPage'));
 const CoachPage = lazy(() => import('./pages/CoachPage'));
 const ProgressPage = lazy(() => import('./pages/ProgressPage'));
 // Progress surfaces, not sixth destinations: `DESTINATION_ROUTES.progress`
@@ -156,6 +157,11 @@ function AppRoutes() {
                     `UNOWNED_ROUTES` for the same reason: there is no rail or
                     bottom bar on it to highlight. */}
                 <Route path="/start/:commitmentId" element={<StartFlowPage />} />
+                {/* The workout runner (#109, epic E09). Full screen for the
+                    same reason and by the same mechanism: it mounts no shell,
+                    so there is no navigation to hide and none of the five
+                    coupled breakpoint gates is touched. */}
+                <Route path="/workout/:sessionId" element={<WorkoutRunnerPage />} />
 
                 <Route
                   element={

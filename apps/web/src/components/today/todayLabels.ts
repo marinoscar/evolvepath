@@ -50,11 +50,18 @@ export const DOMAIN_MODE_LABELS: Record<DomainModeKind, string | null> = {
  * Offered only for `PLANNED` and `READY`: the API refuses a PATCH on a terminal
  * commitment with a 409, and a started one is mid-session.
  */
-export type RowAction = CommitmentActionName | 'edit';
+/**
+ * `start_workout` is a CLIENT-SIDE action like `edit`, not a commitment action
+ * endpoint: it opens a workout session and navigates to the runner (epic E09).
+ * It is offered instead of `start` on a Health commitment that carries a
+ * workout template — the generic timer would be the wrong screen for it.
+ */
+export type RowAction = CommitmentActionName | 'edit' | 'start_workout';
 
 export const ACTION_LABELS: Record<RowAction, string> = {
   edit: 'Edit',
   start: 'Start',
+  start_workout: 'Start workout',
   pause: 'Pause',
   continue: 'Continue',
   complete: 'Complete',

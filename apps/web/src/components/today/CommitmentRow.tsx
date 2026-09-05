@@ -78,6 +78,17 @@ export function CommitmentRow({ commitment, disabled = false, onAction }: Commit
       : []),
   ];
 
+  // A workout opens the runner, not the generic timer (epic E09). Swapped in
+  // place of `start` rather than appended, so the row still offers exactly one
+  // primary move — two "start" buttons on one line is a choice nobody asked
+  // for. Decided from `workoutTemplateId` rather than from the domain: a walk
+  // is a Health commitment too.
+  const workoutIndex = commitment.workoutTemplateId
+    ? actions.indexOf('start' as FamilyRowAction)
+    : -1;
+
+  if (workoutIndex >= 0) actions[workoutIndex] = 'start_workout' as FamilyRowAction;
+
   const labelFor = (action: FamilyRowAction) =>
     isFamily ? familyActionLabel(action) : ACTION_LABELS[action as RowAction];
 

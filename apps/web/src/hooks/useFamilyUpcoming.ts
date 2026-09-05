@@ -32,6 +32,7 @@ export function commitmentToCard(row: Commitment): CommitmentCard {
     scheduledStart: row.scheduledStart,
     scheduledEnd: row.scheduledEnd,
     durationMinutes: fullMinutes,
+    workoutTemplateId: row.workoutTemplateId ?? null,
     versions: {
       full: { title: row.fullVersion ?? row.title, minutes: fullMinutes },
       short:
