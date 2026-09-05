@@ -9,6 +9,23 @@ import {
 } from '../services/api';
 import { useIsMounted } from './useIsMounted';
 
+interface UseFamilyMembersOptions {
+  /**
+   * Whether to fetch at all. Defaults to true.
+   *
+   * Today passes `false` until its own data has arrived, and that is not an
+   * optimisation. A request fired at mount races the boot token refresh: it
+   * lands before `AuthContext` has an access token, gets a 401, and starts a
+   * second refresh whose rotation collides with the first — which the API
+   * correctly reads as refresh-token reuse and answers by revoking the
+   * session. The user is bounced to the login screen by a birthday cue.
+   *
+   * Waiting until the screen has data is also simply right: the cue decorates
+   * a card that does not exist yet.
+   */
+  enabled?: boolean;
+}
+
 interface UseFamilyMembersResult {
   members: FamilyMember[];
   isLoading: boolean;
@@ -26,13 +43,18 @@ interface UseFamilyMembersResult {
  * are other people's names, recorded without their knowledge (VISION §50), and
  * they belong in memory for the length of a session and nowhere else.
  */
-export function useFamilyMembers(): UseFamilyMembersResult {
+export function useFamilyMembers(
+  options: UseFamilyMembersOptions = {},
+): UseFamilyMembersResult {
+  const { enabled = true } = options;
   const [members, setMembers] = useState<FamilyMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const isMounted = useIsMounted();
 
   const refresh = useCallback(async () => {
+    if (!enabled) return;
+
     setIsLoading(true);
     setError(null);
     try {
@@ -47,7 +69,7 @@ export function useFamilyMembers(): UseFamilyMembersResult {
     } finally {
       if (isMounted()) setIsLoading(false);
     }
-  }, [isMounted]);
+  }, [enabled, isMounted]);
 
   // Every mutation refetches rather than splicing: the API orders by creation
   // and reproducing that here would be a second implementation of it.

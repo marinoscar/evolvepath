@@ -1137,6 +1137,38 @@ meaning depends on the previous one having happened. Each run creates a fresh
 user (`uniqueEmail`), so parallel workers and repeat runs never share rows and
 the suite has no leftover-state dependence.
 
+### Running the E08 family spec
+
+E08 (epic #35) ships `specs/family.spec.ts`. It needs the same stack — the
+behaviour lint's optional rewrite calls the coach, so the **fake OpenAI
+overlay** has to be up, and one case deliberately points the provider at an
+unreachable port to prove the lint's verdict does not depend on it (PRD §120).
+
+```bash
+cd infra/compose && docker compose \
+  -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up
+
+cd tests/e2e && npx playwright test specs/family.spec.ts
+```
+
+Nine cases, on both projects, covering PRD §105's five family criteria: create a
+member and a ritual with a recurrence through the UI, watch its occurrences
+appear on Today, answer "I'm in", complete it and read `kept 1` back from
+`GET /family/summary`; move and skip occurrences through the ordinary
+lifecycle; the behaviour lint with and without the coach; the cancel-not-delete
+rule when a recurrence is edited or a ritual paused; and the no-score
+assertion — over every family response **and** the live OpenAPI document.
+
+Each test creates a fresh user (`uniqueEmail`), and the cases that need a
+future occurrence *today* skip themselves rather than fail when the run starts
+too late in the day. `user_profiles.timezone` defaults to `UTC`, which is what
+makes "tonight" computable without a conversion.
+
+The contract these cases hold is written down in
+[`specs/family-domain.md`](specs/family-domain.md), and
+`apps/api/test/docs/family-domain-doc.spec.ts` fails if a constant, a prompt
+version or the coach's sentence changes without that document changing too.
+
 ### Security Note
 
 The test authentication endpoint (`/api/auth/test/login`) and the test login page (`/testing/login`) are **completely disabled in production** through multiple security layers. See [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md#13-test-authentication-development-only) for details.

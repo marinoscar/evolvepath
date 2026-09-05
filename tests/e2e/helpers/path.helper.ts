@@ -87,8 +87,35 @@ export function describeViolations(
  * /auth/refresh` exchanges that cookie for a fresh access token exactly as the
  * app does. Playwright cannot reach the database, so this is how the specs
  * assert persisted state: through the API, as the user.
+ *
+ * -----------------------------------------------------------------------------
+ * CACHED PER PAGE, AND THAT IS NOT AN OPTIMISATION
+ * -----------------------------------------------------------------------------
+ *
+ * REFRESH TOKENS ROTATE. Every call to this function spends the cookie in the
+ * jar and installs a new one, and the APP RUNNING IN THE SAME PAGE refreshes
+ * too — on boot, and on any 401. Minting a token per API call therefore puts a
+ * dozen rotations in flight beside the app's own, and when two of them use the
+ * same cookie the API correctly reads it as refresh-token REUSE and revokes the
+ * session. The spec then fails somewhere unrelated, on the login page, with no
+ * hint of why.
+ *
+ * That is not hypothetical: it is why `path.spec.ts`, `today.spec.ts` and
+ * `family.spec.ts` each pass alone and fail in a long full-suite run. Caching
+ * one token per page makes a spec spend one rotation instead of a dozen.
+ *
+ * The cache is invalidated by `resetAccessToken`, which the API helpers call
+ * once on a 401 before retrying — so an access token that expires mid-spec is
+ * still handled, without a rotation per request.
  */
-export async function accessToken(page: Page): Promise<string> {
+const tokensByPage = new WeakMap<Page, string>();
+
+export async function accessToken(page: Page, forceMint = false): Promise<string> {
+  if (!forceMint) {
+    const cached = tokensByPage.get(page);
+    if (cached) return cached;
+  }
+
   const response = await page.request.post('/api/auth/refresh');
 
   if (!response.ok()) {
@@ -103,15 +130,39 @@ export async function accessToken(page: Page): Promise<string> {
   if (!token) {
     throw new Error(`No accessToken in the refresh response: ${JSON.stringify(body)}`);
   }
+
+  tokensByPage.set(page, token);
   return token;
+}
+
+/** Forget this page's cached token, so the next call mints a fresh one. */
+export function resetAccessToken(page: Page): void {
+  tokensByPage.delete(page);
+}
+
+/**
+ * Run a request with the page's token, minting a new one once on a 401.
+ *
+ * The retry is what makes caching safe: an access token that expired during a
+ * long spec costs one extra round trip rather than a failure, and a spec still
+ * spends one rotation instead of one per call.
+ */
+export async function withToken(
+  page: Page,
+  send: (token: string) => Promise<import('@playwright/test').APIResponse>,
+): Promise<import('@playwright/test').APIResponse> {
+  const first = await send(await accessToken(page));
+  if (first.status() !== 401) return first;
+
+  resetAccessToken(page);
+  return send(await accessToken(page, true));
 }
 
 /** A GET against the API as the signed-in user, with the body on a failure. */
 export async function apiGet<T>(page: Page, path: string): Promise<T> {
-  const token = await accessToken(page);
-  const response = await page.request.get(path, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const response = await withToken(page, (token) =>
+    page.request.get(path, { headers: { Authorization: `Bearer ${token}` } }),
+  );
 
   if (!response.ok()) {
     throw new Error(`GET ${path} → ${response.status()}: ${await response.text()}`);

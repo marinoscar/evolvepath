@@ -174,12 +174,42 @@ export class RitualsService {
 
     let ritual = await this.prisma.ritual.update({ where: { id: existing.id }, data });
 
-    const cancelled = rebuild ? await this.cancelFuture(userId, ritual.id, now) : 0;
-
+    let cancelled = 0;
     let created = 0;
-    if (rebuild && ritual.active) {
-      created = (await this.materializer.materialize(userId, ritual, now)).created;
-      ritual = await this.findOwned(userId, ritual.id);
+
+    if (rebuild) {
+      // WHICH SLOTS DOES THE NEW RULE STILL WANT? An occurrence the rule still
+      // produces is the SAME occurrence — it keeps its row and is refreshed in
+      // place; only the slots the rule dropped are withdrawn.
+      //
+      // Cancelling everything and re-materializing does NOT work, and the way
+      // it fails is silent: the unique `(ritual_id, scheduled_start)` index
+      // turns every re-created slot into a `skipped`, so unticking Sunday would
+      // leave Tuesday and Thursday cancelled and never rebuilt. Found by E08's
+      // e2e (#53), which is exactly the case it was written for.
+      const wanted = ritual.active
+        ? (await this.materializer.desiredOccurrences(userId, ritual, now)).starts
+        : [];
+      const keep = new Set(wanted.map((start) => start.getTime()));
+
+      cancelled = await this.cancelFuture(userId, ritual.id, now, keep);
+
+      if (ritual.active) {
+        // The kept rows show the new title and the new durations: the user
+        // changed the rule, not their mind about tonight.
+        await this.prisma.commitment.updateMany({
+          where: {
+            userId,
+            ritualId: ritual.id,
+            scheduledStart: { gt: now, in: wanted },
+            status: { in: [...CANCELLABLE] },
+          },
+          data: this.materializer.contentFor(ritual),
+        });
+
+        created = (await this.materializer.materialize(userId, ritual, now)).created;
+        ritual = await this.findOwned(userId, ritual.id);
+      }
     }
 
     await this.syncRoutine(userId, ritual);
@@ -235,8 +265,16 @@ export class RitualsService {
    * has touched, and editing the rule must not rewrite what they did. A 409
    * from here would therefore be a programming error, which is why it is logged
    * rather than swallowed.
+   *
+   * `keep` holds the instants the NEW rule still wants, which an edit passes so
+   * that unchanged occurrences survive it. A delete or a pause passes none.
    */
-  private async cancelFuture(userId: string, ritualId: string, now: Date): Promise<number> {
+  private async cancelFuture(
+    userId: string,
+    ritualId: string,
+    now: Date,
+    keep: ReadonlySet<number> = new Set(),
+  ): Promise<number> {
     const rows = await this.prisma.commitment.findMany({
       where: {
         userId,
@@ -244,12 +282,14 @@ export class RitualsService {
         scheduledStart: { gt: now },
         status: { in: [...CANCELLABLE] },
       },
-      select: { id: true },
+      select: { id: true, scheduledStart: true },
     });
 
     let cancelled = 0;
 
     for (const row of rows) {
+      if (keep.has(row.scheduledStart.getTime())) continue;
+
       try {
         await this.commitments.transition(userId, row.id, { to: 'CANCELLED' });
         cancelled += 1;
