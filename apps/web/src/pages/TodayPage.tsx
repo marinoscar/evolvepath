@@ -34,7 +34,9 @@ import { toCommitmentInput } from '../utils/commitmentForm.schema';
 import { CheckInChips } from '../components/today/CheckInChips';
 import { QuickAddFab } from '../components/today/QuickAddFab';
 import { QuickAddSheet } from '../components/today/QuickAddSheet';
-import type { RowAction } from '../components/today/todayLabels';
+import type { FamilyRowAction } from '../components/family/familyLabels';
+import { BirthdayCue } from '../components/family/BirthdayCue';
+import { useFamilyMembers } from '../hooks/useFamilyMembers';
 import { CoachInsightCard } from '../components/today/CoachInsightCard';
 import { DomainCard } from '../components/today/DomainCard';
 import { NextBestActionCard } from '../components/today/NextBestActionCard';
@@ -98,6 +100,11 @@ export default function TodayPage() {
 
   const checkIn = useCheckIn(refresh);
 
+  // One extra request, for the birthday cue on the Family card. Failing is
+  // survivable — the cue simply does not render, and nothing else on Today
+  // depends on it.
+  const { members: familyMembers } = useFamilyMembers();
+
   const allCommitments = useMemo(
     () => today?.domains.flatMap((section) => section.commitments) ?? [],
     [today],
@@ -113,7 +120,7 @@ export default function TodayPage() {
   }, []);
 
   const openDialogFor = useCallback(
-    (action: RowAction, commitment: CommitmentCard) => {
+    (action: FamilyRowAction, commitment: CommitmentCard) => {
       switch (action) {
         case 'edit':
           setEditing(commitment);
@@ -156,10 +163,20 @@ export default function TodayPage() {
   );
 
   const handleAction = useCallback(
-    async (action: RowAction, commitment: CommitmentCard) => {
+    async (action: FamilyRowAction, commitment: CommitmentCard) => {
       if (openDialogFor(action, commitment)) return;
 
       switch (action) {
+        // "I'm in" (epic E08). Not an action endpoint: it is the ordinary
+        // PLANNED → READY transition, wearing family words on a family row.
+        case 'ready':
+          try {
+            await transitionCommitment(commitment.id, { to: 'READY' });
+            await refresh();
+          } catch (err) {
+            setToast(err instanceof Error ? err.message : 'Could not update that');
+          }
+          return;
         case 'start':
           // The Start screen owns the timer; starting from here means going
           // there, not flipping a status in place.
@@ -185,7 +202,7 @@ export default function TodayPage() {
           return;
       }
     },
-    [actions, navigate, openDialogFor, runDecomposition],
+    [actions, navigate, openDialogFor, refresh, runDecomposition],
   );
 
   // ---------------------------------------------------------------------------
@@ -349,6 +366,9 @@ export default function TodayPage() {
                 mode={section.mode}
                 commitments={section.commitments}
                 pendingId={actions.pendingId}
+                headerExtra={
+                  section.domain === 'FAMILY' ? <BirthdayCue members={familyMembers} /> : null
+                }
                 onAction={(action, commitment) => void handleAction(action, commitment)}
               />
             ))}
