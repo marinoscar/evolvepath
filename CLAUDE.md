@@ -626,6 +626,15 @@ Ten intent-named routes over the same matrix. Each returns a **commitment card**
 - `POST /api/reflections` - Note/tags/scores on a commitment, outcome, plan version or day
 - `GET /api/reflections` - Newest first, capped at 200
 
+### Plan Proposals (epic E06)
+The user's half of PRD §15's mutation protocol. There is deliberately no
+`POST /proposals` — proposals are created by the service that produced them.
+- `GET /api/proposals?status=&planId=` - Your proposals, newest first. Reading one past its 7-day life marks it `EXPIRED` (lazy; there is no sweeper)
+- `GET /api/proposals/{id}` - One proposal plus `preview.diff`, computed by the **same pure function** accept applies
+- `POST /api/proposals/{id}/accept` - **The only path in the product that turns AI output into a `PlanVersion`.** Atomic; returns the new version
+- `POST /api/proposals/{id}/edit` - Rewrite the whole change set. Keeps `originalChanges`; a later accept is attributed `createdBy: USER`
+- `POST /api/proposals/{id}/reject` - Keep the current plan. Touches nothing; the reason is kept for the coach
+
 ### Family (epic E08)
 Own data only; a foreign or unknown id answers 404, never 403.
 - `GET /api/family/members` - List; items carry exactly `id`, `nickname`, `relationship`, `birthday`, `createdAt` — PRD §33 fixes the record and there is nothing else to return
@@ -935,6 +944,29 @@ Two rules the Path screen holds that are easy to break:
   verbatim copy of the API's matrix and exists only for optimistic rendering
   between a successful transition and its refetch; each file points at the
   other.
+
+### Proposing a plan change
+
+AI code never calls `PlanVersionsService` and never writes `plan_versions`. It
+calls `ProposalsService.createFromSource(userId, sourceKind, {...})`
+(`apps/api/src/coach/proposals/`), which writes one row and stops. The plan
+changes when — and only when — the user calls
+`POST /proposals/:id/accept` (PRD §15, §89, §107; VISION §19).
+
+Three rules that make that hold:
+
+1. **`applyChanges` is pure and is called twice** — once to render the preview
+   the user reads, once to apply what they accepted. Two implementations would
+   mean approving one thing and getting another.
+2. **A change carries its own `reason`.** PRD §80 wants history to say why the
+   plan changed, and the only moment that reason exists is when the change is
+   proposed.
+3. **Attribution follows who wrote the content.** An accepted proposal is
+   `createdBy: AI`; an accepted proposal the user edited first is
+   `createdBy: USER`.
+
+The full protocol, the six ops and the rejected alternatives are in
+[`docs/specs/coach-and-memory.md`](docs/specs/coach-and-memory.md) §3.
 
 ### Adding an AI persona
 
