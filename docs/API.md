@@ -4165,6 +4165,49 @@ The last row is deliberate: the user opened the app, changed their mind, and
 still has all of Today's vocabulary available. Marking it partial would be the
 product deciding they failed at something they never started.
 
+#### Media coaching
+
+```http
+POST /api/workouts/sessions/{id}/form-check   { "storageObjectId": "…", "exerciseId": "…", "setNumber": 1 }
+POST /api/workouts/equipment-check            { "storageObjectId": "…" }
+POST /api/nutrition/meal-check                { "storageObjectId": "…" }
+```
+
+Three typed calls on the `media_analyst` persona, each carrying context the
+user should not have to type — which exercise, which set, what weight, which
+program. **All three always answer 200**: a provider failure is
+`{ ok: false, error }` (PRD §120), because the form check is a screen somebody
+is standing in front of and an exception there ends the workout.
+
+`storageObjectId` is an object uploaded through `POST /api/storage/objects`;
+ownership is the storage service's own check, and **409 `MEDIA_NOT_READY`**
+until the upload lands. Ten checks a minute per user — each call sends images,
+and a video arrives as several frames.
+
+**The form check withholds its cues whenever a body is the question.** A
+`pain_reported` or `joint_instability` flag, a session already carrying
+`discomfortFlag`, or a set the user logged with any discomfort, all produce
+`cues: []`, the PRD §45 copy in `safetyNote`, and `redirected: true`. Cues
+alongside "get this looked at" would read as permission to keep going. The
+contract has no score, grade or rep count for the same reason — a field the
+model cannot fill is a field it cannot invent.
+
+**The equipment check proposes rather than edits.** Detected equipment goes
+through a deterministic pass over the active program: movements the room cannot
+do, and what the catalog's `substitutionGroup` offers instead. Those become a
+`WORKOUT` plan-change proposal (PRD §15); the check itself changes nothing.
+
+**The meal check never counts.** Any output mentioning calories, macros, grams
+or portion weights is rejected **whole** — `{ ok: false, code: 'schema' }` — and
+nothing is stored. Not edited: a stripped sentence reads as an omission, and we
+would be publishing the rest of a reply that had already ignored its
+instructions (PRD §46, VISION §16).
+
+Answers are stored on the storage object's `metadata._coaching`, alongside the
+`_processing` key the video sampler uses. That is a deliberate seam:
+`media_attachments.ai_summary` (epic #67) is where they belong, and moving them
+is one method on `MediaSummaryService`.
+
 #### Adaptation
 
 ```http
