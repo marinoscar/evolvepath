@@ -235,11 +235,152 @@ function insightProposal() {
   };
 }
 
+
+// ---------------------------------------------------------------------------
+// The Health domain (epic E09, issue #114)
+// ---------------------------------------------------------------------------
+
+/**
+ * A three-day upper/lower/upper week, using catalog names only.
+ *
+ * CATALOG NAMES MATTER. The resolver creates a custom exercise for anything it
+ * cannot match, which would still pass — and would quietly stop testing the
+ * resolution the e2e is there to prove.
+ *
+ * The `workout_program_unsafe` variant is selected by the word "shoulder" in
+ * the request, which is what the user actually types into the limitations box.
+ * It returns five training days for a beginner AND a barbell overhead press —
+ * two independent rule violations, so the spec still fails loudly if one of
+ * them is ever dropped.
+ */
+function workoutProgram(input) {
+  const unsafe = /shoulder/i.test(input);
+
+  const day = (name, exercises) => [
+    { name, variant: 'FULL', targetMinutes: 40, exercises },
+    {
+      name,
+      variant: 'SHORT',
+      targetMinutes: 24,
+      exercises: exercises.slice(0, 2),
+    },
+    {
+      name,
+      variant: 'MINIMUM',
+      targetMinutes: 10,
+      exercises: [{ ...exercises[0], sets: 2 }],
+    },
+  ];
+
+  const exercise = (exerciseName, extra = {}) => ({
+    exerciseName,
+    sets: 3,
+    repMin: 8,
+    repMax: 12,
+    restSeconds: 90,
+    notes: null,
+    ...extra,
+  });
+
+  const upperA = unsafe
+    ? [exercise('Barbell Overhead Press'), exercise('Dumbbell Row')]
+    : [exercise('Dumbbell Bench Press'), exercise('Dumbbell Row')];
+
+  const templates = [
+    ...day('Upper A', upperA),
+    ...day('Lower', [exercise('Goblet Squat'), exercise('Dumbbell Romanian Deadlift')]),
+    ...day('Upper B', [exercise('Incline Dumbbell Press'), exercise('Band Row')]),
+  ];
+
+  const weekdays = unsafe ? [1, 2, 3, 4, 5] : [1, 3, 5];
+  const names = ['Upper A', 'Lower', 'Upper B', 'Upper A', 'Lower'];
+
+  return {
+    programName: unsafe ? 'Five-day split' : 'Three-day upper/lower',
+    durationWeeks: 6,
+    weeklyStructure: weekdays.map((weekday, index) => ({
+      weekday,
+      templateName: names[index],
+    })),
+    templates,
+    progressionMethod: 'DOUBLE_PROGRESSION',
+    substitutions: [
+      { exerciseName: 'Dumbbell Bench Press', alternatives: ['Push-Up'] },
+      { exerciseName: 'Dumbbell Row', alternatives: ['Band Row'] },
+    ],
+    rationale:
+      'Three sessions a week on the movements that carry the most, with room to add ' +
+      'weight once every set reaches the top of its range.',
+  };
+}
+
+/**
+ * A form check.
+ *
+ * "pain" anywhere in the request selects the redirecting variant — the word the
+ * user's own discomfort report puts into the input. The API's post-processing
+ * empties the cues either way; returning cues here is deliberate, so the spec
+ * proves the SERVER withheld them rather than the model never offering any.
+ */
+function formCheck(input) {
+  const painful = /pain|SHARP_PAIN/i.test(input);
+
+  return {
+    observations: painful
+      ? ['The knee travels inward on the way up.']
+      : [
+          'The bar drifts forward as you stand up.',
+          'The last rep is noticeably slower than the first.',
+        ],
+    cues: [
+      'Think about pushing the floor away rather than lifting the bar.',
+      'Stop one rep before the bar slows down.',
+    ],
+    riskFlags: painful ? ['pain_reported'] : ['none'],
+    safetyNote: null,
+    confidence: 'medium',
+  };
+}
+
+function equipmentCheck() {
+  return {
+    equipmentDetected: ['DUMBBELL', 'BENCH'],
+    notes: ['A corner of a room with a bench and a rack of dumbbells.'],
+  };
+}
+
+/** No number appears anywhere here, and the API's guard would reject one. */
+function mealCheck() {
+  return {
+    observations: [
+      'A protein source and a green vegetable on the plate.',
+      'Eaten at a table rather than at a desk.',
+    ],
+    behaviorSuggestions: [
+      {
+        key: 'vegetables_with_dinner',
+        text: 'Keep something green on the plate at dinner like this.',
+      },
+    ],
+  };
+}
+
+function progressionExplanation() {
+  return {
+    sentence: 'Two sessions at the top of the range and comfortable — 22.5 kg today.',
+  };
+}
+
 const SCENARIOS = {
   coach_reply: coachReply,
   safety_decision: safetyDecision,
   insight_proposal: insightProposal,
   weekly_review: weeklyReview,
+  workout_program: workoutProgram,
+  form_check: formCheck,
+  equipment_check: equipmentCheck,
+  meal_check: mealCheck,
+  progression_explanation: progressionExplanation,
 };
 
 /**

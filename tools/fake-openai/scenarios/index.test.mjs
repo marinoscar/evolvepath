@@ -259,3 +259,88 @@ describe('firstId', () => {
     );
   });
 });
+
+describe('the Health domain (epic E09)', () => {
+  it('writes three training days out of catalog names only', () => {
+    const answer = matchScenario(request('workout_program', 'Get stronger'));
+
+    assert.equal(answer.weeklyStructure.length, 3);
+    assert.equal(answer.templates.length, 9);
+
+    // The resolver invents a custom exercise for anything it cannot match,
+    // which would still pass and would quietly stop testing the resolution.
+    const names = answer.templates.flatMap((t) => t.exercises.map((e) => e.exerciseName));
+    for (const name of names) {
+      assert.ok(
+        [
+          'Dumbbell Bench Press',
+          'Dumbbell Row',
+          'Goblet Squat',
+          'Dumbbell Romanian Deadlift',
+          'Incline Dumbbell Press',
+          'Band Row',
+          'Barbell Overhead Press',
+        ].includes(name),
+        `${name} is not a catalog movement`,
+      );
+    }
+  });
+
+  it('gives every full day a short and a minimum sibling', () => {
+    const answer = matchScenario(request('workout_program', 'Get stronger'));
+
+    for (const full of answer.templates.filter((t) => t.variant === 'FULL')) {
+      for (const variant of ['SHORT', 'MINIMUM']) {
+        assert.ok(
+          answer.templates.some((t) => t.name === full.name && t.variant === variant),
+          `${full.name} has no ${variant}`,
+        );
+      }
+    }
+  });
+
+  it('breaks two rules at once when the user mentions a shoulder', () => {
+    const answer = matchScenario(
+      request('workout_program', 'Get stronger. My shoulder is bad.'),
+    );
+
+    // Two independent violations, so the spec still fails loudly if one of
+    // them is ever dropped from the rules.
+    assert.equal(answer.weeklyStructure.length, 5);
+    assert.ok(
+      answer.templates.some((t) =>
+        t.exercises.some((e) => e.exerciseName === 'Barbell Overhead Press'),
+      ),
+    );
+  });
+
+  it('offers cues on a form check so the server can be seen withholding them', () => {
+    const clean = matchScenario(request('form_check', 'Dumbbell Bench Press'));
+    const painful = matchScenario(request('form_check', 'discomfort: SHARP_PAIN'));
+
+    assert.deepEqual(clean.riskFlags, ['none']);
+    assert.deepEqual(painful.riskFlags, ['pain_reported']);
+    assert.ok(painful.cues.length > 0);
+  });
+
+  it('never puts a number in a meal check', () => {
+    const answer = matchScenario(request('meal_check', 'What do you think?'));
+    const text = [
+      ...answer.observations,
+      ...answer.behaviorSuggestions.map((s) => s.text),
+    ].join(' ');
+
+    assert.ok(!/\d/.test(text), text);
+  });
+
+  it('answers the equipment and progression schemas', () => {
+    assert.deepEqual(
+      matchScenario(request('equipment_check', 'a photo')).equipmentDetected,
+      ['DUMBBELL', 'BENCH'],
+    );
+    assert.match(
+      matchScenario(request('progression_explanation', 'increase')).sentence,
+      /22\.5/,
+    );
+  });
+});
