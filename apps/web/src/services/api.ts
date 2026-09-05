@@ -1466,3 +1466,38 @@ export async function approveWeeklyPlan(
 ): Promise<ApproveWeeklyPlanResult> {
   return api.post<ApproveWeeklyPlanResult>(`/weekly/plans/${id}/approve`, body);
 }
+
+// -----------------------------------------------------------------------------
+// The Health domain (epic E09)
+// -----------------------------------------------------------------------------
+
+import type { BodyWeightLog, NutritionBehaviour, WeightTrend } from '../types';
+
+export async function listNutritionBehaviours(): Promise<NutritionBehaviour[]> {
+  const result = await api.get<{ items: NutritionBehaviour[] }>('/nutrition/behaviors');
+  return result.items;
+}
+
+export async function commitNutritionBehaviour(
+  key: string,
+  body: { repeatDays?: number; scheduledStart?: string } = {},
+): Promise<{ commitmentIds: string[] }> {
+  return api.post<{ commitmentIds: string[] }>(`/nutrition/behaviors/${key}/commit`, body);
+}
+
+export async function putWeight(body: BodyWeightLog): Promise<BodyWeightLog> {
+  return api.put<BodyWeightLog>('/health/weight', body);
+}
+
+export async function getWeight(params?: { from?: string; to?: string }): Promise<WeightTrend> {
+  const query = new URLSearchParams();
+  if (params?.from) query.set('from', params.from);
+  if (params?.to) query.set('to', params.to);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+
+  return api.get<WeightTrend>(`/health/weight${suffix}`);
+}
+
+export async function deleteWeight(dateLocal: string): Promise<void> {
+  await api.delete<void>(`/health/weight/${dateLocal}`);
+}

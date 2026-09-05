@@ -80,7 +80,11 @@ export const DESTINATION_ROUTES: Record<DestinationKey, readonly string[]> = {
   // coaching deep link uses, and it must light this destination up exactly as
   // `/` does — it is the same route element, not a redirect.
   today: ['/', '/today'],
-  path: ['/path'],
+  // `/health` sits under Path for the same reason `/path/family` does: PRD §11
+  // fixes five destinations, and the Health surface is a product screen rather
+  // than a sixth place to go. Listed explicitly because the path does not start
+  // with `/path` — the label and the URL answer different questions.
+  path: ['/path', '/health'],
   coach: ['/coach'],
   progress: ['/progress'],
   // `/settings`, not `/profile`. The destination is LABELLED Profile because

@@ -2022,3 +2022,46 @@ export interface ApproveWeeklyPlanResult {
   skippedExisting: number;
   warnings: LoadWarning[];
 }
+
+// =============================================================================
+// The Health domain (epic E09)
+// =============================================================================
+
+export type BehaviourTime = 'MORNING' | 'MIDDAY' | 'EVENING';
+
+export interface BehaviourVersion {
+  title: string;
+  minutes: number;
+}
+
+/** PRD §46's V1 nutrition scope: behaviours, never calories or macros. */
+export interface NutritionBehaviour {
+  key: string;
+  title: string;
+  description: string;
+  defaultTime: BehaviourTime;
+  fullVersion: BehaviourVersion;
+  minimumVersion: BehaviourVersion;
+}
+
+export interface BodyWeightLog {
+  dateLocal: string;
+  weightKg: number;
+}
+
+export interface WeightTrendPoint {
+  dateLocal: string;
+  /** Null where fewer than two readings fall in the seven-day window. */
+  rolling7Kg: number | null;
+}
+
+/**
+ * PRD §47. There is deliberately no per-day classification on this type, and
+ * there must never be one: the promise is that a single measurement is never
+ * called a bad day, and the way to keep it is for the field not to exist.
+ */
+export interface WeightTrend {
+  items: BodyWeightLog[];
+  trend: WeightTrendPoint[];
+  summary: { first: number; last: number; deltaKg: number; days: number } | null;
+}
