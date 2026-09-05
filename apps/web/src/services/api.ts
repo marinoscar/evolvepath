@@ -1362,3 +1362,107 @@ export async function deleteMemoryInsight(id: string): Promise<void> {
 export async function proposeMemoryInsights(): Promise<ProposeInsightsResult> {
   return api.post<ProposeInsightsResult>('/memory-insights/propose', {});
 }
+
+// =============================================================================
+// The weekly loop (epic E10)
+// =============================================================================
+//
+// The ONLY place the web app names these endpoints. If a route or a field
+// moves, this block plus `types/index.ts` is the entire reconciliation surface.
+
+import type {
+  ApproveWeeklyPlanResult,
+  ExtraCommitment,
+  WeeklyDomainModes,
+  WeeklyPlanConstraints,
+  WeeklyPlanDetail,
+  WeeklyPlanSummary,
+  WeeklyReviewDetail,
+  WeeklyReviewSummary,
+  WeeklySettings,
+} from '../types';
+
+/** Null, not a 404, for a user who has never had a review. */
+export async function getCurrentWeeklyReview(): Promise<WeeklyReviewDetail | null> {
+  return api.get<WeeklyReviewDetail | null>('/weekly/reviews/current');
+}
+
+export async function getWeeklyReview(id: string): Promise<WeeklyReviewDetail> {
+  return api.get<WeeklyReviewDetail>(`/weekly/reviews/${id}`);
+}
+
+export async function listWeeklyReviews(params?: {
+  weekStart?: string;
+}): Promise<WeeklyReviewSummary[]> {
+  const query = params?.weekStart ? `?weekStart=${params.weekStart}` : '';
+  const result = await api.get<{ items: WeeklyReviewSummary[] }>(
+    `/weekly/reviews${query}`,
+  );
+  return result.items;
+}
+
+/** Always returns a review: a provider outage becomes `source: 'template'`. */
+export async function generateWeeklyReview(body: {
+  weekStart?: string;
+}): Promise<WeeklyReviewDetail> {
+  return api.post<WeeklyReviewDetail>('/weekly/reviews/generate', body);
+}
+
+export async function skipWeeklyReview(id: string): Promise<WeeklyReviewSummary> {
+  return api.post<WeeklyReviewSummary>(`/weekly/reviews/${id}/skip`, {});
+}
+
+export async function getWeeklySettings(): Promise<WeeklySettings> {
+  return api.get<WeeklySettings>('/weekly/settings');
+}
+
+export async function updateWeeklySettings(body: {
+  weeklyReviewWeekday: number;
+  weeklyReviewTime: string;
+}): Promise<WeeklySettings> {
+  return api.put<WeeklySettings>('/weekly/settings', body);
+}
+
+/** Idempotent server-side: a second call returns the same DRAFT. */
+export async function createWeeklyPlan(body: {
+  weekStart?: string;
+}): Promise<WeeklyPlanDetail> {
+  return api.post<WeeklyPlanDetail>('/weekly/plans', body);
+}
+
+export async function getWeeklyPlan(id: string): Promise<WeeklyPlanDetail> {
+  return api.get<WeeklyPlanDetail>(`/weekly/plans/${id}`);
+}
+
+export async function listWeeklyPlans(params?: {
+  weekStart?: string;
+}): Promise<WeeklyPlanSummary[]> {
+  const query = params?.weekStart ? `?weekStart=${params.weekStart}` : '';
+  const result = await api.get<{ items: WeeklyPlanSummary[] }>(`/weekly/plans${query}`);
+  return result.items;
+}
+
+export async function updateWeeklyPlan(
+  id: string,
+  patch: {
+    constraints?: WeeklyPlanConstraints;
+    primaryFocus?: string | null;
+    domainModes?: WeeklyDomainModes;
+  },
+): Promise<WeeklyPlanDetail> {
+  return api.patch<WeeklyPlanDetail>(`/weekly/plans/${id}`, patch);
+}
+
+export async function proposeWeeklyPlan(
+  id: string,
+  body: { extras?: ExtraCommitment[] },
+): Promise<WeeklyPlanDetail> {
+  return api.post<WeeklyPlanDetail>(`/weekly/plans/${id}/propose`, body);
+}
+
+export async function approveWeeklyPlan(
+  id: string,
+  body: { acknowledgeWarnings?: boolean },
+): Promise<ApproveWeeklyPlanResult> {
+  return api.post<ApproveWeeklyPlanResult>(`/weekly/plans/${id}/approve`, body);
+}
