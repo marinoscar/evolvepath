@@ -82,6 +82,12 @@ const PathPage = lazy(() => import('../src/pages/PathPage'));
 const FamilyPage = lazy(() => import('../src/pages/FamilyPage'));
 const CoachPage = lazy(() => import('../src/pages/CoachPage'));
 const ProgressPage = lazy(() => import('../src/pages/ProgressPage'));
+// The weekly loop (epic E10). Routes under `/progress`, so no navigation or
+// registry change — but they have to exist here or a spec pointed at them would
+// capture a redirect rather than the screen.
+const WeeklyReviewPage = lazy(() => import('../src/pages/WeeklyReviewPage'));
+const WeeklyPlanPage = lazy(() => import('../src/pages/WeeklyPlanPage'));
+const UserWeeklyRhythmPage = lazy(() => import('../src/pages/UserWeeklyRhythmPage'));
 const UserSettingsHubPage = lazy(() => import('../src/pages/UserSettingsHubPage'));
 const UserProfilePage = lazy(() => import('../src/pages/UserProfilePage'));
 const UserAppearancePage = lazy(() => import('../src/pages/UserAppearancePage'));
@@ -220,12 +226,15 @@ function HarnessRoutes() {
             <Route path="/path/family" element={<FamilyPage />} />
             <Route path="/coach" element={<CoachPage />} />
             <Route path="/progress" element={<ProgressPage />} />
+            <Route path="/progress/week" element={<WeeklyReviewPage />} />
+            <Route path="/progress/week/plan" element={<WeeklyPlanPage />} />
 
             <Route path="/settings" element={<UserSettingsHubPage />} />
             <Route path="/settings/profile" element={<UserProfilePage />} />
             <Route path="/settings/appearance" element={<UserAppearancePage />} />
             <Route path="/settings/tokens" element={<UserTokensPage />} />
             <Route path="/settings/ai-key" element={<UserAiKeyPage />} />
+            <Route path="/settings/weekly-rhythm" element={<UserWeeklyRhythmPage />} />
 
             <Route path="/admin" element={<Navigate to="/admin/settings" replace />} />
             <Route

@@ -25,6 +25,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import KeyIcon from '@mui/icons-material/Key';
 import PsychologyIcon from '@mui/icons-material/Psychology';
+import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import type { SettingsSectionDef } from './adminSections';
 
 /**
@@ -78,6 +79,17 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
           'Choose which events notify you, and whether they arrive by email or in your browser.',
         Icon: NotificationsIcon,
         path: '/settings/notifications',
+      },
+      {
+        // Epic E10 (#84). No `permission`, like every card here: the review
+        // rhythm is two columns on the caller's OWN `user_profiles` row, and
+        // `PUT /api/weekly/settings` is plain `@Auth()` for exactly that
+        // reason — gating it would leave a Viewer unable to choose when their
+        // own week is reviewed.
+        title: 'Weekly rhythm',
+        description: 'Choose the day and time your weekly review is prepared.',
+        Icon: EventRepeatIcon,
+        path: '/settings/weekly-rhythm',
       },
     ],
   },
