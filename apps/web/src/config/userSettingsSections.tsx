@@ -24,6 +24,7 @@ import PaletteIcon from '@mui/icons-material/Palette';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import KeyIcon from '@mui/icons-material/Key';
+import PsychologyIcon from '@mui/icons-material/Psychology';
 import type { SettingsSectionDef } from './adminSections';
 
 /**
@@ -98,6 +99,15 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
           'Add, test or remove the OpenAI API key that powers your coaching.',
         Icon: KeyIcon,
         path: '/settings/ai-key',
+      },
+      {
+        // No `permission`: an insight is the caller's own row, and the
+        // controller enforces that with a 404 rather than a role.
+        title: 'AI Memory',
+        description:
+          'See what the coach has learned about you. Confirm, edit, forget, or exclude anything from coaching.',
+        Icon: PsychologyIcon,
+        path: '/settings/ai-memory',
       },
     ],
   },

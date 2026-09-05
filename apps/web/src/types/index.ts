@@ -1778,3 +1778,42 @@ export interface SuggestedPrompt {
   label: string;
   text: string;
 }
+
+// =============================================================================
+// What the coach remembers (epic E06, issue #78)
+// =============================================================================
+
+export const MEMORY_INSIGHT_CATEGORIES = [
+  'IDENTITY',
+  'WORK',
+  'FAMILY',
+  'HEALTH',
+  'COACHING_PREFERENCE',
+  'NOTIFICATION_PREFERENCE',
+  'PATTERN',
+] as const;
+
+export type MemoryInsightCategory = (typeof MEMORY_INSIGHT_CATEGORIES)[number];
+
+export interface MemoryInsight {
+  id: string;
+  category: MemoryInsightCategory;
+  statement: string;
+  evidenceCount: number;
+  /** 0–1. Rendered as words, never as a number (see `MemoryInsightRow`). */
+  confidence: number;
+  /** "The user says this is true." The coach uses only confirmed insights. */
+  userConfirmed: boolean;
+  /** "Never bring this up." A different question from `userConfirmed`. */
+  doNotUse: boolean;
+  expiresAt: string | null;
+  source: 'AI' | 'USER';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProposeInsightsResult {
+  created: MemoryInsight[];
+  /** Never an error: a proposer that cannot run is not a broken screen. */
+  skipped: 'insufficient_data' | 'ai_unavailable' | null;
+}

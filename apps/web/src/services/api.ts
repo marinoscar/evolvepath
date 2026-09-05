@@ -265,6 +265,9 @@ export const api = new ApiService();
 import type {
   // The AI coach (epic E06)
   CoachConversation,
+  MemoryInsight,
+  MemoryInsightCategory,
+  ProposeInsightsResult,
   CoachMessage,
   PlanChange,
   ProposalDetail,
@@ -1303,4 +1306,59 @@ export async function rejectProposal(
   reason?: string,
 ): Promise<ProposalSummary> {
   return api.post<ProposalSummary>(`/proposals/${id}/reject`, { reason });
+}
+
+// =============================================================================
+// What the coach remembers (epic E06, issue #78)
+// =============================================================================
+
+/** `includeDoNotUse` is how the settings page shows excluded insights. */
+export async function getMemoryInsights(params?: {
+  category?: MemoryInsightCategory;
+  includeDoNotUse?: boolean;
+}): Promise<MemoryInsight[]> {
+  const query = new URLSearchParams();
+  if (params?.category) query.set('category', params.category);
+  if (params?.includeDoNotUse) query.set('includeDoNotUse', 'true');
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  const result = await api.get<{ items: MemoryInsight[] }>(
+    `/memory-insights${suffix}`,
+  );
+  return result.items;
+}
+
+export async function createMemoryInsight(body: {
+  category: MemoryInsightCategory;
+  statement: string;
+}): Promise<MemoryInsight> {
+  return api.post<MemoryInsight>('/memory-insights', body);
+}
+
+/** PRD §85's Edit. Editing an AI guess also confirms it, server-side. */
+export async function updateMemoryInsight(
+  id: string,
+  statement: string,
+): Promise<MemoryInsight> {
+  return api.patch<MemoryInsight>(`/memory-insights/${id}`, { statement });
+}
+
+export async function confirmMemoryInsight(id: string): Promise<MemoryInsight> {
+  return api.post<MemoryInsight>(`/memory-insights/${id}/confirm`, {});
+}
+
+export async function setMemoryInsightDoNotUse(
+  id: string,
+  doNotUse: boolean,
+): Promise<MemoryInsight> {
+  return api.post<MemoryInsight>(`/memory-insights/${id}/do-not-use`, { doNotUse });
+}
+
+/** PRD §85's Forget. A hard delete — there is no undo. */
+export async function deleteMemoryInsight(id: string): Promise<void> {
+  await api.delete(`/memory-insights/${id}`);
+}
+
+/** Always resolves with a reason; a 429 is the only rejection worth catching. */
+export async function proposeMemoryInsights(): Promise<ProposeInsightsResult> {
+  return api.post<ProposeInsightsResult>('/memory-insights/propose', {});
 }

@@ -42,6 +42,7 @@ const UserAppearancePage = lazy(() => import('./pages/UserAppearancePage'));
 const UserNotificationsPage = lazy(() => import('./pages/UserNotificationsPage'));
 const UserTokensPage = lazy(() => import('./pages/UserTokensPage'));
 const UserAiKeyPage = lazy(() => import('./pages/UserAiKeyPage'));
+const UserAiMemoryPage = lazy(() => import('./pages/UserAiMemoryPage'));
 const AiKeySetupPage = lazy(() => import('./pages/AiKeySetupPage'));
 
 // Console — the hub (#93) plus one route per card in
@@ -199,6 +200,10 @@ function AppRoutes() {
                       removing a key here sends the user to /setup/ai-key, which is
                       what the confirm dialog warns will happen. */}
                   <Route path="/settings/ai-key" element={<UserAiKeyPage />} />
+                  {/* Epic E06 (#90). Ungated like its siblings: an insight is
+                      the caller's own row and the API answers 404, not 403,
+                      for anyone else's. */}
+                  <Route path="/settings/ai-memory" element={<UserAiMemoryPage />} />
                   {/* Route-level AUTHORIZATION, not just authentication.
                       `ProtectedRoute` above only establishes that someone is
                       logged in — before this, a Viewer typing `/admin/settings`
