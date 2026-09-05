@@ -82,14 +82,15 @@ describe('commitment lifecycle', () => {
     expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
       'Ready',
       'Start',
+      // Offered from PLANNED since #40: a user who did the thing away from the
+      // app must be able to say so without the product inventing a start.
+      'Complete',
+      'Partially complete',
       'Reschedule',
       'Skip',
       'Missed',
       'Cancel',
     ]);
-    // Not offered from PLANNED — the matrix says a commitment must be started
-    // before it can be completed.
-    expect(within(menu).queryByText('Complete')).not.toBeInTheDocument();
   });
 
   it('starts without a dialog, because there is nothing to ask', async () => {

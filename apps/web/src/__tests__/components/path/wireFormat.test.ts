@@ -37,6 +37,10 @@ describe('the web copy of the transition matrix', () => {
     expect([...allowedTransitions('PLANNED')]).toEqual([
       'READY',
       'STARTED',
+      // #40: completion without a start is legal — most of what a user does
+      // happens away from the app.
+      'COMPLETED',
+      'PARTIALLY_COMPLETED',
       'RESCHEDULED',
       'SKIPPED',
       'MISSED',
@@ -45,6 +49,8 @@ describe('the web copy of the transition matrix', () => {
     expect([...allowedTransitions('READY')]).toEqual([
       'PLANNED',
       'STARTED',
+      'COMPLETED',
+      'PARTIALLY_COMPLETED',
       'RESCHEDULED',
       'SKIPPED',
       'MISSED',

@@ -21,6 +21,16 @@ import type { CommitmentStatus } from '@prisma/client';
 //     PRD P4 ("start matters") wants the start recorded whenever it happens;
 //     forcing a READY step first would mean the product either invents one or
 //     loses the fact that the user started.
+//   * COMPLETED and PARTIALLY_COMPLETED are reachable from PLANNED and READY,
+//     not only from STARTED (added by #40, epic E05). Most of what a user does
+//     happens away from the app: they went for the run and then opened the
+//     phone. Requiring a start first would force the product to choose between
+//     refusing an honest "I did it" and MANUFACTURING a start — writing a
+//     `startedAt` and an `APP_FLOW started` evidence row for something it never
+//     observed. PRD §10.9 rules the second one out, so the matrix allows the
+//     jump and the action layer simply writes no start evidence: `startedAt`
+//     stays null, which is itself the honest record that the timer was never
+//     used.
 //   * Everything past STARTED is TERMINAL. A completed commitment does not go
 //     back to started, and a skipped one does not become completed later — the
 //     honest record of a day is what the user did, and an "undo" would make
@@ -43,8 +53,26 @@ export const TERMINAL_STATUSES: ReadonlySet<CommitmentStatus> = new Set<Commitme
 ]);
 
 const ALLOWED: Record<CommitmentStatus, readonly CommitmentStatus[]> = {
-  PLANNED: ['READY', 'STARTED', 'RESCHEDULED', 'SKIPPED', 'MISSED', 'CANCELLED'],
-  READY: ['PLANNED', 'STARTED', 'RESCHEDULED', 'SKIPPED', 'MISSED', 'CANCELLED'],
+  PLANNED: [
+    'READY',
+    'STARTED',
+    'COMPLETED',
+    'PARTIALLY_COMPLETED',
+    'RESCHEDULED',
+    'SKIPPED',
+    'MISSED',
+    'CANCELLED',
+  ],
+  READY: [
+    'PLANNED',
+    'STARTED',
+    'COMPLETED',
+    'PARTIALLY_COMPLETED',
+    'RESCHEDULED',
+    'SKIPPED',
+    'MISSED',
+    'CANCELLED',
+  ],
   // No READY here on purpose: "pause and resume" is E05-02's decomposition
   // flow, not a status change, and adding it silently would let a started
   // commitment lose its startedAt semantics.
