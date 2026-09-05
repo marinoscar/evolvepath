@@ -327,6 +327,19 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     channels: ['browser'],
     defaultEnabled: true,
   },
+
+  // ---------------------------------------------------------------------------
+  // The Health domain (epic E09, issue #77)
+  // ---------------------------------------------------------------------------
+  {
+    key: 'health.program_activated',
+    label: 'Workout program started',
+    description: 'Your training program is live and the first sessions are on your schedule.',
+    // Browser only. It confirms something the user just did, in the tab they
+    // did it in; a phone buzz for a button they pressed a second ago is noise.
+    channels: ['browser'],
+    defaultEnabled: true,
+  },
 ];
 
 /**

@@ -212,6 +212,18 @@ export const EVENT_BROWSER_TEMPLATES: Partial<
     };
   },
 
+  // The program is already live by the time this renders, so the copy confirms
+  // rather than asks. The link goes to the program itself, not to a list.
+  'health.program_activated': (data: never): BrowserNotificationContent => {
+    const { programName, programId } = data as { programName: string; programId: string };
+
+    return {
+      title: 'Your program is live',
+      body: `${programName} is scheduled for the next two weeks.`,
+      link: `/health/programs/${programId}`,
+    };
+  },
+
   'security.role_changed': (data: never): BrowserNotificationContent => {
     const { previousRoles, currentRoles } = data as RoleChangedEmailData;
 
