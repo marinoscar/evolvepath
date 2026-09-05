@@ -299,6 +299,33 @@ This section states the rules; that file explains why.
 See [`docs/specs/settings-ui.md`](docs/specs/settings-ui.md) for the full
 rationale, the rejected alternatives, and the accessibility requirements.
 
+## Today and the next best action
+
+The Today screen, the deterministic next-best-action engine, the commitment
+action endpoints and the Start flow have their own written contract in
+[`docs/specs/today-and-nba.md`](docs/specs/today-and-nba.md): every scoring
+weight and its value, the intervention-mode table **and its resolution order**,
+the sizing rules, the STARTED pre-rule, the timer derivation, the reschedule
+new-row model, the check-in and reflection contracts, the deep-link contract E12
+builds on, and the rejected alternatives.
+
+Read it before changing anything under `apps/api/src/today/`,
+`apps/web/src/components/today/` or `apps/web/src/components/start/`.
+`apps/api/test/docs/today-spec-doc.spec.ts` fails if a weight, a mode threshold
+or an action name changes without the document changing with it — including when
+only the VALUE moves, which is the realistic mistake.
+
+Two rules that are easy to break and expensive to rediscover:
+
+- **`GET /today` must never call AI.** PRD §120's "the screen works when the
+  provider is down" is structural, not a timeout: the coach's sentence is a
+  separate request (`GET /today/insight`) whose every failure is a 200 with
+  `source: 'template'`. An integration spy asserts zero gateway calls.
+- **The elapsed timer is derived, never stored.** `activeSeconds` is time banked
+  at the last pause and `activeSince` is the current run's anchor; a stored
+  elapsed value would need writing on a schedule and would be quietly wrong the
+  moment a client stopped sending it.
+
 ## The domain model
 
 The EvolvePath product tables — the PRD §9 hierarchy from Best Self down to

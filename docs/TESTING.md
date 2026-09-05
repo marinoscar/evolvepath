@@ -875,6 +875,30 @@ npm run test:ui
 
 The application supports end-to-end testing using Playwright with a dedicated test authentication mechanism that bypasses Google OAuth.
 
+**Every epic ships a spec that proves its loop end to end.** `specs/today.spec.ts`
+(epic E05) is the current worked example: it seeds through the API, drives the
+Today screen and the Start flow in the browser, and then reads the result back
+through `GET /api/commitments/…`, `/api/evidence` and `/api/reflections` — so an
+assertion lands in the UI *and* in the database behind it. It includes the two
+cases nothing else can prove: that a mid-timer reload resumes from the server's
+own elapsed time rather than restarting, and that Today, its rationale and
+"Make it smaller" all still work with the AI provider pointed at an unreachable
+URL (PRD §120).
+
+It runs against the compose stack **with the fake OpenAI overlay**, which
+`playwright.config.ts` already starts by default:
+
+```bash
+cd infra/compose && docker compose \
+  -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up
+
+cd tests/e2e && npx playwright test specs/today.spec.ts
+```
+
+Both Playwright projects run it: `chromium` and `mobile-chromium` (Pixel 7, 412px
+— below the `sm` boundary), because the shell mounts different navigation
+components either side of that line.
+
 ### Test Authentication
 
 In development/test environments, a special login page at `/testing/login` allows Playwright tests to authenticate as any user with any role without going through Google OAuth.
