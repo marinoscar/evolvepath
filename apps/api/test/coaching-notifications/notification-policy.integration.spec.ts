@@ -59,6 +59,11 @@ describe('Notification policy (integration)', () => {
     context.prismaMock.userProfile.upsert.mockResolvedValue(profile());
     context.prismaMock.userProfile.update.mockResolvedValue(profile());
     context.prismaMock.auditEvent.create.mockResolvedValue({ id: 'audit' });
+    // The fatigue assessment reads the interaction history (#59); with none
+    // recorded the reduction is inactive and the configured cap stands.
+    context.prismaMock.notificationInteraction.count.mockResolvedValue(0);
+    context.prismaMock.notificationInteraction.findFirst.mockResolvedValue(null);
+    context.prismaMock.notificationInteraction.findMany.mockResolvedValue([]);
   });
 
   const auth = () => authHeader(user.accessToken);
@@ -84,7 +89,7 @@ describe('Notification policy (integration)', () => {
       expect(context.prismaMock.userProfile.upsert).toHaveBeenCalled();
     });
 
-    it('reports fatigue as inert until the engine computes it', async () => {
+    it('reports no fatigue reduction for a user with no ignored messages', async () => {
       const res = await request(context.app.getHttpServer()).get(url).set(auth()).expect(200);
 
       expect(res.body.data.fatigue).toEqual({

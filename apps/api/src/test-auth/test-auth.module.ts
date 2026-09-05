@@ -5,6 +5,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { TestAuthController } from './test-auth.controller';
 import { TestAuthService } from './test-auth.service';
 import { AiModule } from '../ai/ai.module';
+import { CoachingNotificationsModule } from '../coaching-notifications/coaching-notifications.module';
 
 @Module({
   imports: [
@@ -25,6 +26,9 @@ import { AiModule } from '../ai/ai.module';
     // `withAiKey` seeds an OpenAI key so an e2e login lands on the app rather
     // than on the setup gate (#25/#29).
     AiModule,
+
+    // `run-job` drives the real coaching engine, not a stand-in for it (#59).
+    CoachingNotificationsModule,
   ],
   controllers: [TestAuthController],
   providers: [TestAuthService],

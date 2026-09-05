@@ -19,8 +19,9 @@ const notificationPolicyResponseSchema = z.object({
   mutedCategories: z.array(z.string()),
   /**
    * The automatic reduction PRD §61 asks for, surfaced so the settings page can
-   * explain a lower-than-configured cap rather than looking broken. E12-01
-   * reports it inert; E12-03 computes it.
+   * explain a lower-than-configured cap rather than looking broken. Computed by
+   * the SAME function the decision uses (`policy/fatigue.ts`) — a settings page
+   * that disagreed with the engine would be a screen that lies.
    */
   fatigue: z.object({
     active: z.boolean(),

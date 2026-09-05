@@ -340,6 +340,32 @@ Read it before changing anything under `apps/api/src/path/` or
 fails if the schema grows an enum member or a table the document does not
 mention, so the two cannot drift silently.
 
+## Coaching notifications
+
+The decision engine, the nine coaching categories, the copywriter and the
+interaction log have their own written contract in
+[`docs/specs/coaching-notifications.md`](docs/specs/coaching-notifications.md):
+the decision order and every suppress reason, the quiet-hours and fatigue rules
+with their constants, the candidate windows and dedupe keys, the copy gates and
+the banned-phrase patterns, the run's ordering, and the rejected alternatives.
+
+Read it before changing anything under `apps/api/src/coaching-notifications/` or
+the `coach.*` entries in `apps/api/src/notifications/notification-events.ts`.
+
+Three rules that are easy to break and expensive to rediscover:
+
+- **The AI cannot decide whether to send.** PRD §14.7. `decide()` is a pure
+  function with no I/O, and the copywriter is called only on a `send: true`
+  decision, with none of the inputs that decision was made from. It is a
+  signature, not a prompt instruction — keep it that way.
+- **The SENT row is written before the message is.** Its id becomes `?n=` on
+  every link, and the unique `(user_id, event_key, dedupe_key)` index is what
+  makes two overlapping runs send once. Sending first and recording afterwards
+  produces a message the user got and the caps cannot see.
+- **A quiet-hours window usually crosses midnight.** `start <= t < end` matches
+  nothing at all for `22:00–07:00`, so quiet hours silently stop working while
+  every test written against a `12:00–13:00` window still passes.
+
 ## The Family domain
 
 Family members, rituals, recurrence materialization, the behaviour lint and the
@@ -748,6 +774,9 @@ Note: `DATABASE_URL` is constructed automatically from these variables at runtim
 - `AI_REQUEST_TIMEOUT_MS` - Hard deadline for one generation (default: 60000)
 - `AI_MAX_IMAGE_BYTES` - Largest image the gateway will inline (default: 20971520). Bounds one AI call, not one upload.
 - `AI_MAX_IMAGES_PER_CALL` - Images per call, counted after a video expands to its sampled frames (default: 10)
+
+**Coaching notifications (epic E12):**
+- `COACHING_NOTIFICATIONS_ENABLED` - The decision engine's five-minute cron (default: `true`). An off switch rather than a feature flag: the engine's failure mode is sending people messages, so it must be stoppable in one restart. The on-demand `POST /api/auth/test/run-job` route (non-production) is deliberately not gated by it.
 
 Note: `SECRETS_ENCRYPTION_KEY` now also protects the platform OpenAI key and every user's own key. Without it, saving either fails.
 

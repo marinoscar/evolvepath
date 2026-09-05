@@ -7,6 +7,8 @@ import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserProfileService } from '../../user-profile/user-profile.service';
+import { NotificationInteractionsService } from '../interactions/notification-interactions.service';
+import { assessFatigue, type FatigueAssessment } from './fatigue';
 import type {
   NotificationPolicyResponse,
   PatchNotificationPolicy,
@@ -18,25 +20,21 @@ import {
 } from './notification-policy.schema';
 
 /**
- * What the engine needs on top of the stored policy: whether the automatic
- * reduction of PRD §61 is currently in force, and the cap that results.
+ * Whether PRD §61's automatic reduction is in force, and the cap that results.
  *
- * E12-01 answers this inertly on purpose. Fatigue is a function of the
- * interaction history the decision engine also reads, and computing it here
- * would mean two implementations of "has this person been ignoring us" — one in
- * the settings response and one in the decision. E12-03 supplies the real one
- * through this interface, and the response shape does not change when it does.
+ * ONE implementation, shared with the decision (`policy/fatigue.ts`). The
+ * settings page must not answer "has this person been ignoring us" differently
+ * from the engine — a user reading `effectiveDailyCap: 2` and then receiving a
+ * fourth notification would be looking at a screen that lies.
  */
-export interface FatigueAssessment {
-  active: boolean;
-  effectiveDailyCap: number;
-}
+export type { FatigueAssessment } from './fatigue';
 
 @Injectable()
 export class NotificationPolicyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly profiles: UserProfileService,
+    private readonly interactions: NotificationInteractionsService,
   ) {}
 
   /** The resolved policy, for the engine. No fatigue: that is the caller's job. */
@@ -50,19 +48,23 @@ export class NotificationPolicyService {
     });
   }
 
-  /** The settings-page shape. */
+  /** The settings-page shape, including the live fatigue assessment. */
   async get(
     userId: string,
-    fatigue?: FatigueAssessment,
+    now: Date = new Date(),
   ): Promise<NotificationPolicyResponse> {
     const policy = await this.resolve(userId);
-    return toResponse(policy, fatigue);
+    const history = await this.interactions.history(userId, {
+      now,
+      timeZone: policy.timezone,
+    });
+
+    return toResponse(policy, assessFatigue(history.consecutiveIgnored, policy.dailyCap));
   }
 
   async patch(
     userId: string,
     patch: PatchNotificationPolicy,
-    fatigue?: FatigueAssessment,
   ): Promise<NotificationPolicyResponse> {
     const current = await this.resolve(userId);
 
@@ -100,7 +102,7 @@ export class NotificationPolicyService {
       },
     });
 
-    return this.get(userId, fatigue);
+    return this.get(userId);
   }
 }
 

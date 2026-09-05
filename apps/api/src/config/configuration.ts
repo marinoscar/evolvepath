@@ -180,6 +180,21 @@ export default () => {
     },
   },
 
+  // The coaching decision engine's clock (#59, epic E12).
+  //
+  // An OFF SWITCH, not a feature flag: the engine's failure mode is sending
+  // people messages, and an operator investigating "why is everyone getting
+  // notifications at 3am" needs to be able to stop it in one restart without
+  // reverting a deploy. Default on, because an engine that ships disabled ships
+  // untested.
+  //
+  // The on-demand `POST /auth/test/run-job` route is deliberately NOT gated by
+  // this: it is how a test proves the pipeline still works while the cron is
+  // parked.
+  coachingNotifications: {
+    enabled: process.env.COACHING_NOTIFICATIONS_ENABLED !== 'false',
+  },
+
   logLevel: process.env.LOG_LEVEL || 'info',
   };
 };
