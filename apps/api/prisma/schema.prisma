@@ -15,32 +15,43 @@ datasource db {
 // =============================================================================
 
 model User {
-  id                      String    @id @default(uuid()) @db.Uuid
-  email                   String    @unique
-  displayName             String?   @map("display_name")
-  providerDisplayName     String?   @map("provider_display_name")
-  profileImageUrl         String?   @map("profile_image_url")
-  providerProfileImageUrl String?   @map("provider_profile_image_url")
-  isActive                Boolean   @default(true) @map("is_active")
-  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt               DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  id                      String   @id @default(uuid()) @db.Uuid
+  email                   String   @unique
+  displayName             String?  @map("display_name")
+  providerDisplayName     String?  @map("provider_display_name")
+  profileImageUrl         String?  @map("profile_image_url")
+  providerProfileImageUrl String?  @map("provider_profile_image_url")
+  isActive                Boolean  @default(true) @map("is_active")
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  identities                UserIdentity[]
-  userRoles                 UserRole[]
-  userSettings              UserSettings?
-  auditEvents               AuditEvent[]     @relation("ActorEvents")
-  settingsUpdates           SystemSettings[] @relation("SettingsUpdater")
-  refreshTokens             RefreshToken[]   @relation("UserRefreshTokens")
-  allowlistEntriesAdded     AllowedEmail[]   @relation("AllowlistAddedBy")
-  allowlistEntry            AllowedEmail?    @relation("AllowlistClaimedBy")
-  deviceCodes               DeviceCode[]     @relation("UserDeviceCodes")
-  storageObjects            StorageObject[]  @relation("UserStorageObjects")
-  personalAccessTokens      PersonalAccessToken[] @relation("UserPersonalAccessTokens")
-  credentialUpdates         Credential[]     @relation("CredentialUpdatedBy")
-  notificationDeliveries    NotificationDelivery[] @relation("UserNotificationDeliveries")
-  notifications             Notification[]   @relation("UserNotifications")
-  aiInvocations             AiInvocation[]   @relation("UserAiInvocations")
+  identities             UserIdentity[]
+  userRoles              UserRole[]
+  userSettings           UserSettings?
+  auditEvents            AuditEvent[]           @relation("ActorEvents")
+  settingsUpdates        SystemSettings[]       @relation("SettingsUpdater")
+  refreshTokens          RefreshToken[]         @relation("UserRefreshTokens")
+  allowlistEntriesAdded  AllowedEmail[]         @relation("AllowlistAddedBy")
+  allowlistEntry         AllowedEmail?          @relation("AllowlistClaimedBy")
+  deviceCodes            DeviceCode[]           @relation("UserDeviceCodes")
+  storageObjects         StorageObject[]        @relation("UserStorageObjects")
+  personalAccessTokens   PersonalAccessToken[]  @relation("UserPersonalAccessTokens")
+  credentialUpdates      Credential[]           @relation("CredentialUpdatedBy")
+  notificationDeliveries NotificationDelivery[] @relation("UserNotificationDeliveries")
+  notifications          Notification[]         @relation("UserNotifications")
+  aiInvocations          AiInvocation[]         @relation("UserAiInvocations")
+
+  // EvolvePath core domain (epic E02)
+  bestSelfProfile BestSelfProfile? @relation("UserBestSelfProfile")
+  outcomes        Outcome[]        @relation("UserOutcomes")
+  plans           Plan[]           @relation("UserPlans")
+  planVersions    PlanVersion[]    @relation("UserPlanVersions")
+  routines        Routine[]        @relation("UserRoutines")
+  commitments     Commitment[]     @relation("UserCommitments")
+  evidence        Evidence[]       @relation("UserEvidence")
+  reflections     Reflection[]     @relation("UserReflections")
+  domainModes     DomainMode[]     @relation("UserDomainModes")
 
   @@map("users")
 }
@@ -65,8 +76,8 @@ model UserIdentity {
 // =============================================================================
 
 model Role {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String   @unique
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique
   description String?
 
   // Relations
@@ -77,8 +88,8 @@ model Role {
 }
 
 model Permission {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String   @unique
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique
   description String?
 
   // Relations
@@ -273,24 +284,24 @@ model DeviceCode {
 // =============================================================================
 
 enum StorageObjectStatus {
-  pending    // Upload initiated, awaiting chunks
-  uploading  // Chunks being uploaded
+  pending // Upload initiated, awaiting chunks
+  uploading // Chunks being uploaded
   processing // Post-upload processing in progress
-  ready      // Available for use
-  failed     // Upload or processing failed
+  ready // Available for use
+  failed // Upload or processing failed
 }
 
 model StorageObject {
   id              String              @id @default(uuid()) @db.Uuid
-  name            String              // Original filename
-  size            BigInt              // Total size in bytes (BigInt for GB-scale)
+  name            String // Original filename
+  size            BigInt // Total size in bytes (BigInt for GB-scale)
   mimeType        String              @map("mime_type")
   storageKey      String              @unique @map("storage_key") // S3 object key
   storageProvider String              @default("s3") @map("storage_provider")
   bucket          String?
   status          StorageObjectStatus @default(pending)
   s3UploadId      String?             @map("s3_upload_id") // S3 multipart upload ID
-  metadata        Json?               // JSONB for flexible metadata
+  metadata        Json? // JSONB for flexible metadata
   uploadedById    String?             @map("uploaded_by_id") @db.Uuid
   createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz
@@ -310,7 +321,7 @@ model StorageObjectChunk {
   objectId   String   @map("object_id") @db.Uuid
   partNumber Int      @map("part_number") // S3 part number (1-10000)
   eTag       String   @map("e_tag") // S3 ETag for verification
-  size       BigInt   // Chunk size in bytes
+  size       BigInt // Chunk size in bytes
   uploadedAt DateTime @default(now()) @map("uploaded_at") @db.Timestamptz
 
   // Relations
@@ -553,7 +564,7 @@ model Notification {
   // NotificationDelivery.error: a rendered body has no meaningful length
   // bound, and silently truncating what a user was told is worse than storing
   // a long string. (Postgres `text` has no performance penalty over `varchar`.)
-  body String @db.Text
+  body  String @db.Text
 
   // Where the bell should send the user, as a ROOT-RELATIVE PATH ("/settings",
   // "/admin/users?id=…"), never an absolute URL.
@@ -700,7 +711,7 @@ model AiInvocation {
   outputTokens      Int? @map("output_tokens")
   cachedInputTokens Int? @map("cached_input_tokens")
   /// A COUNT, never the reasoning text. See the header.
-  reasoningTokens Int? @map("reasoning_tokens")
+  reasoningTokens   Int? @map("reasoning_tokens")
 
   latencyMs Int @map("latency_ms")
 
@@ -733,4 +744,416 @@ model AiInvocation {
   /// "What is failing right now?" — the operational query.
   @@index([status, createdAt])
   @@map("ai_invocations")
+}
+
+// =============================================================================
+// EvolvePath core domain (epic E02)
+// =============================================================================
+//
+// PRD §9 asks for one hierarchy, made explicit rather than implied by chat:
+//
+//   Best Self → Domains → Outcomes → Plans → Routines → Commitments →
+//   Evidence → Reflection
+//
+// Every table below is one rung of it. Three decisions in here are load-bearing
+// and are written down because a later reader will otherwise "simplify" them:
+//
+// 1. PLANS ARE VERSIONED, ALWAYS. `Plan` is an identity (one per outcome, and
+//    nothing else); every field a user would call "the plan" lives on
+//    `PlanVersion`. PRD §80/§103 require that a plan can change, that the user
+//    can inspect WHY it changed, and that the old one stays readable. A
+//    mutable plan row satisfies none of those: the rationale for a change has
+//    nowhere to live and the previous shape is gone. `previousVersionId`
+//    threads the lineage so "why did this change?" is a walk, not a guess.
+//    Exactly one version per plan may be ACTIVE — enforced by a PARTIAL UNIQUE
+//    INDEX hand-written in the migration, because Prisma's schema language
+//    cannot express `WHERE status = 'ACTIVE'`.
+//
+// 2. EVIDENCE OUTLIVES ITS COMMITMENT. `Evidence.commitmentId` is `SetNull`,
+//    never `Cascade`. PRD §103: "old commitments remain historical evidence".
+//    A user who deletes a commitment is tidying their schedule, not disowning
+//    the fact that they did the work — and momentum (E11) is computed from
+//    evidence, so cascading would silently rewrite their history. The same
+//    reasoning applies to `Reflection.commitmentId`.
+//
+// 3. EVERY TABLE CARRIES `user_id` REDUNDANTLY. `PlanVersion` could reach its
+//    owner through plan → outcome → user, and `Routine` through one more hop.
+//    They store `userId` anyway so an ownership check is a single indexed
+//    predicate (`findFirst({ where: { id, userId } })`, the PAT pattern) rather
+//    than a three-table join that is one refactor away from being dropped.
+//    `onDelete: Cascade` on that relation is what makes account deletion whole.
+// =============================================================================
+
+/// The three life domains EvolvePath organises everything under (PRD §9).
+enum Domain {
+  WORK
+  FAMILY
+  HEALTH
+}
+
+enum OutcomeState {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum PlanVersionStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+  REJECTED
+}
+
+/// Who authored a version. E02 only ever writes USER; E04/E06 add AI proposals,
+/// and the column exists from day one so that lands without a migration.
+enum PlanAuthor {
+  USER
+  AI
+}
+
+enum RoutineTriggerType {
+  TIME
+  EVENT
+}
+
+enum RoutineFrequency {
+  DAILY
+  WEEKDAYS
+  WEEKENDS
+  WEEKLY
+  CUSTOM
+}
+
+enum CommitmentStatus {
+  PLANNED
+  READY
+  STARTED
+  COMPLETED
+  PARTIALLY_COMPLETED
+  RESCHEDULED
+  SKIPPED
+  MISSED
+  CANCELLED
+}
+
+enum EvidenceSource {
+  USER_LOG
+  TIMER
+  WORKOUT_LOG
+  APP_FLOW
+}
+
+/// Per-domain posture (PRD §49). Later epics size the week from it; E02 only
+/// stores it.
+enum DomainModeKind {
+  GROW
+  MAINTAIN
+  RECOVER
+  PAUSE
+}
+
+/// Who the user is trying to become (PRD §10.2). One row per user, replaced
+/// whole rather than patched — it is a statement, not a record set.
+model BestSelfProfile {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  identityStatement String? @map("identity_statement")
+  workIdentity      String? @map("work_identity")
+  familyIdentity    String? @map("family_identity")
+  healthIdentity    String? @map("health_identity")
+  sixMonthVision    String? @map("six_month_vision")
+
+  motivations String[]
+  reasons     String[]
+
+  /// Set every time the profile is replaced. "When did you last look at who
+  /// you said you wanted to be?" is a coaching question (E06), not an audit one.
+  lastReviewedAt DateTime? @map("last_reviewed_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation("UserBestSelfProfile", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+  @@map("best_self_profiles")
+}
+
+/// A meaningful result in one domain (PRD §10.4).
+model Outcome {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  domain      Domain
+  title       String
+  description String?
+
+  /// @db.Date, deliberately: a target date has no time of day, and a
+  /// Timestamptz would shift by a day for anyone east or west of the writer.
+  targetDate DateTime? @map("target_date") @db.Date
+
+  /// 1–5. Bounds are enforced by the DTO, not a CHECK constraint — the API is
+  /// the only writer, and a CHECK would make widening the scale a migration.
+  importance Int @default(3)
+
+  motivation        String?
+  state             OutcomeState @default(ACTIVE)
+  successDefinition String?      @map("success_definition")
+  /// 1–5.
+  userConfidence    Int?         @map("user_confidence")
+  archivedAt        DateTime?    @map("archived_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user        User         @relation("UserOutcomes", fields: [userId], references: [id], onDelete: Cascade)
+  plan        Plan?
+  commitments Commitment[]
+
+  @@index([userId, domain])
+  @@index([userId, state])
+  @@map("outcomes")
+}
+
+/// The identity of an outcome's plan, and nothing else. Everything a user would
+/// call "the plan" lives on PlanVersion — see decision 1 in the header.
+model Plan {
+  id        String @id @default(uuid()) @db.Uuid
+  userId    String @map("user_id") @db.Uuid
+  outcomeId String @unique @map("outcome_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user     User          @relation("UserPlans", fields: [userId], references: [id], onDelete: Cascade)
+  outcome  Outcome       @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
+  versions PlanVersion[]
+
+  @@index([userId])
+  @@map("plans")
+}
+
+model PlanVersion {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  planId String @map("plan_id") @db.Uuid
+
+  /// Monotonic per plan, starting at 1. Unique with planId.
+  version Int
+  status  PlanVersionStatus @default(DRAFT)
+
+  /// WHY this version exists, in the user's words. PRD §103's "the user can
+  /// inspect why the plan changed" is this column plus the lineage below.
+  rationale String?
+
+  /// Minutes per week the version expects to cost.
+  expectedWeeklyLoad Int?    @map("expected_weekly_load")
+  fallbackStrategy   String? @map("fallback_strategy")
+
+  userApproved Boolean    @default(false) @map("user_approved")
+  createdBy    PlanAuthor @default(USER) @map("created_by")
+
+  /// SetNull, not Cascade: deleting an ancestor must not delete the history
+  /// that descends from it.
+  previousVersionId String? @map("previous_version_id") @db.Uuid
+
+  activeFrom  DateTime? @map("active_from") @db.Timestamptz
+  activeUntil DateTime? @map("active_until") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user            User          @relation("UserPlanVersions", fields: [userId], references: [id], onDelete: Cascade)
+  plan            Plan          @relation(fields: [planId], references: [id], onDelete: Cascade)
+  previousVersion PlanVersion?  @relation("PlanVersionLineage", fields: [previousVersionId], references: [id], onDelete: SetNull)
+  nextVersions    PlanVersion[] @relation("PlanVersionLineage")
+  routines        Routine[]
+  commitments     Commitment[]
+
+  @@unique([planId, version])
+  @@index([userId])
+  @@map("plan_versions")
+}
+
+/// A repeatable behaviour a version prescribes. E02 stores routines; nothing
+/// materialises commitments from them yet (E08 recurrence).
+model Routine {
+  id            String @id @default(uuid()) @db.Uuid
+  userId        String @map("user_id") @db.Uuid
+  planVersionId String @map("plan_version_id") @db.Uuid
+
+  title  String
+  domain Domain
+
+  triggerType  RoutineTriggerType @default(TIME) @map("trigger_type")
+  triggerValue String?            @map("trigger_value")
+
+  frequency  RoutineFrequency @default(WEEKDAYS)
+  /// 0 = Sunday … 6 = Saturday. Only meaningful when frequency = CUSTOM.
+  daysOfWeek Int[]            @map("days_of_week")
+
+  /// 'HH:mm' in the user's local time. Stored as text, not a time column: it is
+  /// an intention ("about half six"), not an instant, and E04 adds the timezone
+  /// that would be needed to resolve it.
+  preferredTime String? @map("preferred_time")
+
+  estimatedDurationMin Int     @map("estimated_duration_min")
+  minimumDurationMin   Int     @map("minimum_duration_min")
+  fallbackBehavior     String? @map("fallback_behavior")
+
+  active    Boolean @default(true)
+  sortOrder Int     @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user        User         @relation("UserRoutines", fields: [userId], references: [id], onDelete: Cascade)
+  planVersion PlanVersion  @relation(fields: [planVersionId], references: [id], onDelete: Cascade)
+  commitments Commitment[]
+
+  @@index([planVersionId])
+  @@index([userId])
+  @@map("routines")
+}
+
+/// One intended action at one time. Every link upward is optional and SetNull:
+/// a commitment survives the plan it came from (PRD §103).
+model Commitment {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  domain Domain
+  title  String
+
+  outcomeId     String? @map("outcome_id") @db.Uuid
+  planVersionId String? @map("plan_version_id") @db.Uuid
+  routineId     String? @map("routine_id") @db.Uuid
+
+  scheduledStart DateTime  @map("scheduled_start") @db.Timestamptz
+  scheduledEnd   DateTime? @map("scheduled_end") @db.Timestamptz
+
+  importance     Int     @default(3)
+  commitmentType String? @map("commitment_type")
+
+  /// The three sizes of the same intention (PRD §57). The minimum version is
+  /// what keeps a streak alive on a bad day.
+  fullVersion    String? @map("full_version")
+  shortVersion   String? @map("short_version")
+  minimumVersion String? @map("minimum_version")
+
+  status            CommitmentStatus @default(PLANNED)
+  rescheduleCount   Int              @default(0) @map("reschedule_count")
+  rescheduledFromId String?          @map("rescheduled_from_id") @db.Uuid
+
+  skipReason    String?   @map("skip_reason")
+  userConfirmed Boolean   @default(false) @map("user_confirmed")
+  startedAt     DateTime? @map("started_at") @db.Timestamptz
+  completedAt   DateTime? @map("completed_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user            User         @relation("UserCommitments", fields: [userId], references: [id], onDelete: Cascade)
+  outcome         Outcome?     @relation(fields: [outcomeId], references: [id], onDelete: SetNull)
+  planVersion     PlanVersion? @relation(fields: [planVersionId], references: [id], onDelete: SetNull)
+  routine         Routine?     @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  rescheduledFrom Commitment?  @relation("CommitmentReschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
+  rescheduledTo   Commitment[] @relation("CommitmentReschedule")
+  evidence        Evidence[]
+  reflections     Reflection[]
+
+  @@index([userId, scheduledStart])
+  @@index([userId, status])
+  @@index([planVersionId])
+  @@map("commitments")
+}
+
+/// A fact about what actually happened. Mapped to `evidence_items` because the
+/// snake_case-plural table rule needs a countable noun; the model stays
+/// `Evidence` so service code reads naturally.
+model Evidence {
+  id           String  @id @default(uuid()) @db.Uuid
+  userId       String  @map("user_id") @db.Uuid
+  /// SetNull — see decision 2 in the header.
+  commitmentId String? @map("commitment_id") @db.Uuid
+
+  /// Free label: 'completion', 'partial', 'start', 'timer', … Not an enum: new
+  /// evidence kinds arrive with every domain epic and none of them should be a
+  /// migration.
+  evidenceType String         @map("evidence_type")
+  source       EvidenceSource
+  occurredAt   DateTime       @default(now()) @map("occurred_at") @db.Timestamptz
+
+  quantitativeValue Float?  @map("quantitative_value")
+  quantitativeUnit  String? @map("quantitative_unit")
+  qualitativeValue  String? @map("qualitative_value")
+  /// 0–1.
+  confidence        Float?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user       User        @relation("UserEvidence", fields: [userId], references: [id], onDelete: Cascade)
+  commitment Commitment? @relation(fields: [commitmentId], references: [id], onDelete: SetNull)
+
+  @@index([userId, occurredAt])
+  @@index([commitmentId])
+  @@map("evidence_items")
+}
+
+/// What the user made of it. `relatedType`/`relatedId` are a soft pointer
+/// rather than four nullable FKs: reflections attach to whatever the product
+/// grows next (a day, a week, a workout) and none of those should be a
+/// migration on this table.
+model Reflection {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  /// 'commitment' | 'outcome' | 'plan_version' | 'day'
+  relatedType String  @map("related_type")
+  relatedId   String? @map("related_id") @db.Uuid
+
+  /// Denormalised from relatedId when relatedType = 'commitment', so the
+  /// common join is an FK and stays SetNull with the rest of the history.
+  commitmentId String? @map("commitment_id") @db.Uuid
+
+  userText     String?  @map("user_text")
+  aiSummary    String?  @map("ai_summary")
+  frictionTags String[] @map("friction_tags")
+
+  mood                Int?
+  perceivedDifficulty Int? @map("perceived_difficulty")
+  satisfaction        Int?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user       User        @relation("UserReflections", fields: [userId], references: [id], onDelete: Cascade)
+  commitment Commitment? @relation(fields: [commitmentId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([relatedType, relatedId])
+  @@map("reflections")
+}
+
+/// Current posture per domain (PRD §49). At most one row per user per domain;
+/// a missing row means GROW and the API synthesises it rather than seeding.
+model DomainMode {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  domain        Domain
+  mode          DomainModeKind @default(GROW)
+  reason        String?
+  effectiveFrom DateTime       @default(now()) @map("effective_from") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation("UserDomainModes", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, domain])
+  @@map("domain_modes")
 }
