@@ -21,6 +21,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { AiModule } from './ai/ai.module';
 import { PathModule } from './path/path.module';
 import { CommitmentsModule } from './commitments/commitments.module';
+import { TodayModule } from './today/today.module';
 import { LoggerModule } from './common/logger/logger.module';
 import { TestAuthModule } from './test-auth/test-auth.module';
 
@@ -93,6 +94,7 @@ import configuration from './config/configuration';
     // of a life, edited deliberately; commitments are the record of days,
     // written at volume by the flows E05/E07/E09 add.
     CommitmentsModule,
+    TodayModule,
 
     // Test modules (non-production only)
     ...(process.env.NODE_ENV !== 'production' ? [TestAuthModule] : []),

@@ -1788,6 +1788,141 @@ routines are the record of what the plan used to say.
 
 ---
 
+### Today
+
+The product's primary surface (PRD §12/§13). Two routes, and the split is the
+design: **`GET /today` makes no AI call at all**, so the whole screen renders
+with the provider down. The coach's sentence is a second, optional request.
+
+---
+
+#### GET /today
+**Requires Authentication** — the day.
+
+```json
+{
+  "greeting": "morning",
+  "stateLine": "3 commitments today. Health is in maintenance mode this week.",
+  "dateLocal": "2026-03-02",
+  "timeZone": "America/Costa_Rica",
+  "checkIn": { "feel": "LOW_ENERGY" },
+  "nextBestAction": {
+    "commitmentId": "5a2b…",
+    "title": "Open the doc and write one sentence",
+    "domain": "WORK",
+    "durationMinutes": 5,
+    "version": "minimum",
+    "rationale": "You said: “Free my evenings”. The 5-minute version keeps that alive today.",
+    "fallback": { "title": "5-minute start", "durationMinutes": 5 },
+    "interventionMode": "RECONNECT",
+    "confidence": 0.62
+  },
+  "domains": [
+    { "domain": "WORK", "mode": "GROW", "commitments": [ "…commitment cards…" ] },
+    { "domain": "FAMILY", "mode": "GROW", "commitments": [] },
+    { "domain": "HEALTH", "mode": "PAUSE", "commitments": [ "…" ] }
+  ],
+  "momentum": null,
+  "coachInsight": null
+}
+```
+
+**`domains` always has three entries, in canonical order** — including the empty
+and the paused. A domain that vanished because nothing was scheduled would look
+like data loss. A domain in `PAUSE` is **never** the next best action but still
+gets its card: the user chose to put it down, not to hide it.
+
+**`nextBestAction` is null** when there is nothing to recommend. An empty day is
+not a failure state.
+
+**The day boundary is the user's.** `dateLocal` and the candidate window come
+from `user_profiles.timezone`; a stored zone the runtime cannot resolve degrades
+to UTC with a warning rather than failing the request. Yesterday's still-planned
+commitments are **not** candidates — VISION §33 refuses catch-up debt.
+
+##### How the recommendation is chosen
+
+PRD §13: "The AI should not freely invent priority." The engine is deterministic
+and additive — every term is `weight × factor` with `factor ∈ [0,1]`, so the
+breakdown sums to the score and no term can silently dominate.
+
+| Term | Weight | Factor |
+|---|---|---|
+| Importance | 30 | `importance / 5` |
+| Urgency | 25 | the larger of a 12-hour schedule ramp (overdue = 1) and a 7-day deadline ramp |
+| Repeated avoidance | 20 | `min(rescheduleCount, 3) / 3`, read from the live row |
+| Plan relevance | 10 | active plan 1, inactive 0.5, none 0 |
+| Domain balance | 10 | mode factor (GROW 1, RECOVER 0.75, MAINTAIN 0.5) × 1 if untouched today else 0.25 |
+| Contextual fit | 10 | 1 inside the hour either side of the scheduled window |
+| Effort mismatch | −25 | 1 when the chosen size exceeds the minutes left today |
+| Conflict | −40 | 1 when a *different* commitment is already running |
+| Fatigue | −15 | feel factor (LOW_ENERGY 1, PACKED/UNEXPECTED_PROBLEM 0.5) × `min(minutes/60, 1)` |
+
+Ties resolve by earlier `scheduledStart`, then earlier `createdAt`, then id — so
+two equally good commitments do not swap places between refreshes. `confidence`
+is the gap to second place, clamped to 0.2–0.95 (0.9 for a lone candidate).
+
+**One pre-rule overrides all of it:** a commitment already `STARTED` today *is*
+the next best action, in `ACT` mode, counting down its own timer. Ranking it
+against the rest would let the engine tell a user to abandon what they are doing.
+
+##### Which size, and which posture
+
+The size follows the check-in: `LOW_ENERGY` → the minimum, `PACKED` /
+`UNEXPECTED_PROBLEM` → the short version, otherwise the full one stepped down
+only when it does not fit the remaining budget, never below the minimum. **A size
+the user never declared is never offered** — inventing a short version would be
+the product proposing a smaller commitment nobody agreed to.
+
+`interventionMode` is VISION §21's posture, resolved by the first matching rule:
+
+| Mode | When |
+|---|---|
+| `RECOVER` | 3+ days since any evidence, and the user has logged something before |
+| `CHALLENGE_PLAN` | the top candidate's routine failed 4+ times in 14 days |
+| `DIAGNOSE` | the top candidate has been moved twice or more |
+| `REDUCE` | check-in `PACKED`/`UNEXPECTED_PROBLEM`, or the chosen size exceeds the budget |
+| `RECONNECT` | check-in `LOW_ENERGY` |
+| `CLARIFY` | the outcome states neither motivation nor a definition of done |
+| `REINFORCE` | 3+ completions in 7 days with nothing missed |
+| `ACT` | otherwise |
+
+Order is the design, not an implementation detail: all of these can be true at
+once for someone having a hard week, and the winner decides what the product
+says to them. A brand-new account never gets `RECOVER` — never having logged
+anything is not a lapse.
+
+`rationale` is a deterministic template per mode, filled from the candidate.
+It is **never AI**: a card that says "Draft the storyline · 25 min" and nothing
+else is a to-do list, and PRD §120 requires the screen to work with the provider
+down.
+
+---
+
+#### GET /today/insight
+**Requires Authentication** — the coach's sentence about today. **Always 200.**
+
+```json
+{
+  "text": "Low energy is information, not a verdict. The smallest version still counts today.",
+  "source": "template",
+  "generatedAt": "2026-03-02T09:00:00.000Z"
+}
+```
+
+`source: "template"` means the coach was unavailable — no key, provider down, a
+response that failed the schema — and this is the deterministic sentence keyed to
+the intervention mode the engine already resolved. It is not an error and not an
+apology: a coaching card is the wrong place to learn about an expired API key.
+
+Cached per user per local day, **in process**. Stated rather than hidden: with
+several API instances a user can see one regeneration per instance per day. A
+check-in invalidates the entry, because a user who just said "low energy" and
+still reads yesterday's chirpy sentence would reasonably conclude nothing
+listened.
+
+---
+
 #### Commitments
 
 A commitment is one intended action at one time, in three sizes (PRD §57 /

@@ -139,6 +139,13 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
     name: 'EvolvePath',
     tags: [
       {
+        name: 'Today',
+        description:
+          "The signed-in user's day: the deterministic next best action with its rationale, " +
+          'the three domain sections, the check-in, and the coach insight. `GET /today` makes ' +
+          'no AI call — the screen renders with the provider down.',
+      },
+      {
         name: 'Best Self',
         description:
           "The calling user's Best Self profile — who they are trying to become (PRD §10.2). " +
