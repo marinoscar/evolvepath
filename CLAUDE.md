@@ -995,6 +995,22 @@ settings hub and the notification registry each make on their own axis
    Live example of the smallest possible call: `AiAdminTestService`'s connection
    probe (`apps/api/src/ai/connection-probe.ts`).
 
+### Calling an AI persona
+
+Whatever the persona, the **input comes from
+`ContextAssemblerService.assemble(userId, scope)` and
+`renderForPrompt(context)`** (`apps/api/src/coach/context/`), never from an
+ad-hoc Prisma dump at the call site. `CONTEXT_SCOPES` is the single place that
+says what each persona may know, and it is what makes PRD §85's promise —
+an insight marked "don't use for coaching" is never used — enforceable rather
+than aspirational: there is exactly one query that could have included it.
+
+`assemble` rejects rather than returning a partial context; a caller treats
+that the same way it treats an unavailable provider, by falling back to the
+deterministic path (PRD §120). The scope table, the character budget, the
+truncation order and the rejected alternatives are in
+[`docs/specs/coach-and-memory.md`](docs/specs/coach-and-memory.md) §1.
+
 ## Specialized Subagents (MANDATORY)
 
 **CRITICAL REQUIREMENT**: This project uses specialized subagents for all development work. You MUST delegate tasks to the appropriate subagent. Do NOT attempt to perform development tasks directly without using the designated agent.
