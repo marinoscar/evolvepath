@@ -466,6 +466,15 @@ app can gate its shell without a second request on boot.
 - `storage_object_chunks` - Multipart upload chunk tracking
 - `personal_access_tokens` - User-created long-lived API tokens (hashed)
 - `ai_invocations` - AI call telemetry (model, prompt version, tokens, latency, validation result, redacted I/O); never chain of thought
+- `best_self_profiles` - Who the user is trying to become (identity statements, six-month vision, motivations); one row per user, replaced whole
+- `outcomes` - Meaningful results per domain (Work, Family, Health) with importance, target date and state
+- `plans` - One per outcome; an identity only, everything mutable lives on its versions
+- `plan_versions` - Versioned plan content (rationale, expected weekly load, lineage); at most one ACTIVE per plan, enforced by a partial unique index
+- `routines` - Repeatable behaviours prescribed by a plan version (trigger, frequency, duration, fallback)
+- `commitments` - One intended action at one time, with its lifecycle status and reschedule lineage
+- `evidence_items` - Facts about what actually happened; survives its commitment (`commitment_id` is SET NULL)
+- `reflections` - What the user made of a commitment, outcome, plan version or day
+- `domain_modes` - Per-domain posture (GROW, MAINTAIN, RECOVER, PAUSE); a missing row means GROW
 
 ## Access Control: Email Allowlist
 

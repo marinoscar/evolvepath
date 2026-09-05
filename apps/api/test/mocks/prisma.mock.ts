@@ -47,7 +47,16 @@ export function mockPrismaTransaction(): void {
 }
 
 /**
- * Creates a fresh mock PrismaService for unit tests
+ * Creates a fresh mock PrismaService for unit tests.
+ *
+ * `mockDeep<PrismaClient>()` is structural, so every delegate the generated
+ * client exposes is mockable here the moment `prisma:generate` runs — the
+ * EvolvePath domain delegates added by #36 (`bestSelfProfile`, `outcome`,
+ * `plan`, `planVersion`, `routine`, `commitment`, `evidence`, `reflection`,
+ * `domainMode`) included. There is deliberately no hand-maintained list of
+ * delegates to extend: one would drift from the schema silently, and a test
+ * stubbing a delegate that no longer exists is exactly the failure that list
+ * would hide.
  */
 export function createMockPrismaService(): MockPrismaService {
   return mockDeep<PrismaClient>();
