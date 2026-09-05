@@ -83,6 +83,25 @@ export class WorkoutSessionsController {
     return this.sessions.get(userId, id);
   }
 
+  @Get(':id/exercises/:exerciseId/explain')
+  @Auth()
+  @ApiOperation({
+    summary: "One sentence about a movement's progression suggestion",
+    description:
+      'PRD §42: the rule decides, the coach explains. The number comes from the deterministic ' +
+      'rule before this runs, and a sentence naming any other load is discarded in favour of ' +
+      'the template — so `source` is `template` whenever the provider is down, the user has no ' +
+      'key, or the model wrote something we will not show.',
+  })
+  @ApiResponse({ status: 200, description: "`{ sentence, source: 'ai' | 'template' }`" })
+  async explain(
+    @CurrentUser('id') userId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('exerciseId', ParseUUIDPipe) exerciseId: string,
+  ): Promise<{ sentence: string; source: string }> {
+    return this.sessions.explain(userId, id, exerciseId);
+  }
+
   @Post(':id/sets')
   @Auth()
   @ApiOperation({
