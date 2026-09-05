@@ -248,6 +248,20 @@ describe('AppBar', () => {
       expect(screen.getByText('Access Tokens')).toBeInTheDocument();
     });
 
+    // The one NON-settings drill-down (#56). The table it comes from is data,
+    // not a gate: adding a row changes what the bar SAYS on a route, never at
+    // which width it changes shape.
+    it('shows Back + "Outcome" on the outcome detail route', () => {
+      setViewportWidth(375);
+      render(<AppBar />, {
+        wrapperOptions: { route: '/path/outcomes/abc-123' },
+      });
+
+      expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+      expect(screen.getByText('Outcome')).toBeInTheDocument();
+      expect(screen.queryByText(APP_NAME)).not.toBeInTheDocument();
+    });
+
     it('still renders UserMenu in the drill-down branch', () => {
       setViewportWidth(375);
       render(<AppBar />, { wrapperOptions: { route: '/admin/settings' } });
@@ -317,6 +331,26 @@ describe('AppBar', () => {
 
       expect(screen.getByText(APP_NAME)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /toggle theme/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    });
+
+    it('keeps the normal toolbar on the Path list itself', () => {
+      // `/path` is a DESTINATION, not a drill-down: the bottom bar already has
+      // a tab for it, and a back arrow there would go up to nothing.
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/path' } });
+
+      expect(screen.getByText(APP_NAME)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    });
+
+    it('does not drill down on a path deeper than one outcome segment', () => {
+      // The pattern admits exactly one segment. A deeper page would need its
+      // own row, with its own title and its own parent.
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/path/outcomes/abc/extra' } });
+
+      expect(screen.getByText(APP_NAME)).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
     });
 

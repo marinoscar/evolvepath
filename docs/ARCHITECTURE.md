@@ -1023,6 +1023,7 @@ for genuinely parallel content only.
 | Auth Callback | `/auth/callback` | Public | - | Token handling |
 | Today | `/` | Required | Any | The day's next best action (placeholder until E05) |
 | Path | `/path` | Required | Any | Best Self, outcomes, plans and routines |
+| — Outcome | `/path/outcomes/:id` | Required | Any | One outcome: plan, versions, routines, commitments |
 | Coach | `/coach` | Required | Any | The AI coach (placeholder until E06) |
 | Progress | `/progress` | Required | Any | Momentum and evidence (placeholder until E11) |
 | User Settings hub | `/settings` | Required | Any (authenticated) | Searchable hub over the user's own settings |
@@ -1126,7 +1127,47 @@ pattern this route belongs to.
 
 ---
 
-### 9.5 Progressive Web App
+### 9.5 The Path screen
+
+`/path` renders the PRD §9 hierarchy — Best Self at the top, then three domain
+sections (Work, Family, Health) each holding outcome cards — and
+`/path/outcomes/:id` opens one outcome in full: its plan, that plan's routines,
+its upcoming commitments, and the history of every version the plan has had.
+
+**One routing model, two layouts.** An outcome opens at
+`/path/outcomes/:id` at *every* width. Only the layout changes: the domain grid
+goes 1 → 2 → 3 columns across `xs`/`sm`/`md`, and the detail page goes 1 → 2
+columns at `md`. The tempting alternative — a master/detail split above `sm`
+and a route below it — means the same click produces a different URL depending
+on the window, so a link shared from a laptop lands somewhere else on a phone
+and Back means two different things. Layout is a rendering decision;
+navigation is not.
+
+The compact top bar gets a back arrow on the detail route through
+`PRODUCT_DRILLDOWNS` in `AppBar.tsx` — a small data table, not a gate. Adding a
+row changes what the bar *says* on a route, never at which width it changes
+shape, so it does not touch the five coupled breakpoint gates.
+
+**The layers, and how each is reached:**
+
+| Layer | Hook | Notes |
+|---|---|---|
+| Best Self | `useBestSelf` | `null` means "never saved" — an empty card, not an error |
+| Outcomes | `useOutcomes` | `includeArchived` drives the "Show archived" switch |
+| One outcome + plan + versions + routines | `useOutcome` | Four chained requests behind one `refresh` |
+| Commitments (next 14 days) | `useOutcomeCommitments` | Refetches after every transition |
+| Domain modes | `useDomainModes` | Always three; the API synthesises the unset ones |
+
+**Two invariants worth stating explicitly.** Nothing on this screen makes an
+authorization decision: an id that is not the caller's answers 404, identical
+to one that never existed, and the page renders a not-found state rather than
+redirecting. And the commitment action menu renders the API's own
+`allowedTransitions` array rather than a locally computed list, so a client
+running an older bundle cannot offer a move the API would refuse.
+
+---
+
+### 9.6 Progressive Web App
 
 PRD §123 makes mobile the primary platform, so the web app is installable to a
 home screen and launches without a network round trip for its shell.

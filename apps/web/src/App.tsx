@@ -21,6 +21,9 @@ const ActivateDevicePage = lazy(() => import('./pages/ActivateDevicePage'));
 // placeholders until E05, E06 and E11; Path is replaced wholesale by #56.
 const TodayPage = lazy(() => import('./pages/TodayPage'));
 const PathPage = lazy(() => import('./pages/PathPage'));
+// The outcome drill-down (#56). Its own route at every width — see the page's
+// header for why a master/detail split above `sm` was rejected.
+const OutcomeDetailPage = lazy(() => import('./pages/OutcomeDetailPage'));
 const CoachPage = lazy(() => import('./pages/CoachPage'));
 const ProgressPage = lazy(() => import('./pages/ProgressPage'));
 // User settings — the hub (#96) plus one route per card in
@@ -134,6 +137,7 @@ function AppRoutes() {
                 >
                   <Route path="/" element={<TodayPage />} />
                   <Route path="/path" element={<PathPage />} />
+                  <Route path="/path/outcomes/:id" element={<OutcomeDetailPage />} />
                   <Route path="/coach" element={<CoachPage />} />
                   <Route path="/progress" element={<ProgressPage />} />
                   {/* The per-user settings surface (#96, epic #90) — the same

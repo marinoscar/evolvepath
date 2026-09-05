@@ -1,5 +1,7 @@
 import { http, HttpResponse } from 'msw';
 
+import { pathHandlers } from './pathHandlers';
+
 // Use wildcard pattern to match relative URLs
 const API_BASE = '*/api';
 
@@ -561,4 +563,8 @@ export const handlers = [
       },
     });
   }),
+
+  // The EvolvePath product domain (#56, epic #33), in its own file: a stateful
+  // store with the transition matrix enforced, rather than canned responses.
+  ...pathHandlers,
 ];

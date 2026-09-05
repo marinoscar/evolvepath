@@ -2,6 +2,7 @@ import '@testing-library/jest-dom';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { server } from './mocks/server';
+import { resetPathState } from './mocks/pathHandlers';
 
 // Set base URL for fetch
 const BASE_URL = 'http://localhost:3000';
@@ -220,6 +221,10 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   server.resetHandlers();
+  // The EvolvePath handlers keep a real in-memory store (#56), so unlike the
+  // stateless handlers `resetHandlers` alone is not enough: without this a
+  // test would inherit the previous one's outcomes and plans.
+  resetPathState();
   resetViewportWidth();
   mediaQueryListRegistry.clear();
 });

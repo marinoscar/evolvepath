@@ -865,3 +865,298 @@ export interface MyAiKeyStatus {
     hasDefaultModel: boolean;
   };
 }
+
+// =============================================================================
+// EvolvePath product domain (epic #33)
+// =============================================================================
+//
+// String unions mirroring the Prisma enums in `apps/api/prisma/schema.prisma`.
+// They are hand-maintained rather than generated, and the cost of that is one
+// place to update when the schema changes — accepted because generating types
+// from Prisma would put the API's build output on the web app's critical path
+// for a set of values that changes about once an epic.
+//
+// The API is the only authority on what a user may see. Nothing in these types
+// or in the components over them makes an authorization decision: an id that
+// is not yours answers 404, and that 404 is the truth.
+// =============================================================================
+
+export type Domain = 'WORK' | 'FAMILY' | 'HEALTH';
+export type OutcomeState = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'ARCHIVED';
+export type PlanVersionStatus = 'DRAFT' | 'ACTIVE' | 'SUPERSEDED' | 'REJECTED';
+export type PlanAuthor = 'USER' | 'AI';
+export type RoutineTriggerType = 'TIME' | 'EVENT';
+export type RoutineFrequency = 'DAILY' | 'WEEKDAYS' | 'WEEKENDS' | 'WEEKLY' | 'CUSTOM';
+export type CommitmentStatus =
+  | 'PLANNED'
+  | 'READY'
+  | 'STARTED'
+  | 'COMPLETED'
+  | 'PARTIALLY_COMPLETED'
+  | 'RESCHEDULED'
+  | 'SKIPPED'
+  | 'MISSED'
+  | 'CANCELLED';
+export type EvidenceSource = 'USER_LOG' | 'TIMER' | 'WORKOUT_LOG' | 'APP_FLOW';
+export type DomainModeKind = 'GROW' | 'MAINTAIN' | 'RECOVER' | 'PAUSE';
+
+/** The three domains in render order — the same order the API returns. */
+export const DOMAIN_ORDER: readonly Domain[] = ['WORK', 'FAMILY', 'HEALTH'];
+
+export const DOMAIN_LABELS: Record<Domain, string> = {
+  WORK: 'Work',
+  FAMILY: 'Family',
+  HEALTH: 'Health',
+};
+
+export interface BestSelfProfile {
+  id: string;
+  identityStatement: string | null;
+  workIdentity: string | null;
+  familyIdentity: string | null;
+  healthIdentity: string | null;
+  sixMonthVision: string | null;
+  motivations: string[];
+  reasons: string[];
+  lastReviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BestSelfInput {
+  identityStatement?: string | null;
+  workIdentity?: string | null;
+  familyIdentity?: string | null;
+  healthIdentity?: string | null;
+  sixMonthVision?: string | null;
+  motivations?: string[];
+  reasons?: string[];
+}
+
+export interface ActivePlanVersionSummary {
+  id: string;
+  version: number;
+}
+
+export interface Outcome {
+  id: string;
+  domain: Domain;
+  title: string;
+  description: string | null;
+  /** `YYYY-MM-DD`, not an instant — a target date has no time of day. */
+  targetDate: string | null;
+  importance: number;
+  motivation: string | null;
+  state: OutcomeState;
+  successDefinition: string | null;
+  userConfidence: number | null;
+  archivedAt: string | null;
+  planId: string | null;
+  activePlanVersion: ActivePlanVersionSummary | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OutcomeInput {
+  domain?: Domain;
+  title?: string;
+  description?: string | null;
+  targetDate?: string | null;
+  importance?: number;
+  motivation?: string | null;
+  successDefinition?: string | null;
+  userConfidence?: number | null;
+  /** ARCHIVED is not settable here — it is reached through the archive route. */
+  state?: 'ACTIVE' | 'PAUSED' | 'COMPLETED';
+}
+
+export interface PlanVersionSummary {
+  id: string;
+  version: number;
+  status: PlanVersionStatus;
+  rationale: string | null;
+  createdBy: PlanAuthor;
+  userApproved: boolean;
+  previousVersionId: string | null;
+  activeFrom: string | null;
+  activeUntil: string | null;
+  routineCount: number;
+  createdAt: string;
+}
+
+export interface PlanVersion extends PlanVersionSummary {
+  planId: string;
+  expectedWeeklyLoad: number | null;
+  fallbackStrategy: string | null;
+  routines: Routine[];
+}
+
+export interface Plan {
+  id: string;
+  outcomeId: string;
+  activeVersion: PlanVersionSummary | null;
+  versionCount: number;
+  createdAt: string;
+}
+
+export interface PlanInput {
+  rationale?: string | null;
+  expectedWeeklyLoad?: number | null;
+  fallbackStrategy?: string | null;
+  routines?: RoutineInput[];
+}
+
+export interface PlanVersionInput {
+  /** Required by the API: PRD §80 wants "why it changed" always renderable. */
+  rationale: string;
+  expectedWeeklyLoad?: number | null;
+  fallbackStrategy?: string | null;
+  copyRoutinesFrom?: 'active' | 'none';
+}
+
+export interface Routine {
+  id: string;
+  planVersionId: string;
+  title: string;
+  domain: Domain;
+  triggerType: RoutineTriggerType;
+  triggerValue: string | null;
+  frequency: RoutineFrequency;
+  /** 0 = Sunday … 6 = Saturday. Only meaningful when `frequency` is CUSTOM. */
+  daysOfWeek: number[];
+  preferredTime: string | null;
+  estimatedDurationMin: number;
+  minimumDurationMin: number;
+  fallbackBehavior: string | null;
+  active: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoutineInput {
+  planVersionId?: string;
+  title?: string;
+  domain?: Domain;
+  triggerType?: RoutineTriggerType;
+  triggerValue?: string | null;
+  frequency?: RoutineFrequency;
+  daysOfWeek?: number[];
+  preferredTime?: string | null;
+  estimatedDurationMin?: number;
+  minimumDurationMin?: number;
+  fallbackBehavior?: string | null;
+  active?: boolean;
+  sortOrder?: number;
+}
+
+export interface Commitment {
+  id: string;
+  domain: Domain;
+  title: string;
+  outcomeId: string | null;
+  planVersionId: string | null;
+  routineId: string | null;
+  scheduledStart: string;
+  scheduledEnd: string | null;
+  importance: number;
+  commitmentType: string | null;
+  fullVersion: string | null;
+  shortVersion: string | null;
+  minimumVersion: string | null;
+  status: CommitmentStatus;
+  /**
+   * Computed by the API from its own matrix. The UI renders EXACTLY these, so
+   * a client running an older bundle can never offer a move the API refuses —
+   * `utils/commitmentTransitions.ts` exists only for optimistic rendering.
+   */
+  allowedTransitions: CommitmentStatus[];
+  rescheduleCount: number;
+  rescheduledFromId: string | null;
+  rescheduledToId: string | null;
+  skipReason: string | null;
+  userConfirmed: boolean;
+  startedAt: string | null;
+  completedAt: string | null;
+  evidenceCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommitmentDetail extends Commitment {
+  evidence: Evidence[];
+  reflections: Reflection[];
+}
+
+export interface CommitmentInput {
+  domain: Domain;
+  title: string;
+  scheduledStart: string;
+  scheduledEnd?: string | null;
+  importance?: number;
+  commitmentType?: string | null;
+  outcomeId?: string | null;
+  planVersionId?: string | null;
+  routineId?: string | null;
+  fullVersion?: string | null;
+  shortVersion?: string | null;
+  minimumVersion?: string | null;
+  userConfirmed?: boolean;
+}
+
+export interface TransitionEvidenceInput {
+  evidenceType?: string;
+  quantitativeValue?: number;
+  quantitativeUnit?: string | null;
+  qualitativeValue?: string | null;
+}
+
+export interface TransitionInput {
+  to: CommitmentStatus;
+  reason?: string | null;
+  /** ISO 8601 with offset. Required when `to` is RESCHEDULED, rejected otherwise. */
+  rescheduleTo?: string;
+  /** Only ever accepted with COMPLETED or PARTIALLY_COMPLETED. */
+  evidence?: TransitionEvidenceInput;
+}
+
+export interface TransitionResult {
+  commitment: Commitment;
+  /** The new PLANNED commitment a reschedule opened; null otherwise. */
+  rescheduledTo: Commitment | null;
+  evidence: Evidence | null;
+}
+
+export interface Evidence {
+  id: string;
+  commitmentId: string | null;
+  evidenceType: string;
+  source: EvidenceSource;
+  occurredAt: string;
+  quantitativeValue: number | null;
+  quantitativeUnit: string | null;
+  qualitativeValue: string | null;
+  confidence: number | null;
+  createdAt: string;
+}
+
+export interface Reflection {
+  id: string;
+  relatedType: string;
+  relatedId: string | null;
+  userText: string | null;
+  aiSummary: string | null;
+  frictionTags: string[];
+  mood: number | null;
+  perceivedDifficulty: number | null;
+  satisfaction: number | null;
+  createdAt: string;
+}
+
+export interface DomainMode {
+  domain: Domain;
+  mode: DomainModeKind;
+  reason: string | null;
+  /** Null for a domain the user has never set — no row exists for it. */
+  effectiveFrom: string | null;
+}

@@ -10,6 +10,29 @@
  */
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
+/**
+ * Unwraps the `{ data, meta }` envelope every API response carries.
+ *
+ * KEYED ON THE KEY'S PRESENCE, not on the value's truthiness. This used to be
+ * `body.data ?? body`, which is correct for every payload except the falsy
+ * ones — and `GET /me/best-self` answers `{ "data": null }` for a profile that
+ * has never been saved, which is a legitimate, documented result and not an
+ * absence. `??` fell through on it and handed the caller the whole envelope,
+ * so `profile` became `{ data: null, meta: {...} }`: truthy, wrongly shaped,
+ * and only visible where something later read a field off it.
+ *
+ * The same trap waits for any endpoint that answers `0`, `false` or `""`.
+ *
+ * A response that is not an envelope at all (an error body already handled
+ * above, or a bare value) is returned untouched, exactly as before.
+ */
+function unwrapEnvelope<T>(body: unknown): T {
+  if (body !== null && typeof body === 'object' && 'data' in body) {
+    return (body as { data: T }).data;
+  }
+  return body as T;
+}
+
 interface RequestOptions extends RequestInit {
   skipAuth?: boolean;
 }
@@ -84,7 +107,7 @@ class ApiService {
         }
 
         const data = await retryResponse.json();
-        return data.data ?? data;
+        return unwrapEnvelope<T>(data);
       }
       throw new ApiError('Unauthorized', 401);
     }
@@ -108,7 +131,7 @@ class ApiService {
     }
 
     const data = await response.json();
-    return data.data ?? data;
+    return unwrapEnvelope<T>(data);
   }
 
   async refreshToken(): Promise<boolean> {
@@ -262,6 +285,27 @@ import type {
   AppNotification,
   NotificationListResponse,
   UnreadCountResponse,
+  // EvolvePath product domain (epic #33)
+  BestSelfProfile,
+  BestSelfInput,
+  Domain,
+  DomainMode,
+  DomainModeKind,
+  Outcome,
+  OutcomeInput,
+  Plan,
+  PlanInput,
+  PlanVersion,
+  PlanVersionInput,
+  PlanVersionSummary,
+  Routine,
+  RoutineInput,
+  Commitment,
+  CommitmentDetail,
+  CommitmentInput,
+  CommitmentStatus,
+  TransitionInput,
+  TransitionResult,
 } from '../types';
 
 // Allowlist API
@@ -669,3 +713,179 @@ export async function markAllNotificationsRead(): Promise<UnreadCountResponse> {
 
 /** Re-exported for consumers that only import from this module. */
 export type { AppNotification };
+
+// =============================================================================
+// EvolvePath product domain (epic #33)
+// =============================================================================
+//
+// The ONLY place in the web app that names these endpoints. Everything above
+// this line speaks in domain terms; if a route or a field moves, this block
+// plus the types in `types/index.ts` are the entire reconciliation surface.
+//
+// No function here makes an authorization decision. An id belonging to another
+// user answers 404, identical to an id that never existed, and that answer is
+// the truth — there is deliberately nothing client-side to disagree with it.
+// =============================================================================
+
+// --- Best Self --------------------------------------------------------------
+
+/** `null` until the profile has been saved once — an empty card, not an error. */
+export async function getBestSelf(): Promise<BestSelfProfile | null> {
+  return api.get<BestSelfProfile | null>('/me/best-self');
+}
+
+/** A PUT: omitted fields are cleared. There is no PATCH by design. */
+export async function putBestSelf(input: BestSelfInput): Promise<BestSelfProfile> {
+  return api.put<BestSelfProfile>('/me/best-self', input);
+}
+
+// --- Outcomes ---------------------------------------------------------------
+
+export async function getOutcomes(params?: {
+  domain?: Domain;
+  includeArchived?: boolean;
+}): Promise<Outcome[]> {
+  const query = new URLSearchParams();
+  if (params?.domain) query.set('domain', params.domain);
+  if (params?.includeArchived) query.set('includeArchived', 'true');
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return api.get<Outcome[]>(`/outcomes${suffix}`);
+}
+
+export async function createOutcome(input: OutcomeInput): Promise<Outcome> {
+  return api.post<Outcome>('/outcomes', input);
+}
+
+export async function getOutcome(id: string): Promise<Outcome> {
+  return api.get<Outcome>(`/outcomes/${id}`);
+}
+
+export async function updateOutcome(id: string, patch: OutcomeInput): Promise<Outcome> {
+  return api.patch<Outcome>(`/outcomes/${id}`, patch);
+}
+
+/** Idempotent: archiving an already-archived outcome succeeds and changes nothing. */
+export async function archiveOutcome(id: string): Promise<Outcome> {
+  return api.post<Outcome>(`/outcomes/${id}/archive`, {});
+}
+
+// --- Domain modes -----------------------------------------------------------
+
+/** Always three entries, in WORK/FAMILY/HEALTH order, synthesised where unset. */
+export async function getDomainModes(): Promise<DomainMode[]> {
+  return api.get<DomainMode[]>('/me/domain-modes');
+}
+
+export async function setDomainMode(
+  domain: Domain,
+  body: { mode: DomainModeKind; reason?: string | null },
+): Promise<DomainMode> {
+  return api.put<DomainMode>(`/me/domain-modes/${domain}`, body);
+}
+
+// --- Plans and versions -----------------------------------------------------
+
+export async function getPlansForOutcome(outcomeId: string): Promise<Plan[]> {
+  return api.get<Plan[]>(`/outcomes/${outcomeId}/plans`);
+}
+
+export async function createPlan(outcomeId: string, body: PlanInput): Promise<Plan> {
+  return api.post<Plan>(`/outcomes/${outcomeId}/plans`, body);
+}
+
+export async function getPlanVersions(planId: string): Promise<PlanVersionSummary[]> {
+  return api.get<PlanVersionSummary[]>(`/plans/${planId}/versions`);
+}
+
+/** `version` is the integer the user sees ("v2"), not the version's UUID. */
+export async function getPlanVersion(planId: string, version: number): Promise<PlanVersion> {
+  return api.get<PlanVersion>(`/plans/${planId}/versions/${version}`);
+}
+
+export async function createPlanVersion(
+  planId: string,
+  body: PlanVersionInput,
+): Promise<PlanVersion> {
+  return api.post<PlanVersion>(`/plans/${planId}/versions`, body);
+}
+
+export async function activatePlanVersion(
+  planId: string,
+  version: number,
+): Promise<PlanVersion> {
+  return api.post<PlanVersion>(`/plans/${planId}/versions/${version}/activate`, {});
+}
+
+export async function rejectPlanVersion(
+  planId: string,
+  version: number,
+  reason?: string,
+): Promise<PlanVersion> {
+  return api.post<PlanVersion>(`/plans/${planId}/versions/${version}/reject`, { reason });
+}
+
+// --- Routines ---------------------------------------------------------------
+
+export async function getRoutines(
+  planVersionId: string,
+  includeInactive = true,
+): Promise<Routine[]> {
+  const query = new URLSearchParams({ planVersionId });
+  // The editor shows deactivated routines with a toggle, so the default here
+  // is the opposite of the API's — a list that silently hid them would make
+  // "reactivate this" unreachable.
+  if (includeInactive) query.set('includeInactive', 'true');
+  return api.get<Routine[]>(`/routines?${query.toString()}`);
+}
+
+export async function createRoutine(input: RoutineInput): Promise<Routine> {
+  return api.post<Routine>('/routines', input);
+}
+
+export async function updateRoutine(id: string, patch: RoutineInput): Promise<Routine> {
+  return api.patch<Routine>(`/routines/${id}`, patch);
+}
+
+export async function deleteRoutine(id: string): Promise<void> {
+  await api.delete<void>(`/routines/${id}`);
+}
+
+// --- Commitments ------------------------------------------------------------
+
+export async function getCommitments(params: {
+  /** ISO 8601 with offset. Required by the API; the window is capped at 62 days. */
+  from: string;
+  to: string;
+  outcomeId?: string;
+  domain?: Domain;
+  status?: CommitmentStatus[];
+}): Promise<Commitment[]> {
+  const query = new URLSearchParams({ from: params.from, to: params.to });
+  if (params.outcomeId) query.set('outcomeId', params.outcomeId);
+  if (params.domain) query.set('domain', params.domain);
+  // CSV, not repeated keys — see the API's query DTO for why.
+  if (params.status?.length) query.set('status', params.status.join(','));
+  return api.get<Commitment[]>(`/commitments?${query.toString()}`);
+}
+
+export async function createCommitment(input: CommitmentInput): Promise<Commitment> {
+  return api.post<Commitment>('/commitments', input);
+}
+
+export async function getCommitment(id: string): Promise<CommitmentDetail> {
+  return api.get<CommitmentDetail>(`/commitments/${id}`);
+}
+
+/**
+ * The only way a commitment's status changes.
+ *
+ * A move the API's matrix forbids answers 409 with
+ * `details.reason === 'INVALID_TRANSITION'`, which the caller uses to tell
+ * "the world moved under you" apart from every other conflict.
+ */
+export async function transitionCommitment(
+  id: string,
+  body: TransitionInput,
+): Promise<TransitionResult> {
+  return api.post<TransitionResult>(`/commitments/${id}/transition`, body);
+}
