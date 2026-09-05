@@ -6,6 +6,7 @@ import { CommitmentsModule } from '../commitments/commitments.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PathModule } from '../path/path.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { StorageModule } from '../storage/storage.module';
 import { SafetyModule } from '../coach/safety/safety.module';
 import { UserProfileModule } from '../user-profile/user-profile.module';
 import { ExercisesController } from './exercises/exercises.controller';
@@ -17,6 +18,9 @@ import { ProgressionExplainerService } from './progression/progression-explainer
 import { WorkoutAdaptationController } from './adaptation/workout-adaptation.controller';
 import { WorkoutAdaptationService } from './adaptation/workout-adaptation.service';
 import { WorkoutAdaptationTask } from './adaptation/workout-adaptation.task';
+import { MediaCheckService } from './media/media-check.service';
+import { MediaSummaryService } from './media/media-summary.service';
+import { WorkoutMediaController } from './media/workout-media.controller';
 import { WorkoutSessionsController } from './sessions/workout-sessions.controller';
 import { WorkoutSessionsService } from './sessions/workout-sessions.service';
 
@@ -52,12 +56,14 @@ import { WorkoutSessionsService } from './sessions/workout-sessions.service';
     PathModule,
     UserProfileModule,
     NotificationsModule,
+    StorageModule,
   ],
   controllers: [
     WorkoutProgramsController,
     ExercisesController,
     WorkoutSessionsController,
     WorkoutAdaptationController,
+    WorkoutMediaController,
   ],
   providers: [
     ExerciseResolverService,
@@ -67,12 +73,15 @@ import { WorkoutSessionsService } from './sessions/workout-sessions.service';
     ProgressionExplainerService,
     WorkoutAdaptationService,
     WorkoutAdaptationTask,
+    MediaCheckService,
+    MediaSummaryService,
   ],
   exports: [
     WorkoutProgramsService,
     WorkoutSessionsService,
     ExerciseResolverService,
     WorkoutAdaptationService,
+    MediaCheckService,
   ],
 })
 export class WorkoutsModule {}
