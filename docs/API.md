@@ -3943,6 +3943,11 @@ Another user's plan id answers **404, never 403**.
 
 ### Workouts
 
+The full written contract for this domain — the rules, the progression table,
+the detectors and what each of them refuses to do — is
+[`docs/specs/health-domain.md`](specs/health-domain.md). This section is the
+wire shapes.
+
 Structured training (PRD §37–§44). The program lives in tables rather than in a
 chat transcript, which is what lets it schedule itself onto Today, show "last
 time" on the next session, and be adapted when it keeps failing.
@@ -4267,7 +4272,9 @@ Another user's program id answers **404, never 403**.
 
 ### Health Domain
 
-Nutrition behaviours and optional body-weight tracking (PRD §46, §47).
+Nutrition behaviours and optional body-weight tracking (PRD §46, §47). The
+rules behind them are in
+[`docs/specs/health-domain.md`](specs/health-domain.md) §8–§9.
 **Behaviours, not calories**: there is no macro, no food database, no BMI and no
 goal weight in this section, by design (VISION §16).
 

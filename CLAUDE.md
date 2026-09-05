@@ -462,6 +462,41 @@ Three rules that are easy to break and expensive to rediscover:
   PRD §105. `apps/api/src/family/no-score.guard.spec.ts` fails the build if one
   reaches a family schema, DTO or `/api/family` OpenAPI path.
 
+## The Health domain
+
+Workout programs, the session runner, progression, adaptation, media coaching,
+nutrition behaviours and the weight trend have their own written contract in
+[`docs/specs/health-domain.md`](docs/specs/health-domain.md): the data model,
+the builder's rules table with its codes and constants, the starter program,
+approve's transaction and scheduling formula, the finish → commitment status
+table, the idempotent set-logging protocol, the progression rules verbatim, the
+adaptation detectors, the media contracts with the safety redirect and the
+no-calorie guard, the nutrition registry, the weight trend rules, and the
+rejected alternatives.
+
+Read it before changing anything under `apps/api/src/workouts/`,
+`apps/api/src/health-domain/`, `apps/web/src/components/workouts/` or
+`apps/web/src/components/health/`.
+`apps/api/test/docs/health-domain-doc.spec.ts` fails if a constant, a prompt
+version, a detector or the safety copy changes without the document changing
+with it — including when only the VALUE moves, which is the realistic mistake.
+
+Three rules that are easy to break and expensive to rediscover:
+
+- **The progression rule has no model in it.** PRD §42. `suggestProgression` is
+  pure and the six reasons are evaluated in a fixed order; the AI writes a
+  sentence *about* the decision afterwards, and `numbersAreSafe()` rejects that
+  sentence if it introduces a number the recommendation did not contain.
+- **`equipment` on a catalog row is everything the movement needs, not a menu.**
+  A row meaning "dumbbells or kettlebells" is read as "dumbbells and
+  kettlebells" and disappears from every filter it appears in — silently, and
+  only for the users who own one of the two.
+- **Adaptation writes proposals, never plans.** The detectors are counting, not
+  reasoning, and the plan changes only through
+  `POST /api/proposals/:id/accept`. Accepting runs the registered
+  `PROPOSAL_EFFECT`s inside the same transaction, which is what re-points
+  `workout_templates.routine_id` at the new version's routine.
+
 ## The workout runner and its offline outbox
 
 `/workout/:sessionId` (`apps/web/src/pages/WorkoutRunnerPage.tsx`) is full
@@ -1099,6 +1134,10 @@ settings hub makes on its own axis (epic #109, wired end to end by #128).
 Live examples of all three steps: `AuthService.handleGoogleLogin`
 (`user.welcome`), `AllowlistService.addEmail` (`allowlist.invitation`), and
 `UsersService.updateUserRoles` (`security.role_changed`, mandatory).
+`WorkoutProgramsService.approve` (`health.program_activated`) is the worked
+example of the placement rule: the `notify` call sits **after** the approval
+transaction commits, because a detached dispatch would otherwise announce a
+program a rollback removed.
 
 **A COACHING event (`coach.*`) is the same three steps plus two declarations**,
 and both live in `apps/api/src/coaching-notifications/` — never a second event
