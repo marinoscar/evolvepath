@@ -221,3 +221,91 @@ export const weeklyDomainModesSchema = z
   .partial();
 
 export type WeeklyDomainModes = z.infer<typeof weeklyDomainModesSchema>;
+
+// =============================================================================
+// Next week, before it is committed to (issue #80, epic E10)
+// =============================================================================
+
+/**
+ * One commitment EvolvePath proposes for next week.
+ *
+ * `include` and `excludedBy` rather than simply omitting the row: PRD §50 step
+ * 5 shows the user what the week WOULD be, and a Wednesday that is silently
+ * absent is indistinguishable from a Wednesday the product forgot. An excluded
+ * row renders greyed with its reason, which is the difference between a list
+ * the user can trust and one they have to check.
+ */
+export const proposedCommitmentSchema = z.object({
+  /** `${routineId}:${date}` or `extra:${index}` — stable across re-proposals. */
+  key: z.string(),
+  source: z.enum(['routine', 'extra']),
+  include: z.boolean(),
+  domain: domainEnum,
+  title: z.string().min(1).max(200),
+  date: isoDate,
+  startTime: hhmm,
+  estimatedMinutes: z.number().int().min(1).max(480),
+  minimumMinutes: z.number().int().min(1).nullable(),
+  routineId: z.string().uuid().nullable(),
+  planVersionId: z.string().uuid().nullable(),
+  outcomeId: z.string().uuid().nullable(),
+  fullVersion: z.string().nullable(),
+  shortVersion: z.string().nullable(),
+  minimumVersion: z.string().nullable(),
+  /** Routine occurrences always; extras only when the user says so. */
+  recurring: z.boolean(),
+  excludedBy: z.enum(['travel_day', 'fixed_event', 'paused_domain']).nullable(),
+});
+
+export type ProposedCommitment = z.infer<typeof proposedCommitmentSchema>;
+
+/** Something the user added by hand in the wizard. */
+export const extraCommitmentSchema = z.object({
+  domain: domainEnum,
+  title: z.string().min(1).max(200),
+  date: isoDate,
+  startTime: hhmm,
+  estimatedMinutes: z.number().int().min(1).max(480),
+  minimumVersion: z.string().max(500).nullable().default(null),
+  recurring: z.boolean().default(false),
+});
+
+export type ExtraCommitment = z.infer<typeof extraCommitmentSchema>;
+
+/**
+ * A load warning. DATA, NEVER AN EXCEPTION.
+ *
+ * PRD §48 wants the product to say "you already have eight recurring
+ * commitments; I recommend replacing something rather than adding another
+ * habit" — a recommendation, not a refusal. A person who deliberately wants a
+ * heavy week is not making a mistake the software should block.
+ */
+export const loadWarningSchema = z.object({
+  code: z.enum(['RECURRING_OVER_CAP', 'MINUTES_OVER_CAPACITY', 'DAY_OVER_CAPACITY']),
+  message: z.string(),
+  suggestion: z.string(),
+  detail: z.record(z.string(), z.unknown()),
+});
+
+export type LoadWarning = z.infer<typeof loadWarningSchema>;
+
+export const weeklyPlanProposalSchema = z.object({
+  items: z.array(proposedCommitmentSchema).max(60),
+  /** Echoed back so `/propose` is re-runnable without the client resending. */
+  extras: z.array(extraCommitmentSchema).max(20),
+  summary: z.object({
+    recurringCount: z.number().int(),
+    estimatedMinutes: z.number().int(),
+    byDomain: z.record(
+      domainEnum,
+      z.object({ count: z.number().int(), minutes: z.number().int() }),
+    ),
+    softCap: z.number().int(),
+    /** Null when the user never told us how much time they have. */
+    capacityMinutes: z.number().int().nullable(),
+  }),
+  warnings: z.array(loadWarningSchema),
+  proposedAt: z.string().datetime(),
+});
+
+export type WeeklyPlanProposal = z.infer<typeof weeklyPlanProposalSchema>;
