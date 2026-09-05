@@ -313,7 +313,7 @@ live rows, by audit history, and by the specs above.
 | Epic | Adds | Must not touch |
 |---|---|---|
 | E04 Onboarding | `user_profiles` (timezone, locale, onboarding state) — **landed**, #100 | Writes outcomes/plans through the same services, with `createdBy: USER` after approval |
-| E05 Today | Execution columns on `commitments` (`activeSince`, `activeSeconds`, `timerMinutes`, `versionUsed`, `minutesSpent`, `steps`, `decomposedFromId`, `skipNote`, per-version minutes) and the `CommitmentVersion` enum — **landed**, #40 | Widened the matrix (both copies, both tests); writes `APP_FLOW` evidence via `createFromFlow`'s rules |
+| E05 Today | `daily_check_ins`, plus execution columns on `commitments` (`activeSince`, `activeSeconds`, `timerMinutes`, `versionUsed`, `minutesSpent`, `steps`, `decomposedFromId`, `skipNote`, per-version minutes) and the `CommitmentVersion` enum — **landed**, #40 | Widened the matrix (both copies, both tests); writes `APP_FLOW` evidence via `createFromFlow`'s rules |
 | E06 AI Coach | `coach_conversations`, `plan_change_proposals`, `memory_insights`, `obstacles` | Creates plan versions via `createDraft(…, 'AI')`; never writes `plan_versions` directly |
 | E07 Work/Focus | `focus_sessions` | Writes `TIMER` evidence via `createFromFlow`; reads `rescheduleCount` |
 | E08 Family | `family_members`, `rituals`, ritual links on commitments | May add a nullable column to `commitments`; may not change its status matrix without a test |

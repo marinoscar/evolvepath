@@ -461,6 +461,10 @@ request on boot. Reading `onboarding` never creates a `user_profiles` row.
 ### Today
 - `GET /api/today` - The day: deterministic next best action with rationale, three domain sections (always three, including paused), the check-in. **Makes no AI call**
 - `GET /api/today/insight` - The coach's sentence. Always 200; `source: 'template'` when AI is unavailable
+- `POST /api/today/check-in` - "How does today feel?"; upsert, one row per user per local day; invalidates the cached insight
+- `GET /api/today/check-in` - Today's check-in, or null
+- `POST /api/today/reflection` - End-of-day quick option + optional text, stored as a `relatedType: 'day'` reflection
+- `GET /api/today/reflection` - Today's latest day reflection, or null
 
 ### Best Self (current user)
 - `GET /api/me/best-self` - The caller's Best Self profile; `data: null` until saved
@@ -570,6 +574,7 @@ Ten intent-named routes over the same matrix. Each returns a **commitment card**
 - `evidence_items` - Facts about what actually happened; survives its commitment (`commitment_id` is SET NULL)
 - `reflections` - What the user made of a commitment, outcome, plan version or day
 - `domain_modes` - Per-domain posture (GROW, MAINTAIN, RECOVER, PAUSE); a missing row means GROW
+- `daily_check_ins` - "How does today feel?" — one row per user per local day, upserted; `date_local` is text in the user's own timezone, never a date column
 - `user_profiles` - Typed per-user preferences the product reasons about: `timezone` (what "today" means), `coachingStyle`, `weekdayMinutes`, quiet hours and onboarding progress; one row per user, created lazily (a missing row means onboarding has not finished)
 
 ## Access Control: Email Allowlist
