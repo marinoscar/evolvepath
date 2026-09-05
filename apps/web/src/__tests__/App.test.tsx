@@ -117,6 +117,7 @@ function signInAs(
             configured: aiKeyConfigured,
             hint: aiKeyConfigured ? '\u2022\u2022\u2022\u2022e2e1' : null,
           },
+          onboarding: { completed: true },
         },
       }),
     ),

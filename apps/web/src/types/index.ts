@@ -27,6 +27,21 @@ export interface User {
    * wholesale) would need a second fake to render anything.
    */
   aiKey: AiKeySummary;
+  /**
+   * Whether this user has finished onboarding (epic E04, #100).
+   *
+   * REQUIRED for the same reason `aiKey` is: the shell decides between the
+   * onboarding flow and the app before it renders anything, and an optional
+   * field would make "the server did not send it" look like "not onboarded".
+   * Making it required lets the compiler list every fixture that must declare
+   * it.
+   */
+  onboarding: OnboardingStatus;
+}
+
+/** Onboarding progress as `GET /auth/me` reports it. */
+export interface OnboardingStatus {
+  completed: boolean;
 }
 
 /**

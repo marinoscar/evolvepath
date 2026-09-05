@@ -11,6 +11,7 @@ export const mockUsers: User[] = [
     isActive: true,
     createdAt: '2024-01-01T00:00:00.000Z',
     aiKey: { configured: true, hint: '\u2022\u2022\u2022\u2022e2e1' },
+    onboarding: { completed: true },
   },
   {
     id: 'user-2',
@@ -22,6 +23,7 @@ export const mockUsers: User[] = [
     isActive: true,
     createdAt: '2024-01-02T00:00:00.000Z',
     aiKey: { configured: true, hint: '\u2022\u2022\u2022\u2022e2e1' },
+    onboarding: { completed: true },
   },
   {
     id: 'user-3',
@@ -41,6 +43,7 @@ export const mockUsers: User[] = [
     isActive: true,
     createdAt: '2024-01-03T00:00:00.000Z',
     aiKey: { configured: true, hint: '\u2022\u2022\u2022\u2022e2e1' },
+    onboarding: { completed: true },
   },
   {
     id: 'user-4',
@@ -52,6 +55,7 @@ export const mockUsers: User[] = [
     isActive: false,
     createdAt: '2024-01-04T00:00:00.000Z',
     aiKey: { configured: true, hint: '\u2022\u2022\u2022\u2022e2e1' },
+    onboarding: { completed: true },
   },
 ];
 
@@ -95,6 +99,7 @@ export function createMockUser(overrides: Partial<User> = {}): User {
     isActive: true,
     createdAt: new Date().toISOString(),
     aiKey: { configured: true, hint: '\u2022\u2022\u2022\u2022e2e1' },
+    onboarding: { completed: true },
     ...overrides,
   };
 }
