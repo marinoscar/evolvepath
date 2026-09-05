@@ -20,6 +20,7 @@ import { TokenResponseDto } from './dto/auth-user.dto';
 import { AuthProviderDto } from './dto/auth-provider.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { UserAiKeyService } from '../ai/user-key/user-ai-key.service';
+import { UserProfileService } from '../user-profile/user-profile.service';
 import type { UserWelcomeEmailData } from '../email';
 
 export interface FullTokenResponse {
@@ -44,6 +45,7 @@ export class AuthService {
     // user's OpenAI key, and a call to it here would put plaintext one careless
     // `return` away from the response every page load already fetches.
     private readonly userAiKey: UserAiKeyService,
+    private readonly userProfile: UserProfileService,
   ) {}
 
   /**
@@ -697,6 +699,13 @@ export class AuthService {
     // and returns no secret material.
     const aiKey = await this.userAiKey.describe(user.id);
 
+    // Carried here for exactly the reason `aiKey` is (#100, epic E04): the web
+    // app decides between the onboarding flow and the app shell before it
+    // renders anything, and a second request would put a waterfall in front of
+    // every boot. This is a READ — a user who has never onboarded still has no
+    // `user_profiles` row after calling `/auth/me`.
+    const onboardingCompleted = await this.userProfile.isOnboardingComplete(user.id);
+
     return {
       id: user.id,
       email: user.email,
@@ -706,6 +715,7 @@ export class AuthService {
       roles,
       permissions,
       aiKey: { configured: aiKey.configured, hint: aiKey.hint },
+      onboarding: { completed: onboardingCompleted },
     };
   }
 

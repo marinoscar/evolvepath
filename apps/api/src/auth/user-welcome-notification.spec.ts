@@ -5,6 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AdminBootstrapService } from '../common/services/admin-bootstrap.service';
 import { AllowlistService } from '../allowlist/allowlist.service';
 import { UserAiKeyService } from '../ai/user-key/user-ai-key.service';
+import { UserProfileService } from '../user-profile/user-profile.service';
 import {
   createMockPrismaService,
   MockPrismaService,
@@ -144,6 +145,11 @@ describe('user.welcome: fires after commit, and the dispatcher reads the recipie
               .fn()
               .mockResolvedValue({ configured: false, hint: null, updatedAt: null }),
           },
+        },
+        // `getCurrentUser` also reports whether onboarding is finished (#100).
+        {
+          provide: UserProfileService,
+          useValue: { isOnboardingComplete: jest.fn().mockResolvedValue(false) },
         },
         { provide: NOTIFICATION_CHANNEL_SENDERS, useValue: [emailSender] },
       ],

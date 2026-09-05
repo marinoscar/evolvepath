@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserAiKeyService } from '../ai/user-key/user-ai-key.service';
+import { UserProfileService } from '../user-profile/user-profile.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -20,6 +21,7 @@ describe('AuthService', () => {
   let mockAllowlistService: jest.Mocked<AllowlistService>;
   let mockNotifications: { notify: jest.Mock; notifyAddress: jest.Mock };
   let mockUserAiKey: { describe: jest.Mock };
+  let mockUserProfile: { isOnboardingComplete: jest.Mock };
 
   const mockGoogleProfile: GoogleProfile = {
     id: 'google-123',
@@ -88,6 +90,13 @@ describe('AuthService', () => {
             describe: jest
               .fn()
               .mockResolvedValue({ configured: false, hint: null, updatedAt: null }),
+          }),
+        },
+        // `getCurrentUser` also reports whether onboarding is finished (#100).
+        {
+          provide: UserProfileService,
+          useValue: (mockUserProfile = {
+            isOnboardingComplete: jest.fn().mockResolvedValue(false),
           }),
         },
       ],
@@ -675,6 +684,43 @@ describe('AuthService', () => {
       await expect(service.getCurrentUser('non-existent')).rejects.toThrow(
         UnauthorizedException,
       );
+    });
+
+    // #100: the web app gates its whole shell on this flag, so both values have
+    // to come straight from the profile service rather than be inferred here.
+    describe('onboarding status (#100)', () => {
+      const mockUser = {
+        id: 'user-1',
+        email: 'test@example.com',
+        displayName: 'Alex',
+        providerDisplayName: null,
+        profileImageUrl: null,
+        providerProfileImageUrl: null,
+        isActive: true,
+        createdAt: new Date(),
+        userRoles: [],
+      };
+
+      beforeEach(() => {
+        mockPrisma.user.findUnique.mockResolvedValue(mockUser as any);
+      });
+
+      it('reports false for an account that has never onboarded', async () => {
+        mockUserProfile.isOnboardingComplete.mockResolvedValue(false);
+
+        const result = await service.getCurrentUser('user-1');
+
+        expect(result.onboarding).toEqual({ completed: false });
+        expect(mockUserProfile.isOnboardingComplete).toHaveBeenCalledWith('user-1');
+      });
+
+      it('reports true once the profile says onboarding finished', async () => {
+        mockUserProfile.isOnboardingComplete.mockResolvedValue(true);
+
+        const result = await service.getCurrentUser('user-1');
+
+        expect(result.onboarding).toEqual({ completed: true });
+      });
     });
   });
 
