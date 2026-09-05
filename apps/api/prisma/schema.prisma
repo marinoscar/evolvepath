@@ -2284,6 +2284,12 @@ model WorkoutTemplateExercise {
   restSeconds Int     @map("rest_seconds")
   notes       String?
 
+  /// When the user said "not this one" (PRD §43). A TIMESTAMP rather than a
+  /// boolean because the adaptation detector runs on windows: "disliked" is a
+  /// thing that happened on a day, and a boolean would make an old dislike
+  /// indistinguishable from one from this morning.
+  dislikedAt DateTime? @map("disliked_at") @db.Timestamptz
+
   template WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   /// Restrict, not Cascade: deleting a catalog movement that somebody's program
   /// prescribes must fail loudly rather than quietly empty their workout.
