@@ -59,8 +59,12 @@ class ApiService {
       ...fetchOptions.headers,
     };
 
-    // Only set Content-Type for requests with a body (Fastify 5 is strict about this)
-    if (fetchOptions.body) {
+    // Only set Content-Type for requests with a body (Fastify 5 is strict about this).
+    //
+    // FormData is the exception, and it must stay one: the browser sets
+    // `multipart/form-data; boundary=…` itself, and a hand-written header would
+    // omit the boundary and make the body unparseable at the other end.
+    if (fetchOptions.body && !(fetchOptions.body instanceof FormData)) {
       (headers as Record<string, string>)['Content-Type'] = 'application/json';
     }
 
@@ -80,7 +84,9 @@ class ApiService {
       if (refreshed) {
         // Update authorization header with new token and retry ONCE
         const retryHeaders: HeadersInit = {
-          'Content-Type': 'application/json',
+          ...(fetchOptions.body instanceof FormData
+            ? {}
+            : { 'Content-Type': 'application/json' }),
           ...fetchOptions.headers,
           'Authorization': `Bearer ${this.accessToken}`,
         };
@@ -211,6 +217,16 @@ class ApiService {
 
   delete<T>(endpoint: string, options?: RequestOptions) {
     return this.request<T>(endpoint, { ...options, method: 'DELETE' });
+  }
+
+  /**
+   * A multipart POST. Separate from `post` because the body must NOT be
+   * stringified and the Content-Type must not be set — the browser writes it
+   * with the boundary, and a hand-written one omits the boundary and makes the
+   * request unparseable.
+   */
+  postForm<T>(endpoint: string, form: FormData, options?: RequestOptions) {
+    return this.request<T>(endpoint, { ...options, method: 'POST', body: form });
   }
 }
 
@@ -1634,4 +1650,52 @@ export async function explainProgression(
   return api.get<{ sentence: string; source: string }>(
     `/workouts/sessions/${sessionId}/exercises/${exerciseId}/explain`,
   );
+}
+
+// -----------------------------------------------------------------------------
+// Health media coaching (epic E09)
+// -----------------------------------------------------------------------------
+
+import type {
+  EquipmentCheckResult,
+  FormCheckResult,
+  MealCheckResult,
+  MediaCheckResponse,
+  StorageObjectSummary,
+} from '../types';
+
+/** Upload one file and get the object the coaching endpoints refer to. */
+export async function uploadMedia(file: File): Promise<StorageObjectSummary> {
+  const form = new FormData();
+  form.append('file', file);
+
+  return api.postForm<StorageObjectSummary>('/storage/objects', form);
+}
+
+export async function getStorageObject(id: string): Promise<StorageObjectSummary> {
+  return api.get<StorageObjectSummary>(`/storage/objects/${id}`);
+}
+
+export async function formCheck(
+  sessionId: string,
+  body: { storageObjectId: string; exerciseId: string; setNumber?: number },
+): Promise<MediaCheckResponse<FormCheckResult>> {
+  return api.post<MediaCheckResponse<FormCheckResult>>(
+    `/workouts/sessions/${sessionId}/form-check`,
+    body,
+  );
+}
+
+export async function equipmentCheck(body: {
+  storageObjectId: string;
+  programId?: string;
+}): Promise<MediaCheckResponse<EquipmentCheckResult>> {
+  return api.post<MediaCheckResponse<EquipmentCheckResult>>('/workouts/equipment-check', body);
+}
+
+export async function mealCheck(body: {
+  storageObjectId: string;
+  question?: string;
+}): Promise<MediaCheckResponse<MealCheckResult>> {
+  return api.post<MediaCheckResponse<MealCheckResult>>('/nutrition/meal-check', body);
 }

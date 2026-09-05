@@ -113,6 +113,12 @@ export function buildProgram(overrides: Partial<WorkoutProgram> = {}): WorkoutPr
   };
 }
 
+export interface MediaCheckStub {
+  ok: boolean;
+  result?: unknown;
+  error?: { code: string; message: string };
+}
+
 interface SessionState {
   view: WorkoutSessionView;
   logged: SetLog[];
@@ -125,6 +131,10 @@ interface WorkoutState {
   finished: Array<{ status: string; notes: string | null }>;
   /** When set, the next set POST fails with this status. `0` means a network error. */
   setPostStatus: number | null;
+  formCheck: MediaCheckStub | null;
+  equipmentCheck: MediaCheckStub | null;
+  mealCheck: MediaCheckStub | null;
+  formCheckRequests: Array<Record<string, unknown>>;
   programs: WorkoutProgram[];
   generateRequests: GenerateProgramRequest[];
   approveRequests: Array<{ id: string; body: { preferredTime?: string; startDate?: string } }>;
@@ -142,6 +152,10 @@ const state: WorkoutState = {
   batches: [],
   finished: [],
   setPostStatus: null,
+  formCheck: null,
+  equipmentCheck: null,
+  mealCheck: null,
+  formCheckRequests: [],
   programs: [],
   generateRequests: [],
   approveRequests: [],
@@ -157,6 +171,10 @@ export function resetWorkoutState(): void {
   state.batches = [];
   state.finished = [];
   state.setPostStatus = null;
+  state.formCheck = null;
+  state.equipmentCheck = null;
+  state.mealCheck = null;
+  state.formCheckRequests = [];
   state.programs = [];
   state.generateRequests = [];
   state.approveRequests = [];
@@ -322,7 +340,84 @@ function applySet(session: SessionState, body: LogSetBody): SetLog {
   return set;
 }
 
+export function setFormCheckResult(stub: MediaCheckStub | null): void {
+  state.formCheck = stub;
+}
+
+export function setEquipmentCheckResult(stub: MediaCheckStub | null): void {
+  state.equipmentCheck = stub;
+}
+
+export function setMealCheckResult(stub: MediaCheckStub | null): void {
+  state.mealCheck = stub;
+}
+
+export function formCheckRequests(): ReadonlyArray<Record<string, unknown>> {
+  return state.formCheckRequests;
+}
+
 export const workoutHandlers = [
+  // The upload the three media flows go through. One object, ready at once —
+  // the real pipeline's processing states belong to E03.
+  http.post(`${API_BASE}/storage/objects`, () =>
+    HttpResponse.json(
+      { data: { id: 'object-1', name: 'clip.mp4', mimeType: 'video/mp4', status: 'ready' } },
+      { status: 201 },
+    ),
+  ),
+
+  http.post(`${API_BASE}/workouts/sessions/:id/form-check`, async ({ request }) => {
+    state.formCheckRequests.push((await request.json()) as Record<string, unknown>);
+
+    return HttpResponse.json({
+      data: state.formCheck ?? {
+        ok: true,
+        result: {
+          observations: ['The bar drifts forward on the way up.'],
+          cues: ['Keep it over your mid-foot.'],
+          riskFlags: ['none'],
+          safetyNote: null,
+          confidence: 'medium',
+          redirected: false,
+        },
+        storageObjectId: 'object-1',
+        invocationId: 'inv-1',
+      },
+    });
+  }),
+
+  http.post(`${API_BASE}/workouts/equipment-check`, () =>
+    HttpResponse.json({
+      data: state.equipmentCheck ?? {
+        ok: true,
+        result: {
+          equipmentDetected: ['DUMBBELL', 'BENCH'],
+          notes: ['A small room, no rack.'],
+          substitutions: [],
+          proposalId: null,
+        },
+        storageObjectId: 'object-1',
+        invocationId: 'inv-2',
+      },
+    }),
+  ),
+
+  http.post(`${API_BASE}/nutrition/meal-check`, () =>
+    HttpResponse.json({
+      data: state.mealCheck ?? {
+        ok: true,
+        result: {
+          observations: ['A protein source and a green vegetable on the plate.'],
+          behaviorSuggestions: [
+            { key: 'vegetables_with_dinner', text: 'Keep the greens on the plate at dinner.' },
+          ],
+        },
+        storageObjectId: 'object-1',
+        invocationId: 'inv-3',
+      },
+    }),
+  ),
+
   http.post(`${API_BASE}/workouts/sessions`, async ({ request }) => {
     const body = (await request.json()) as { commitmentId?: string; templateId?: string };
 

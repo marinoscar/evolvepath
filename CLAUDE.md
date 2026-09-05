@@ -490,6 +490,32 @@ Three rules that are easy to break:
   by the runner and the progression explanation, and it contains no programming
   advice — not "try it lighter", not "use the machine version" (PRD §45).
 
+## Health media entry points
+
+The three E09-06 coaching endpoints are reached from where the user already is:
+**Check my form** from the workout runner (a sheet over the session, so the rest
+timer keeps running), **Photograph your equipment** from the builder's equipment
+step and from the program page, and **Meal check** from Today's quick add.
+
+Three rules:
+
+- **`capture="environment"` on every one of them.** PRD §123 is mobile-first,
+  and a form check that opens a file browser in a gym is a feature nobody uses.
+  The attribute is ignored on a desktop, so there is one code path rather than a
+  width gate.
+- **A photo pre-selects; it never overrides.** The builder's equipment chips
+  stay editable after a photograph — a picture of one corner of a garage is
+  evidence, not an inventory.
+- **The meal card says "I look at habits, not calories" out loud.** A photograph
+  of food invites the assumption, and PRD §46 is the answer to it. Risk flags on
+  the form check carry an icon *and* text: a warning only a sighted reader with
+  full colour vision can read is not a warning.
+
+`MediaCapture` (`apps/web/src/components/health/media/`) uploads one file
+through the existing storage endpoint. E03 (epic #67) owns
+`MediaAttachmentPicker` with its purposes, targets and processing states; when
+it lands, these three call sites swap component and keep their logic.
+
 ## Architecture Principles
 
 1. **Separation of Concerns**: UI handles presentation only; API handles all business logic and authorization

@@ -23,6 +23,7 @@ import {
 } from '@mui/material';
 
 import type { Equipment, GenerateProgramRequest } from '../../../types';
+import { EquipmentPhotoStep } from '../media/EquipmentPhotoStep';
 
 // =============================================================================
 // PRD §37's seven inputs, one question at a time (issue #95, epic E09)
@@ -265,6 +266,15 @@ export function BuilderWizard({ defaults = {}, submitting, onGenerate }: Builder
                 />
               ))}
             </Stack>
+
+            {/* The photo PRE-SELECTS; it never overrides. A picture of one
+                corner of a garage is evidence, not an inventory. */}
+            <EquipmentPhotoStep
+              onDetected={(detected) =>
+                setEquipment((current) => [...new Set([...current, ...detected])])
+              }
+            />
+
             {navigation()}
           </Box>
         );

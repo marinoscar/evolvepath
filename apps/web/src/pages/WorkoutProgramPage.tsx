@@ -21,6 +21,7 @@ import { useWorkoutProgram } from '../hooks/useWorkoutProgram';
 import { listExercises, startWorkoutSession } from '../services/api';
 import { NON_EQUIVALENCE_CAPTION, TemplateTable } from '../components/workouts/TemplateTable';
 import { WeeklyStructure } from '../components/workouts/WeeklyStructure';
+import { EquipmentPhotoStep } from '../components/workouts/media/EquipmentPhotoStep';
 
 /**
  * `/health/programs/:programId` — the plan, outside the conversation (VISION §14).
@@ -188,6 +189,15 @@ export function WorkoutProgramPage() {
           </Box>
         ))}
       </Stack>
+
+      {program.status === 'ACTIVE' ? (
+        <Box component="section" aria-labelledby="equipment-changed" sx={{ mt: 4 }}>
+          <Typography variant="subtitle1" component="h2" id="equipment-changed">
+            Equipment changed?
+          </Typography>
+          <EquipmentPhotoStep programId={program.id} />
+        </Box>
+      ) : null}
 
       {program.rationale ? (
         <Box

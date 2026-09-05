@@ -3,9 +3,11 @@ import {
   Card,
   CardContent,
   Chip,
+  IconButton,
   Stack,
   Typography,
 } from '@mui/material';
+import VideocamIcon from '@mui/icons-material/Videocam';
 
 import type { SessionExercise, SetLog } from '../../../types';
 import { ProgressionChip } from './ProgressionChip';
@@ -15,6 +17,8 @@ interface ExerciseCardProps {
   /** `clientId`s that have not reached the server yet. */
   pending: string[];
   onExplain: () => Promise<string>;
+  /** Opens the form check for this movement (epic E09). */
+  onCheckForm?: () => void;
   children?: React.ReactNode;
 }
 
@@ -38,7 +42,13 @@ function describeSets(sets: SetLog[]): string {
  * The user did it; hiding it until a request succeeds would be the app losing
  * work in front of them.
  */
-export function ExerciseCard({ exercise, pending, onExplain, children }: ExerciseCardProps) {
+export function ExerciseCard({
+  exercise,
+  pending,
+  onExplain,
+  onCheckForm,
+  children,
+}: ExerciseCardProps) {
   const range =
     exercise.repMin === exercise.repMax
       ? `${exercise.repMin}`
@@ -47,9 +57,20 @@ export function ExerciseCard({ exercise, pending, onExplain, children }: Exercis
   return (
     <Card variant="outlined">
       <CardContent>
-        <Typography variant="h6" component="h2">
-          {exercise.name}
-        </Typography>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Typography variant="h6" component="h2" sx={{ flex: 1 }}>
+            {exercise.name}
+          </Typography>
+          {onCheckForm ? (
+            <IconButton
+              aria-label={`Record a video of your ${exercise.name} set`}
+              onClick={onCheckForm}
+              sx={{ minWidth: 44, minHeight: 44 }}
+            >
+              <VideocamIcon />
+            </IconButton>
+          ) : null}
+        </Stack>
 
         <Typography variant="body2" color="text.secondary">
           {exercise.sets} × {range} · rest {exercise.restSeconds} s
