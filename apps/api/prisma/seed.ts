@@ -1,6 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
+import { seedExercises } from './exercise-catalog';
+
 // Prisma 7 requires a driver adapter — PrismaClient can no longer be
 // instantiated with no options. The seed script is invoked as a standalone
 // ts-node process (see prisma.config.ts: migrations.seed), not through
@@ -217,7 +219,12 @@ async function main() {
   await seedRolePermissions();
   await seedSystemSettings();
   await seedInitialAdminAllowlist();
+  await seedExercises(prisma);
 
+  // The exercise catalog (epic E09) is the one product table that IS seeded:
+  // its rows belong to nobody, and the program builder needs names to resolve
+  // against before any user exists.
+  //
   // The EvolvePath product tables (outcomes, plans, plan_versions, routines,
   // commitments, evidence_items, reflections, best_self_profiles,
   // domain_modes) are deliberately left empty. Everything in them belongs to

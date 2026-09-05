@@ -77,6 +77,12 @@ model User {
   weeklyReviews WeeklyReview[] @relation("UserWeeklyReviews")
   weeklyPlans   WeeklyPlan[]   @relation("UserWeeklyPlans")
 
+  // The Health domain (epic E09)
+  customExercises Exercise[]       @relation("UserCustomExercises")
+  workoutPrograms WorkoutProgram[] @relation("UserWorkoutPrograms")
+  workoutSessions WorkoutSession[] @relation("UserWorkoutSessions")
+  bodyWeightLogs  BodyWeightLog[]  @relation("UserBodyWeightLogs")
+
   @@map("users")
 }
 
@@ -763,7 +769,7 @@ model UserProfile {
   /// When the weekly review is prepared (PRD §50: "a recommended day/time
   /// chosen by user"). 0 = Sunday … 6 = Saturday, range-checked by the database
   /// as well as by Zod — an out-of-range weekday would silently never fire.
-  weeklyReviewWeekday Int    @default(0)       @map("weekly_review_weekday")
+  weeklyReviewWeekday Int    @default(0) @map("weekly_review_weekday")
   /// 'HH:mm' local wall-clock, like `quietHoursStart`. The sweep runs hourly,
   /// so the minutes are documentation rather than a promise.
   weeklyReviewTime    String @default("17:00") @map("weekly_review_time")
@@ -1120,10 +1126,12 @@ model Plan {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  user      User                 @relation("UserPlans", fields: [userId], references: [id], onDelete: Cascade)
-  outcome   Outcome              @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
-  versions  PlanVersion[]
-  proposals PlanChangeProposal[] @relation("PlanChangeProposals")
+  user            User                 @relation("UserPlans", fields: [userId], references: [id], onDelete: Cascade)
+  outcome         Outcome              @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
+  versions        PlanVersion[]
+  proposals       PlanChangeProposal[] @relation("PlanChangeProposals")
+  /// The Health domain (epic E09): the workout programs approved into this plan.
+  workoutPrograms WorkoutProgram[]
 
   @@index([userId])
   @@map("plans")
@@ -1207,13 +1215,17 @@ model Routine {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  user        User         @relation("UserRoutines", fields: [userId], references: [id], onDelete: Cascade)
-  planVersion PlanVersion  @relation(fields: [planVersionId], references: [id], onDelete: Cascade)
-  commitments Commitment[]
+  user            User             @relation("UserRoutines", fields: [userId], references: [id], onDelete: Cascade)
+  planVersion     PlanVersion      @relation(fields: [planVersionId], references: [id], onDelete: Cascade)
+  commitments     Commitment[]
   /// A ritual (epic E08) surfaces itself on the Path by pointing at a routine it
   /// keeps in sync. SetNull on the ritual side, so deleting the routine never
   /// deletes the ritual.
-  rituals     Ritual[]
+  rituals         Ritual[]
+  /// The FULL workout template this routine schedules, when it is a workout
+  /// (epic E09). 1:1, and what lets a routine-targeted plan change reach a
+  /// template.
+  workoutTemplate WorkoutTemplate?
 
   @@index([planVersionId])
   @@index([userId])
@@ -1310,6 +1322,11 @@ model Commitment {
   // ritual occurrence is a commitment first. Deleting the ritual or the family
   // member must leave the record of what the user actually did untouched.
 
+  /// Which workout this commitment runs, when it is one (epic E09). SetNull:
+  /// deleting the program must not delete the record of the session the user
+  /// already did against it.
+  workoutTemplateId String? @map("workout_template_id") @db.Uuid
+
   /// The ritual that materialized this occurrence, when it came from one.
   ritualId       String? @map("ritual_id") @db.Uuid
   /// Who the commitment is with. Context, never an axis of measurement.
@@ -1336,6 +1353,10 @@ model Commitment {
   interactions NotificationInteraction[]
   ritual       Ritual?                   @relation(fields: [ritualId], references: [id], onDelete: SetNull)
   familyMember FamilyMember?             @relation(fields: [familyMemberId], references: [id], onDelete: SetNull)
+
+  // The Health domain (epic E09)
+  workoutTemplate WorkoutTemplate? @relation(fields: [workoutTemplateId], references: [id], onDelete: SetNull)
+  workoutSession  WorkoutSession?
 
   /// MATERIALIZATION IDEMPOTENCY (issue #37, epic E08). Re-running the
   /// materializer over the same horizon must not double-book an occurrence, and
@@ -2021,9 +2042,9 @@ model WeeklyPlan {
   primaryFocus String? @map("primary_focus")
 
   /// `weeklyPlanConstraintsSchema` — travel days, fixed events, notes.
-  constraints Json @default("{}")
+  constraints Json  @default("{}")
   /// `weeklyDomainModesSchema` — the posture the user intends for next week.
-  domainModes Json @default("{}") @map("domain_modes")
+  domainModes Json  @default("{}") @map("domain_modes")
   /// `weeklyPlanProposalSchema` (E10-03) — the materialised items, the load
   /// summary and its warnings. Cleared whenever the inputs change.
   proposal    Json?
@@ -2040,4 +2061,312 @@ model WeeklyPlan {
   @@unique([userId, weekStart])
   @@index([userId, status])
   @@map("weekly_plans")
+}
+
+// =============================================================================
+// The Health domain: workout programs, sessions and body weight (epic E09)
+// =============================================================================
+//
+// PRD §38 asks for workout plans that are STRUCTURAL rather than conversational,
+// and that is the whole reason these tables exist. A program the coach described
+// in a chat message cannot schedule itself onto Today, cannot show "last time"
+// on the next session, and cannot be adapted when the user keeps skipping it.
+//
+// Three shapes carry that:
+//
+//   1. A PROGRAM owns TEMPLATES, and a template is a WORKOUT AT ONE SIZE.
+//      "Upper A" exists three times — FULL, SHORT and MINIMUM — rather than once
+//      with a set of modifiers, because the runner has to render a concrete
+//      exercise list the moment a user taps "use the short version" (PRD §44,
+//      VISION §15). Deriving that list at read time would be a second, quieter
+//      implementation of programming.
+//   2. A SESSION is what actually happened, and it is NOT the commitment.
+//      A user can run the same template twice in a day, or run one with no
+//      commitment at all; `commitment_id` is therefore nullable and SetNull.
+//   3. A SET LOG carries a CLIENT-MINTED `client_id`. PRD §121 requires the
+//      runner to work with intermittent connectivity, which means the phone
+//      replays a queue it is not sure was accepted. The unique index on that
+//      column is what makes the replay idempotent — not a transaction, and not
+//      client-side bookkeeping.
+
+/// What a movement needs. An array rather than a single value: a Bulgarian
+/// split squat wants a bench AND dumbbells, and the builder filters the catalog
+/// by what the user actually has.
+enum Equipment {
+  BODYWEIGHT
+  DUMBBELL
+  BARBELL
+  MACHINE
+  CABLE
+  KETTLEBELL
+  BAND
+  BENCH
+}
+
+/// PRD §39's movement taxonomy. `ACCESSORY` is a deliberate tenth value so that
+/// VISION §14's Upper A example (triceps pressdown, dumbbell curl) can be seeded
+/// without mislabelling an isolation movement as a press or a pull.
+enum MovementPattern {
+  PUSH_H
+  PUSH_V
+  PULL_H
+  PULL_V
+  SQUAT
+  HINGE
+  LUNGE
+  CARRY
+  CORE
+  ACCESSORY
+}
+
+/// PRD §42 is explicit that progression stays conservative and deterministic.
+/// The enum has one member on purpose: it is a place for a second scheme to
+/// land, not an invitation to add one.
+enum ProgressionMethod {
+  DOUBLE_PROGRESSION
+}
+
+enum WorkoutProgramStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+/// The three sizes of one workout (PRD §44). Mirrors `CommitmentVersion`, but
+/// they are not the same enum: a commitment's version is a label on an
+/// intention, a template's variant is a different row of exercises.
+enum WorkoutVariant {
+  FULL
+  SHORT
+  MINIMUM
+}
+
+enum WorkoutSessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+}
+
+/// PRD §45. `SHARP_PAIN` is a safety signal, never a programming input: it stops
+/// the exercise and shows professional-care copy. It is deliberately not a
+/// numeric scale — a number invites the software to reason about it.
+enum Discomfort {
+  NONE
+  MILD
+  SHARP_PAIN
+}
+
+/// The movement catalog (PRD §39).
+///
+/// One table for shared rows and per-user rows. `scope` is `'catalog'` for the
+/// seeded 44 and the owning user's id for anything the builder had to invent, so
+/// `@@unique([scope, nameKey])` lets two users each have their own "DB Bench
+/// Press" while the catalog keeps exactly one.
+model Exercise {
+  id String @id @default(uuid()) @db.Uuid
+
+  name    String
+  /// `name.trim().toLowerCase()` with runs of whitespace collapsed, computed by
+  /// the service and by the seed. Not a generated column: a generated column
+  /// would make the migration depend on the exact Postgres version's notion of
+  /// immutability, for a value two callers already produce.
+  nameKey String @map("name_key")
+  /// `'catalog'`, or the id of the user who owns this custom row.
+  scope   String @default("catalog")
+
+  equipment            Equipment[]
+  movementPattern      MovementPattern @map("movement_pattern")
+  instructions         String          @db.Text
+  /// From the fixed vocabulary in `workout-program-rules.ts`. What the safety
+  /// rules intersect a user's stated limitations against.
+  contraindicationTags String[]        @map("contraindication_tags")
+  /// What this movement can be swapped for (PRD §37). Substitution is a lookup,
+  /// not a model call.
+  substitutionGroup    String          @map("substitution_group")
+
+  isCustom        Boolean @default(false) @map("is_custom")
+  createdByUserId String? @map("created_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  createdBy         User?                     @relation("UserCustomExercises", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  templateExercises WorkoutTemplateExercise[]
+  setLogs           SetLog[]
+
+  @@unique([scope, nameKey])
+  @@index([substitutionGroup])
+  @@map("exercises")
+}
+
+/// A structured workout program (PRD §37, §38; VISION §52).
+///
+/// `planId` is null until the user approves: PRD §15 says AI output becomes a
+/// plan only when a human says so, and a DRAFT program that already pointed at a
+/// plan would be exactly the half-applied state that rule exists to prevent.
+model WorkoutProgram {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  name            String
+  durationWeeks   Int    @map("duration_weeks")
+  /// `[{ weekday: 0-6, templateId }]`, typed by Zod at the boundary.
+  weeklyStructure Json   @map("weekly_structure")
+
+  progressionMethod ProgressionMethod    @default(DOUBLE_PROGRESSION) @map("progression_method")
+  status            WorkoutProgramStatus @default(DRAFT)
+
+  /// The E02 plan of the user's Health outcome. Set at approve, SetNull after.
+  planId String? @map("plan_id") @db.Uuid
+
+  /// The validated builder request. Kept so a regenerate can start from what the
+  /// user actually asked for; it holds free-text limitations and is never logged.
+  generationInput Json?   @map("generation_input")
+  rationale       String? @db.Text
+  /// `[{ exerciseId, alternativeExerciseIds[] }]`.
+  substitutions   Json?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user      User              @relation("UserWorkoutPrograms", fields: [userId], references: [id], onDelete: Cascade)
+  plan      Plan?             @relation(fields: [planId], references: [id], onDelete: SetNull)
+  templates WorkoutTemplate[]
+
+  @@index([userId, status])
+  @@map("workout_programs")
+}
+
+/// One workout at one size (PRD §40, §44).
+///
+/// `routineId` is 1:1 and exists only on FULL templates: it is the join that
+/// lets an E06 plan-change proposal, whose diffs target routines, reach a
+/// workout template (E09-05). Without it the adaptation detector would have to
+/// invent a second targeting vocabulary.
+model WorkoutTemplate {
+  id        String @id @default(uuid()) @db.Uuid
+  programId String @map("program_id") @db.Uuid
+
+  name          String
+  variant       WorkoutVariant
+  targetMinutes Int            @map("target_minutes")
+
+  /// SHORT and MINIMUM point at their FULL sibling.
+  fallbackOfTemplateId String? @map("fallback_of_template_id") @db.Uuid
+  routineId            String? @unique @map("routine_id") @db.Uuid
+
+  program    WorkoutProgram    @relation(fields: [programId], references: [id], onDelete: Cascade)
+  routine    Routine?          @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  fallbackOf WorkoutTemplate?  @relation("TemplateFallbacks", fields: [fallbackOfTemplateId], references: [id], onDelete: Cascade)
+  fallbacks  WorkoutTemplate[] @relation("TemplateFallbacks")
+
+  exercises   WorkoutTemplateExercise[]
+  sessions    WorkoutSession[]
+  commitments Commitment[]
+
+  @@unique([programId, name, variant])
+  @@map("workout_templates")
+}
+
+/// A prescribed movement inside a template: sets, a rep RANGE and rest.
+///
+/// The range is two columns rather than a string because double progression
+/// (PRD §42) is arithmetic over its ends — "all sets at repMax" is the entire
+/// trigger for adding weight.
+model WorkoutTemplateExercise {
+  id         String @id @default(uuid()) @db.Uuid
+  templateId String @map("template_id") @db.Uuid
+  exerciseId String @map("exercise_id") @db.Uuid
+
+  order       Int
+  sets        Int
+  repMin      Int     @map("rep_min")
+  repMax      Int     @map("rep_max")
+  restSeconds Int     @map("rest_seconds")
+  notes       String?
+
+  template WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  /// Restrict, not Cascade: deleting a catalog movement that somebody's program
+  /// prescribes must fail loudly rather than quietly empty their workout.
+  exercise Exercise        @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+
+  @@unique([templateId, order])
+  @@map("workout_template_exercises")
+}
+
+/// One run of one template (PRD §41; VISION §52).
+model WorkoutSession {
+  id           String  @id @default(uuid()) @db.Uuid
+  userId       String  @map("user_id") @db.Uuid
+  commitmentId String? @unique @map("commitment_id") @db.Uuid
+  templateId   String  @map("template_id") @db.Uuid
+
+  /// Which size was actually run. Changed mid-session when the user drops to the
+  /// short version, which is why it lives here and not only on the template.
+  variant WorkoutVariant
+
+  startedAt  DateTime  @map("started_at") @db.Timestamptz
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz
+
+  status         WorkoutSessionStatus @default(IN_PROGRESS)
+  /// True once any set was logged with MILD or SHARP_PAIN. A flag rather than a
+  /// score: PRD §45's response is to stop and suggest professional evaluation,
+  /// and nothing in the product should be tempted to average it.
+  discomfortFlag Boolean              @default(false) @map("discomfort_flag")
+
+  user       User            @relation("UserWorkoutSessions", fields: [userId], references: [id], onDelete: Cascade)
+  commitment Commitment?     @relation(fields: [commitmentId], references: [id], onDelete: SetNull)
+  template   WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  setLogs    SetLog[]
+
+  @@index([userId, templateId, status, startedAt])
+  @@map("workout_sessions")
+}
+
+/// One set, as it was actually performed (PRD §41).
+///
+/// `clientId` is minted by the phone, not the server. It is the whole of the
+/// offline story: the runner queues sets it could not send, replays the queue on
+/// reconnect, and this unique index turns a duplicate replay into a P2002 the
+/// API maps to "already saved" instead of a second set.
+model SetLog {
+  id         String @id @default(uuid()) @db.Uuid
+  sessionId  String @map("session_id") @db.Uuid
+  exerciseId String @map("exercise_id") @db.Uuid
+
+  setNumber  Int        @map("set_number")
+  weightKg   Decimal?   @map("weight_kg") @db.Decimal(6, 2)
+  reps       Int
+  /// 1-10, validated at the API boundary. Optional because RPE is a skill.
+  rpe        Int?
+  discomfort Discomfort @default(NONE)
+
+  loggedAt DateTime @map("logged_at") @db.Timestamptz
+  clientId String   @unique @map("client_id")
+
+  session  WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exercise Exercise       @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, exerciseId, setNumber])
+  @@map("set_logs")
+}
+
+/// An optional body-weight entry (PRD §47).
+///
+/// `dateLocal` is text in the user's own timezone, exactly like
+/// `daily_check_ins.date_local`: "the day I weighed myself" is a calendar fact,
+/// and a timestamp would make it depend on where the user was standing.
+model BodyWeightLog {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  dateLocal String  @map("date_local") @db.VarChar(10)
+  weightKg  Decimal @map("weight_kg") @db.Decimal(5, 2)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation("UserBodyWeightLogs", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dateLocal])
+  @@map("body_weight_logs")
 }
