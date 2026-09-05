@@ -137,10 +137,11 @@ describe('App', () => {
     await waitFor(
       () => {
         // Either the login page or the shell's Today screen, depending on the
-        // mocked auth state. `today-empty-state` is the stable marker for
-        // "landed on `/`": the greeting above it varies with the hour.
+        // mocked auth state. `today-state-line` is the stable marker for
+        // "landed on `/`": it renders for every board, empty or not, while the
+        // greeting above it varies with the hour.
         const welcomeText = screen.queryByText(/Welcome/i);
-        const todayScreen = screen.queryByTestId('today-empty-state');
+        const todayScreen = screen.queryByTestId('today-state-line');
         expect(welcomeText || todayScreen).toBeTruthy();
       },
       { timeout: 5000 },
@@ -167,7 +168,7 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(() => expect(screen.getByTestId('today-empty-state')).toBeInTheDocument(), {
+      await waitFor(() => expect(screen.getByTestId('today-state-line')).toBeInTheDocument(), {
         timeout: 5000,
       });
     });
@@ -207,7 +208,7 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(() => expect(screen.getByTestId('today-empty-state')).toBeInTheDocument(), {
+      await waitFor(() => expect(screen.getByTestId('today-state-line')).toBeInTheDocument(), {
         timeout: 5000,
       });
       expect(screen.queryByRole('heading', { name: /system settings/i })).not.toBeInTheDocument();
@@ -222,7 +223,7 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(() => expect(screen.getByTestId('today-empty-state')).toBeInTheDocument(), {
+      await waitFor(() => expect(screen.getByTestId('today-state-line')).toBeInTheDocument(), {
         timeout: 5000,
       });
       expect(screen.queryByRole('heading', { name: 'Admin Users' })).not.toBeInTheDocument();
@@ -443,7 +444,7 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(() => expect(screen.getByTestId('today-empty-state')).toBeInTheDocument(), {
+      await waitFor(() => expect(screen.getByTestId('today-state-line')).toBeInTheDocument(), {
         timeout: 5000,
       });
     });
@@ -461,7 +462,7 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(() => expect(screen.getByTestId('today-empty-state')).toBeInTheDocument(), {
+      await waitFor(() => expect(screen.getByTestId('today-state-line')).toBeInTheDocument(), {
         timeout: 5000,
       });
       expect(screen.queryByRole('heading', { name: 'Admin Advanced' })).not.toBeInTheDocument();
@@ -534,7 +535,7 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(() => expect(screen.getByTestId('today-empty-state')).toBeInTheDocument(), {
+      await waitFor(() => expect(screen.getByTestId('today-state-line')).toBeInTheDocument(), {
         timeout: 5000,
       });
       expect(screen.queryByRole('heading', { name: 'Admin Users' })).not.toBeInTheDocument();

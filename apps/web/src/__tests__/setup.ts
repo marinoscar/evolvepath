@@ -3,6 +3,7 @@ import { cleanup } from '@testing-library/react';
 import { afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { server } from './mocks/server';
 import { resetPathState } from './mocks/pathHandlers';
+import { resetTodayState } from './mocks/todayHandlers';
 
 // Set base URL for fetch
 const BASE_URL = 'http://localhost:3000';
@@ -225,6 +226,7 @@ afterEach(() => {
   // stateless handlers `resetHandlers` alone is not enough: without this a
   // test would inherit the previous one's outcomes and plans.
   resetPathState();
+  resetTodayState();
   resetViewportWidth();
   mediaQueryListRegistry.clear();
 });
