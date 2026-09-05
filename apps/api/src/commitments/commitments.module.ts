@@ -1,6 +1,11 @@
 import { Module } from '@nestjs/common';
 
+import { AiModule } from '../ai/ai.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { UserProfileModule } from '../user-profile/user-profile.module';
+import { CommitmentActionsController } from './actions/commitment-actions.controller';
+import { CommitmentActionsService } from './actions/commitment-actions.service';
+import { DecompositionService } from './decomposition/decomposition.service';
 import { CommitmentsController } from './commitments.controller';
 import { CommitmentsService } from './commitments.service';
 import { EvidenceController } from './evidence/evidence.controller';
@@ -23,9 +28,24 @@ import { ReflectionsService } from './reflections/reflections.service';
  * route can produce.
  */
 @Module({
-  imports: [PrismaModule],
-  controllers: [CommitmentsController, EvidenceController, ReflectionsController],
-  providers: [CommitmentsService, EvidenceService, ReflectionsService],
-  exports: [CommitmentsService, EvidenceService, ReflectionsService],
+  // `AiModule` is here for one method: "break this down" (#40). It is imported
+  // rather than injected globally so that the coupling is visible — this module
+  // does exactly one thing that can fail because a provider is down, and PRD
+  // §120 requires every other route in it to keep working when that happens.
+  imports: [PrismaModule, AiModule, UserProfileModule],
+  controllers: [
+    CommitmentsController,
+    CommitmentActionsController,
+    EvidenceController,
+    ReflectionsController,
+  ],
+  providers: [
+    CommitmentsService,
+    CommitmentActionsService,
+    DecompositionService,
+    EvidenceService,
+    ReflectionsService,
+  ],
+  exports: [CommitmentsService, CommitmentActionsService, EvidenceService, ReflectionsService],
 })
 export class CommitmentsModule {}
