@@ -160,6 +160,13 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'and the evidence timeline. Counts and states only — there is no score.',
       },
       {
+        name: 'Comeback',
+        description:
+          'Return after inactivity: stale commitments are closed as history, one small restart ' +
+          'action is offered, and completing it records recovery. No overdue list is ever ' +
+          'produced — there is deliberately no route here that reports what was missed.',
+      },
+      {
         name: 'Best Self',
         description:
           "The calling user's Best Self profile — who they are trying to become (PRD §10.2). " +

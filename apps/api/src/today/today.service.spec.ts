@@ -3,6 +3,7 @@ import type { Commitment } from '@prisma/client';
 
 import { CandidateLoaderService, type TodayCandidates } from './nba/candidate-loader.service';
 import { MomentumService } from '../progress/momentum/momentum.service';
+import { UserProfileService } from '../user-profile/user-profile.service';
 import { versionsOf } from '../commitments/commitment-card.mapper';
 import { TodayService } from './today.service';
 import { todayResponseSchema } from './today.schema';
@@ -108,6 +109,7 @@ describe('TodayService (#38)', () => {
   let service: TodayService;
   let loader: { load: jest.Mock };
   let momentum: { summary: jest.Mock };
+  let profiles: { find: jest.Mock };
 
   beforeEach(async () => {
     loader = { load: jest.fn() };
@@ -119,11 +121,14 @@ describe('TodayService (#38)', () => {
       }),
     };
 
+    profiles = { find: jest.fn().mockResolvedValue(null) };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TodayService,
         { provide: CandidateLoaderService, useValue: loader },
         { provide: MomentumService, useValue: momentum },
+        { provide: UserProfileService, useValue: profiles },
       ],
     }).compile();
 
@@ -316,6 +321,33 @@ describe('TodayService (#38)', () => {
       loader.load.mockResolvedValue(loaded());
 
       expect((await service.getToday('u1', NOW)).checkIn).toBeNull();
+    });
+  });
+
+  describe('comeback (#112)', () => {
+    it('is null for a user with no open loop — Today shows no backlog', async () => {
+      loader.load.mockResolvedValue(loaded());
+
+      expect((await service.getToday('u1', NOW)).comeback).toBeNull();
+    });
+
+    it('is a pointer while a loop is open, never a list of what was missed', async () => {
+      loader.load.mockResolvedValue(loaded());
+      profiles.find.mockResolvedValue({
+        comebackState: 'OFFERED',
+        comebackCommitmentId: '33333333-3333-4333-8333-333333333333',
+        comebackOfferedAt: new Date('2026-03-02T04:00:00.000Z'),
+      });
+
+      const result = await service.getToday('u1', NOW);
+
+      expect(todayResponseSchema.safeParse(result).success).toBe(true);
+      expect(result.comeback).toEqual({
+        state: 'OFFERED',
+        restartCommitmentId: '33333333-3333-4333-8333-333333333333',
+        offeredAt: '2026-03-02T04:00:00.000Z',
+      });
+      expect(Object.keys(result.comeback!)).toHaveLength(3);
     });
   });
 

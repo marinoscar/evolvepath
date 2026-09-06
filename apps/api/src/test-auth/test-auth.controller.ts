@@ -14,8 +14,10 @@ import { TestEnvironmentGuard } from './guards/test-environment.guard';
 import { TestAuthService } from './test-auth.service';
 import { TestLoginDto } from './dto/test-login.dto';
 import { RunJobDto } from './dto/run-job.dto';
+import { SimulateIdleDto } from './dto/simulate-idle.dto';
 import { Auth } from '../auth/decorators/auth.decorator';
 import { CoachingNotificationsService } from '../coaching-notifications/coaching-notifications.service';
+import { ComebackSweepTask } from '../progress/comeback/comeback-sweep.task';
 
 const REFRESH_TOKEN_COOKIE = 'refresh_token';
 const COOKIE_OPTIONS = {
@@ -35,6 +37,7 @@ export class TestAuthController {
     private readonly testAuthService: TestAuthService,
     private readonly configService: ConfigService,
     private readonly coachingNotifications: CoachingNotificationsService,
+    private readonly comebackSweep: ComebackSweepTask,
   ) {}
 
   /**
@@ -109,15 +112,54 @@ export class TestAuthController {
     status: 403,
     description: 'Forbidden - only available in non-production environments',
   })
-  async runJob(@Body() dto: RunJobDto): Promise<{
-    scanned: number;
-    sent: number;
-    suppressed: number;
-    skipped: boolean;
-  }> {
+  async runJob(@Body() dto: RunJobDto): Promise<Record<string, unknown>> {
     const now = dto.now ? new Date(dto.now) : undefined;
     this.logger.log(`Running job '${dto.job}'${dto.now ? ` at ${dto.now}` : ''}`);
 
-    return this.coachingNotifications.runOnce(now);
+    if (dto.job === 'comeback') {
+      // Per-user rather than the whole sweep: a test asserting on one user's
+      // offer must not race with the same job writing offers for every other
+      // seeded account.
+      const userId = await this.testAuthService.userIdForEmail(
+        dto.email ?? '',
+      );
+      const result = await this.comebackSweep.runForUser(userId, now);
+
+      return { job: dto.job, ...result };
+    }
+
+    return { job: dto.job, ...(await this.coachingNotifications.runOnce(now)) };
+  }
+
+  /**
+   * Make a user look idle (issue #112, epic E11).
+   *
+   * `@Public()` like `login` above, and for the same reason: it names the user
+   * by email so an e2e can call it before it has a token. Behind
+   * `TestEnvironmentGuard`, in a module that is not registered in production at
+   * all — two independent reasons it cannot exist there.
+   */
+  @Public()
+  @Post('simulate-idle')
+  @UseGuards(TestEnvironmentGuard)
+  @ApiOperation({
+    summary: 'Shift a user’s history backwards (non-production only)',
+    description:
+      'Moves `last_active_at` and every one of the user’s commitment and evidence timestamps ' +
+      'back by the same number of days, so a freshly seeded history reads as “idle for N days” ' +
+      'without a global clock seam. The sweep then runs against the real clock.',
+  })
+  @ApiResponse({ status: 201, description: 'The user’s history was shifted' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - only available in non-production environments',
+  })
+  async simulateIdle(@Body() dto: SimulateIdleDto): Promise<{
+    userId: string;
+    shiftedCommitments: number;
+    shiftedEvidence: number;
+    lastActiveAt: string;
+  }> {
+    return this.testAuthService.simulateIdle(dto);
   }
 }

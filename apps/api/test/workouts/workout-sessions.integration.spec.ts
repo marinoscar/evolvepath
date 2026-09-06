@@ -23,6 +23,7 @@ import { PAIN_SAFETY_COPY } from '../../src/workouts/safety/workout-safety-copy'
 import { validProposal } from '../../src/workouts/programs/__fixtures__/proposal.fixture';
 import { seedExercises } from '../../prisma/exercise-catalog';
 import { closeTestApp, createTestApp, TestContext } from '../helpers/test-app.helper';
+import { ActivityTrackerService } from '../../src/progress/comeback/activity-tracker.service';
 
 // =============================================================================
 // A workout, end to end, against a real database (issue #81, epic E09)
@@ -145,6 +146,9 @@ describeWithDb('Workout sessions (integration, real DB)', () => {
         ai as unknown as AiGatewayService,
         new UserProfileService(service),
       ),
+      // The real tracker: `record` is fire-and-forget, so a session finishing
+      // through the action layer also stamps `last_active_at` (#112).
+      new ActivityTrackerService(service, new UserProfileService(service)),
     );
 
     generator = new WorkoutProgramGeneratorService(

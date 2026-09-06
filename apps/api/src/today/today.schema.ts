@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { commitmentCardSchema } from '../commitments/commitment-card.schema';
+import { todayComebackSchema } from '../progress/comeback/comeback.schema';
 import { momentumStateEnum } from '../progress/progress.schema';
 import { domainModeKindSchema, domainSchema } from '../path/domain.schema';
 import { INTERVENTION_MODES } from './nba/intervention-mode';
@@ -85,6 +86,14 @@ export const todayResponseSchema = z.object({
     FAMILY: momentumSummarySchema,
     HEALTH: momentumSummarySchema,
   }),
+  /**
+   * The open comeback loop, or null (E11-02, #112).
+   *
+   * A state and a pointer — never a list of what was missed. PRD §109: overdue
+   * items do not flood Today, and the way to guarantee that is for this screen
+   * to have no field that could carry them.
+   */
+  comeback: todayComebackSchema,
   /**
    * ALWAYS null here. The coach's sentence is fetched separately from
    * `GET /today/insight` so a slow or dead provider cannot delay this response

@@ -17,6 +17,7 @@ import { ProposalsService } from './proposals/proposals.service';
 import { PROPOSAL_EFFECT } from './proposals/proposal-effects';
 import { WorkoutProposalEffect } from '../workouts/adaptation/workout-proposal-effects';
 import { SafetyModule } from './safety/safety.module';
+import { ActivityModule } from '../progress/comeback/activity.module';
 
 /**
  * The AI coach (epic E06).
@@ -28,6 +29,8 @@ import { SafetyModule } from './safety/safety.module';
  */
 @Module({
   imports: [
+    // A coaching turn is behaviour (#112).
+    ActivityModule,
     PrismaModule,
     AiModule,
     SafetyModule,

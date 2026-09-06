@@ -7,6 +7,7 @@ import { CreateEvidenceDto } from './dto/create-evidence.dto';
 import { EvidenceQueryDto } from './dto/evidence-query.dto';
 import { EvidenceResponseDto } from './dto/evidence-response.dto';
 import { toEvidenceDto } from './evidence.mapper';
+import { ActivityTrackerService } from '../../progress/comeback/activity-tracker.service';
 
 /** What a server-side flow supplies. Deliberately not a request shape. */
 export interface FlowEvidenceInput {
@@ -22,7 +23,10 @@ export interface FlowEvidenceInput {
 
 @Injectable()
 export class EvidenceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activity: ActivityTrackerService,
+  ) {}
 
   async list(userId: string, query: EvidenceQueryDto): Promise<EvidenceResponseDto[]> {
     const where: Prisma.EvidenceWhereInput = {
@@ -78,6 +82,9 @@ export class EvidenceService {
       commitmentId: row.commitmentId,
     });
 
+    // Logging what happened is the purest form of activity (#112).
+    this.activity.record(userId);
+
     return toEvidenceDto(row);
   }
 
@@ -111,6 +118,9 @@ export class EvidenceService {
       evidenceType: row.evidenceType,
       commitmentId: row.commitmentId,
     });
+
+    // Logging what happened is the purest form of activity (#112).
+    this.activity.record(userId);
 
     return toEvidenceDto(row);
   }

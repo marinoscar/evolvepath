@@ -6,6 +6,7 @@ import { DOMAINS } from '../path/domain.schema';
 import { elapsedSeconds } from '../commitments/actions/commitment-timer';
 import { DOMAINS as ALL_DOMAINS } from '../path/domain.schema';
 import { MomentumService } from '../progress/momentum/momentum.service';
+import { UserProfileService } from '../user-profile/user-profile.service';
 import type { MomentumSummaryPayload } from './today.schema';
 import { greetingFor } from './local-date';
 import { CandidateLoaderService, type TodayCandidates } from './nba/candidate-loader.service';
@@ -41,12 +42,14 @@ export class TodayService {
   constructor(
     private readonly loader: CandidateLoaderService,
     private readonly momentum: MomentumService,
+    private readonly profiles: UserProfileService,
   ) {}
 
   async getToday(userId: string, now: Date = new Date()): Promise<TodayResponse> {
-    const [loaded, momentum] = await Promise.all([
+    const [loaded, momentum, profile] = await Promise.all([
       this.loader.load(userId, now),
       this.momentumOrDegraded(userId, now),
+      this.profiles.find(userId),
     ]);
 
     const scored = this.rank(loaded);
@@ -77,6 +80,16 @@ export class TodayService {
           .map((row) => toCommitmentCard(row, now)),
       })),
       momentum,
+      // A pointer, never a backlog. The restart row is an ordinary commitment
+      // and already appears on its own domain card.
+      comeback:
+        profile && profile.comebackState !== 'NONE' && profile.comebackOfferedAt
+          ? {
+              state: profile.comebackState,
+              restartCommitmentId: profile.comebackCommitmentId,
+              offeredAt: profile.comebackOfferedAt.toISOString(),
+            }
+          : null,
       coachInsight: null,
     };
   }

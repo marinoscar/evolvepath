@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
+import { ActivityTrackerService } from '../../progress/comeback/activity-tracker.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserProfileService } from '../../user-profile/user-profile.service';
 import { localDate, localDayBounds, safeTimeZone } from '../local-date';
@@ -32,6 +33,7 @@ export class DayReflectionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly userProfile: UserProfileService,
+    private readonly activity: ActivityTrackerService,
   ) {}
 
   async create(
@@ -63,6 +65,9 @@ export class DayReflectionService {
         meta: { dateLocal, quickOption: dto.quickOption } as Prisma.InputJsonValue,
       },
     });
+
+    // A reflection is something the user did (#112).
+    this.activity.record(userId);
 
     return {
       id: row.id,

@@ -5,6 +5,10 @@ import { EvidenceService } from './evidence.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { createMockPrismaService, MockPrismaService } from '../../../test/mocks/prisma.mock';
 import { createEvidenceSchema } from './dto/create-evidence.dto';
+import { ActivityTrackerService } from '../../progress/comeback/activity-tracker.service';
+
+/** `record` is fire-and-forget; these specs only need it not to explode. */
+const activity = { touch: jest.fn(), record: jest.fn() };
 
 describe('evidence validation', () => {
   const base = { evidenceType: 'completion', source: 'USER_LOG' };
@@ -56,7 +60,11 @@ describe('EvidenceService', () => {
     prisma = createMockPrismaService();
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [EvidenceService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        EvidenceService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: ActivityTrackerService, useValue: activity },
+      ],
     }).compile();
 
     service = module.get<EvidenceService>(EvidenceService);

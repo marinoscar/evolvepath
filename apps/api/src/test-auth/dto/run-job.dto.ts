@@ -15,8 +15,17 @@ import { z } from 'zod';
  * header of `notification-policy.ts` for why that is the shape.
  */
 const runJobSchema = z.object({
-  job: z.enum(['coaching-notifications']),
+  /**
+   * ONE ROUTE, ONE ENUM — E11's comeback sweep is added here rather than as a
+   * second `jobs/run` route, so a harness keeps learning one shape (#112).
+   */
+  job: z.enum(['coaching-notifications', 'comeback']),
   now: z.iso.datetime().optional(),
+  /**
+   * Which user to run a per-user job for. Required by `comeback`, which sweeps
+   * one person at a time; ignored by the coaching engine, which scans everyone.
+   */
+  email: z.string().email().optional(),
 });
 
 export class RunJobDto extends createZodDto(runJobSchema) {}

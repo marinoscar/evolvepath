@@ -8,6 +8,7 @@ import { localDate, safeTimeZone } from '../local-date';
 import type { CheckInReader } from '../check-in-reader';
 import type { CheckInFeelValue } from '../today.schema';
 import type { CheckInResponseDto } from '../dto/check-in.dto';
+import { ActivityTrackerService } from '../../progress/comeback/activity-tracker.service';
 
 /**
  * The daily check-in (issue #43, epic E05).
@@ -26,6 +27,7 @@ export class CheckInService implements CheckInReader {
     // The CACHE, not the insight service: depending on the service would close a
     // cycle back through TodayService → CandidateLoaderService → CHECK_IN_READER.
     private readonly insight: TodayInsightCache,
+    private readonly activity: ActivityTrackerService,
   ) {}
 
   /** What `GET /today` reads. Never writes. */
@@ -80,6 +82,9 @@ export class CheckInService implements CheckInReader {
         meta: { dateLocal, feel } as Prisma.InputJsonValue,
       },
     });
+
+    // Saying how today feels is behaviour, not a page load (#112).
+    this.activity.record(userId);
 
     return { dateLocal: row.dateLocal, feel: row.feel, updatedAt: row.updatedAt.toISOString() };
   }

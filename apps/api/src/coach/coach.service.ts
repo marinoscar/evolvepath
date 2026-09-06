@@ -19,6 +19,7 @@ import {
   buildCoachInstructions,
 } from './prompts/coach.prompt';
 import { ProposalsService } from './proposals/proposals.service';
+import { ActivityTrackerService } from '../progress/comeback/activity-tracker.service';
 import { SafetyPolicyService } from './safety/safety-policy.service';
 import type { SafetyDecision } from './safety/safety.types';
 import type { SendCoachMessageDto } from './dto/send-coach-message.dto';
@@ -68,6 +69,7 @@ export class CoachService {
     private readonly conversations: CoachConversationsService,
     private readonly proposals: ProposalsService,
     private readonly profiles: UserProfileService,
+    private readonly activity: ActivityTrackerService,
   ) {}
 
   async listMessages(
@@ -106,7 +108,13 @@ export class CoachService {
   ): Promise<SendCoachMessageResponseDto> {
     return tracer.startActiveSpan('coach.send_message', async (span) => {
       try {
-        return await this.runTurn(userId, dto);
+        const reply = await this.runTurn(userId, dto);
+
+        // Talking to the coach is behaviour (PRD §57, #112) — a comeback offer
+        // must not greet somebody who has been working through it in here.
+        this.activity.record(userId);
+
+        return reply;
       } finally {
         span.end();
       }

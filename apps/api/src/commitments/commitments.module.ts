@@ -13,6 +13,7 @@ import { EvidenceController } from './evidence/evidence.controller';
 import { EvidenceService } from './evidence/evidence.service';
 import { ReflectionsController } from './reflections/reflections.controller';
 import { ReflectionsService } from './reflections/reflections.service';
+import { ActivityModule } from '../progress/comeback/activity.module';
 
 /**
  * The deterministic state machine every later epic mutates: what the user
@@ -39,7 +40,15 @@ import { ReflectionsService } from './reflections/reflections.service';
   // THIS one — it cancels ritual occurrences through the transition matrix —
   // and two modules importing each other is a cycle Nest cannot resolve
   // without `forwardRef`, which hides the coupling rather than removing it.
-  imports: [PrismaModule, AiModule, UserProfileModule, BehaviourLintModule],
+  imports: [
+    PrismaModule,
+    AiModule,
+    UserProfileModule,
+    BehaviourLintModule,
+    // "When did this user last do something?" (#112). A two-import module, so
+    // depending on it here cannot close a cycle back through ProgressModule.
+    ActivityModule,
+  ],
   controllers: [
     CommitmentsController,
     CommitmentActionsController,
