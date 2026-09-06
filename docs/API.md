@@ -1630,6 +1630,295 @@ response shape is identical to `POST /ai-settings/test`.
 
 ---
 
+### Onboarding
+
+The first gate a signed-in user passes after the BYOK key setup (PRD §19–§20,
+epic E04). Every route is `@Auth()` and every one addresses the caller's own
+`user_profiles` row — there is no such thing as somebody else's onboarding, so
+there is no permission to check and no 403 to return.
+
+**Two rules the whole section rests on:**
+
+- **Answers are saved per step.** PRD §19 gives this five to eight minutes on a
+  phone, and a phone locks. A wizard holding its answers in React state loses
+  them to a notification.
+- **The plan is not saved at all until it is approved.** `POST
+  /onboarding/propose` writes the proposal to `user_profiles.pending_proposal`
+  and nothing else; `outcomes`, `plans`, `plan_versions`, `routines` and
+  `commitments` gain no rows until `POST /onboarding/approve` (PRD §15).
+
+#### GET /onboarding
+**Requires Authentication** — the state the wizard resumes from. Safe to call
+on every boot; creates the profile row if the user has never had one.
+
+**Response:**
+```json
+{
+  "data": {
+    "step": "TIME",
+    "completed": false,
+    "answers": {
+      "sixMonthVision": "Stop wasting mornings, be present at dinner, get back in shape",
+      "domains": ["WORK", "FAMILY", "HEALTH"],
+      "domainReflections": { "work": "I start with email every day" },
+      "obstacles": ["PROCRASTINATE", "TOO_AMBITIOUS"],
+      "weekdayMinutes": 45,
+      "healthBaseline": null,
+      "coachingStyle": "BALANCED"
+    },
+    "pendingProposal": null,
+    "proposalSource": null,
+    "confidenceScore": null
+  },
+  "meta": { "timestamp": "2026-09-06T10:00:00.000Z" }
+}
+```
+
+`proposalSource` is `"ai"` or `"template"` and is read off the stored row. It
+is what `approve` attributes the plan version to; a client cannot claim it.
+
+---
+
+#### POST /onboarding/start
+**Requires Authentication** — records the timezone everything in this flow is
+scheduled in, and moves `onboardingStep` off `PROMISE`.
+
+**Request Body:**
+```json
+{ "timezone": "America/Costa_Rica", "locale": "es" }
+```
+
+The timezone is required and is not guessed from an IP: every commitment this
+flow creates is an instant computed from it, and a wrong one puts tonight's
+dinner on tomorrow. The browser knows the answer
+(`Intl.DateTimeFormat().resolvedOptions().timeZone`).
+
+**200** with the state. **400** `INVALID_TIMEZONE` for a zone the runtime cannot
+resolve. **409** `ONBOARDING_ALREADY_COMPLETED`.
+
+A user who walks back to step 1 to fix their timezone is **not** dragged forward
+to step 2 again — the step only advances from `PROMISE`.
+
+---
+
+#### PATCH /onboarding/answers
+**Requires Authentication** — save one step. A merge patch: an absent key is
+left alone.
+
+**Request Body** (every key optional, at least one required):
+```json
+{
+  "step": "TIME",
+  "sixMonthVision": "…",
+  "domains": ["WORK", "HEALTH"],
+  "domainReflections": { "work": "…", "family": "…", "health": "…" },
+  "obstacles": ["PROCRASTINATE"],
+  "weekdayMinutes": 45,
+  "healthBaseline": {
+    "experience": "BEGINNER",
+    "daysPerWeek": 3,
+    "minutesPerSession": 30,
+    "equipment": ["Dumbbells"],
+    "preferences": "…",
+    "limitations": "…"
+  },
+  "coachingStyle": "BALANCED"
+}
+```
+
+**Strict.** An unknown key is a **400** rather than a silently dropped answer:
+the wizard saves as the user types, and a typo'd field name answering 200 would
+look like a working save and lose the answer.
+
+`step` records where the client now is. **`DONE` is rejected** — completion is
+`approve`'s to declare, and a client that could patch its way there would have a
+completed account with no Path in it.
+
+**409** `ONBOARDING_ALREADY_COMPLETED`.
+
+---
+
+#### POST /onboarding/propose
+**Requires Authentication** — ask the coach for a first Path. Empty body.
+
+Calls the `planner` persona with prompt version `onboarding-proposal.v1` and the
+`onboarding_proposal` schema, then holds the output to the guardrails below.
+Stores the result on `user_profiles.pending_proposal` **and nowhere else**.
+
+**Response:**
+```json
+{
+  "data": {
+    "source": "ai",
+    "proposal": {
+      "bestSelf": {
+        "identityStatement": "I start important work before I become reactive. …",
+        "workIdentity": "Someone who protects the work that matters",
+        "familyIdentity": null,
+        "healthIdentity": null,
+        "sixMonthVision": "…"
+      },
+      "outcomes": [
+        {
+          "domain": "WORK",
+          "title": "Protect my most important work",
+          "whyItMatters": "…",
+          "successDefinition": "…"
+        }
+      ],
+      "routines": [
+        {
+          "domain": "WORK",
+          "title": "Start the most important task before email",
+          "triggerType": "WEEKDAYS",
+          "triggerValue": "Mon,Wed,Fri",
+          "frequency": "3x per week",
+          "idealMinutes": 25,
+          "minimumMinutes": 10,
+          "fallbackBehavior": "Open the task and write the first sentence"
+        }
+      ],
+      "firstWeekCommitments": [
+        {
+          "domain": "WORK",
+          "title": "Start the most important task before email",
+          "scheduledStart": "2026-09-07T13:30:00.000Z",
+          "durationMinutes": 25,
+          "fullVersion": "25 focused minutes on the most important task",
+          "shortVersion": "15 minutes on the most important task",
+          "minimumVersion": "Open the task and write the first sentence"
+        }
+      ],
+      "rationale": "…",
+      "reducedFromRequest": false
+    }
+  }
+}
+```
+
+**Guardrails**, applied identically to model output, to the template, and to the
+copy the user edited before approving:
+
+| Rule | Why |
+|---|---|
+| At most one outcome per selected domain, and only selected domains | A first Path is what the user asked for, not what the model found interesting |
+| At most **3** routines in total | PRD §70. A first plan with five habits is a plan abandoned in week two |
+| `minimumMinutes <= idealMinutes` | A minimum longer than the full version is not a fallback |
+| Every `scheduledStart` inside `[today − 1 day, today + 8 days]` **in the user's timezone** | "The first week" means the first week |
+| Commitment domains ⊆ selected domains | As above |
+| No single local day above `weekdayMinutes`, when the user answered | PRD §20 step 5 asked; ignoring the answer makes asking dishonest |
+
+**A violation is never corrected.** Model output that breaks a rule is discarded
+whole and answered as a schema failure — a plan the server quietly fixed is a
+plan the user approves believing the coach wrote it.
+
+**400** `ONBOARDING_INCOMPLETE` when `sixMonthVision` or `domains` is missing.
+**409** `ONBOARDING_ALREADY_COMPLETED`.
+**412** `AI_KEY_REQUIRED` — the one AI failure the user can fix.
+**503** with `details: { reason: "AI_UNAVAILABLE", code, retryable }`.
+`retryable` is true for `rate_limit`, `timeout`, `network` and `provider`, and
+false for `ai_disabled`, `no_model`, `schema` and `refusal` — it is what chooses
+between the wizard's `Try again` and `Continue without AI`.
+
+---
+
+#### POST /onboarding/skip-ai
+**Requires Authentication** — a starting Path with no model involved. Empty body.
+
+PRD §120: the flow **completes** with the provider down — not an apology and a
+retry button, but a plan the user can actually approve. Deterministic, built
+from the only things the server knows without a model: which domains the user
+picked, how many minutes they said they have, and what day it is where they are.
+
+Held to the same guardrails the model is, and **honest about being a template**
+in its own `rationale`.
+
+Per selected domain: Work — "Start the most important task before email"
+(Mon/Wed/Fri, 25 / 10 minutes, fallback "Open the task and write the first
+sentence"); Family — "Phone-free dinner" (Tue/Thu/Sun, 30 / 10, "Ten minutes of
+undivided attention"); Health — "Three 30-minute strength sessions"
+(Mon/Wed/Sat, 30 / 10, "A 10-minute walk"), with the user's `healthBaseline`
+days capped at three.
+
+Domains landing on the same day **share that day's minutes**, so a three-domain
+user with 45 minutes gets a plan that fits rather than one the guardrails reject.
+
+**200** with `source: "template"`. **400** `ONBOARDING_INCOMPLETE` or
+`PROPOSAL_INVALID`. **409** `ONBOARDING_ALREADY_COMPLETED`.
+
+---
+
+#### POST /onboarding/confidence
+**Requires Authentication** — PRD §72's question, asked before the plan is
+activated: *"How confident are you that you can do this in a difficult week?"*
+
+**Request Body:** `{ "score": 2 }` — an integer 1–5.
+
+**1 or 2 replaces the plan with a smaller one**, by the route it came from: an
+AI proposal is re-proposed with the reduce instruction and the previous plan in
+the input; a template is reduced arithmetically (drop the heaviest behaviour,
+halve the rest with a ten-minute floor). **3 and above** stores the score and
+changes nothing.
+
+**Response:** `{ "proposal": …, "source": "ai", "reproposed": true }`.
+
+**400** `NO_PENDING_PROPOSAL`. **409** `ONBOARDING_ALREADY_COMPLETED`. **412** /
+**503** as for `propose`.
+
+---
+
+#### POST /onboarding/approve
+**Requires Authentication** — the PRD §15 approval step, and the only path in
+this flow that turns a proposal into rows.
+
+**Request Body:** `{ "proposal": { … } }` — the pending proposal, possibly
+edited. `source` is deliberately **not** in the body: it is read off the stored
+row, because a client claiming `"ai"` would put the coach's name on a plan it
+never wrote.
+
+One `$transaction`:
+
+1. `best_self_profiles` — upserted from `proposal.bestSelf`
+2. per outcome: an `outcomes` row, its `plans` row, and `plan_versions` v1
+   `{ status: ACTIVE, userApproved: true, createdBy: AI | USER, rationale,
+   expectedWeeklyLoad, fallbackStrategy }`
+3. per routine: a `routines` row under that domain's version
+4. per commitment: a `commitments` row `{ status: PLANNED }` carrying all three
+   versions, linked to its routine **by title** — the contract has no ids in it,
+   because a model inventing one would point a commitment at another user's
+   routine
+5. `domain_modes` `GROW` for every selected domain
+6. the profile: `onboardingStep = DONE`, `onboardingCompletedAt = now`,
+   `pendingProposal` cleared
+
+Then, **after** the transaction, one `onboarding:approved` audit row with
+`{ source, outcomes, routines, commitments, edited, confidenceScore }` —
+counts, never content. A row written inside would be rolled back with the thing
+it is evidence of.
+
+**201:**
+```json
+{
+  "data": {
+    "bestSelfId": "…",
+    "outcomeIds": ["…"],
+    "planVersionIds": ["…"],
+    "routineIds": ["…"],
+    "commitmentIds": ["…"]
+  }
+}
+```
+
+**400** `PROPOSAL_INVALID` with `details.rules[]` naming each broken rule in a
+sentence — the review screen renders them under the offending section.
+**409** `ONBOARDING_ALREADY_COMPLETED`.
+
+**The second approve is a 409, not a silent no-op.** A client that raced two
+submits needs to be able to tell which one built the Path; a silent success
+would return a second set of ids for rows that were never created.
+
+---
+
 ### EvolvePath
 
 The product domain: who the user is trying to become, what they are trying to

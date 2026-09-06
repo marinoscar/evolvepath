@@ -881,6 +881,22 @@ is never closed (the matrix has no `STARTED → MISSED`).
 Note: `GET /api/today` carries `comeback: { state, restartCommitmentId, offeredAt }`
 or `null` — a pointer and three keys, never a backlog.
 
+### Onboarding (epic E04)
+The first gate after the BYOK key setup. Answers are saved per step; the plan is
+not saved at all until it is approved (PRD §15) — `outcomes`, `plans`,
+`routines` and `commitments` gain no rows until `approve`.
+- `GET /api/onboarding` - The state the wizard resumes from; creates the profile row lazily
+- `POST /api/onboarding/start` - Records the timezone everything here is scheduled in. 400 `INVALID_TIMEZONE`
+- `PATCH /api/onboarding/answers` - One step, as a merge patch. **Strict**: an unknown key is a 400, never a silently dropped answer. `step: 'DONE'` is rejected — completion is `approve`'s to declare
+- `POST /api/onboarding/propose` - The `planner` persona, then the guardrails. Stores on `user_profiles.pending_proposal` and nowhere else. 412 `AI_KEY_REQUIRED`; 503 `AI_UNAVAILABLE` with `details.retryable`
+- `POST /api/onboarding/skip-ai` - The deterministic Path. **Never calls the gateway** (PRD §120), held to the same guardrails, and honest about being a template in its own rationale
+- `POST /api/onboarding/confidence` - PRD §72. 1 or 2 replaces the plan with a smaller one (re-proposed when it came from the coach, reduced arithmetically when it came from the template); 3+ stores the score
+- `POST /api/onboarding/approve` - 201. One transaction: Best Self, one outcome + plan + ACTIVE v1 per domain, the routines, the first week's commitments, GROW domain modes, the profile marked done, then one `onboarding:approved` audit row. A second call is **409**, not a no-op
+
+Note: `source` is read off the stored row, never the request body — a client
+claiming `'ai'` would put the coach's name on a plan it never wrote. It is what
+`plan_versions.created_by` is set from.
+
 ### Best Self (current user)
 - `GET /api/me/best-self` - The caller's Best Self profile; `data: null` until saved
 - `PUT /api/me/best-self` - Replace it whole and stamp `lastReviewedAt` (no PATCH by design)
