@@ -130,28 +130,54 @@ export function buildTemplateProposal(
   const domains = dedupe(answers.domains);
   const today = localDate(now, timezone);
 
+  // ---- when each domain's behaviour falls, before deciding how long it is ---
+  //
+  // The days come FIRST because the minutes depend on them. Two domains landing
+  // on the same Monday have to share that Monday's budget, and a per-routine
+  // clamp cannot see that — which is exactly the guardrail this template would
+  // otherwise fail on a three-domain user with 45 minutes a day.
+
+  const sessionsFor = (domain: ProposalDomain): number =>
+    domain === 'HEALTH' && answers.healthBaseline
+      ? Math.min(answers.healthBaseline.daysPerWeek, 3)
+      : 3;
+
+  const daysByDomain = new Map<ProposalDomain, string[]>(
+    domains.map((domain) => [
+      domain,
+      nextOccurrences(today, TEMPLATE_WEEKDAYS[domain], sessionsFor(domain)),
+    ]),
+  );
+
+  /** local date → how many domains want something on it. */
+  const load = new Map<string, number>();
+
+  for (const days of daysByDomain.values()) {
+    for (const day of days) load.set(day, (load.get(day) ?? 0) + 1);
+  }
+
   const outcomes: OnboardingProposal['outcomes'] = [];
   const routines: OnboardingProposal['routines'] = [];
   const commitments: OnboardingProposal['firstWeekCommitments'] = [];
 
   for (const domain of domains) {
     const spec = TEMPLATES[domain];
+    const days = daysByDomain.get(domain) ?? [];
 
-    // The health baseline is the one answer that changes a template. The days
-    // are capped at three because PRD §70's ceiling is about the first week,
-    // not about ambition, and a user who said seven still gets three.
-    const sessions =
-      domain === 'HEALTH' && answers.healthBaseline
-        ? Math.min(answers.healthBaseline.daysPerWeek, 3)
-        : 3;
+    // The share of the day this domain may take on its BUSIEST day, so the
+    // total on every day stays inside what the user said they have.
+    const share =
+      answers.weekdayMinutes == null
+        ? null
+        : Math.floor(answers.weekdayMinutes / Math.max(...days.map((d) => load.get(d) ?? 1), 1));
 
-    const idealMinutes = clampMinutes(
+    // The health baseline is the one answer that changes a template.
+    const requested =
       domain === 'HEALTH' && answers.healthBaseline
         ? answers.healthBaseline.minutesPerSession
-        : spec.idealMinutes,
-      answers.weekdayMinutes,
-      spec.minimumMinutes,
-    );
+        : spec.idealMinutes;
+
+    const idealMinutes = clampMinutes(requested, share, spec.minimumMinutes);
 
     outcomes.push({
       domain,
@@ -165,13 +191,13 @@ export function buildTemplateProposal(
       title: spec.routineTitle,
       triggerType: 'WEEKDAYS',
       triggerValue: spec.triggerValue,
-      frequency: `${sessions}x per week`,
+      frequency: `${days.length}x per week`,
       idealMinutes,
       minimumMinutes: Math.min(spec.minimumMinutes, idealMinutes),
       fallbackBehavior: spec.fallbackBehavior,
     });
 
-    for (const day of nextOccurrences(today, TEMPLATE_WEEKDAYS[domain], sessions)) {
+    for (const day of days) {
       commitments.push({
         domain,
         title: spec.routineTitle,
@@ -277,10 +303,16 @@ function nextOccurrences(today: string, weekdays: number[], count: number): stri
   return days;
 }
 
-/** Never longer than the user's stated weekday budget, never under the floor. */
-function clampMinutes(minutes: number, budget: number | null, floor: number): number {
-  if (budget == null) return minutes;
-  return Math.max(floor, Math.min(minutes, budget));
+/**
+ * Never longer than this domain's share of a day, never under the floor.
+ *
+ * The floor wins a conflict: a user with fifteen minutes and three areas gets a
+ * plan that slightly overruns rather than a five-minute strength session, and
+ * the guardrails then tell them so in words they can act on.
+ */
+function clampMinutes(minutes: number, share: number | null, floor: number): number {
+  if (share == null) return minutes;
+  return Math.max(floor, Math.min(minutes, share));
 }
 
 function dedupe(domains: ProposalDomain[]): ProposalDomain[] {

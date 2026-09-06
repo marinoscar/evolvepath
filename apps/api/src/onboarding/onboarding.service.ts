@@ -274,7 +274,10 @@ export class OnboardingService {
    */
   async approve(
     userId: string,
-    edited: OnboardingProposal,
+    // UNKNOWN, on purpose: the shape is checked below with `safeParse` so the
+    // answer is `PROPOSAL_INVALID` with rules a person can read, rather than
+    // the pipe's generic 400. See `dto/approve-onboarding.dto.ts`.
+    edited: unknown,
     now: Date = new Date(),
   ): Promise<ApprovedPath> {
     const profile = await this.profiles.getOrCreate(userId);
@@ -289,7 +292,25 @@ export class OnboardingService {
     // a plan it never saw.
     const source: 'ai' | 'template' = storedSource === 'template' ? 'template' : 'ai';
 
-    const proposal = onboardingProposalSchema.parse(edited);
+    // `safeParse`, not `parse`: a proposal the user edited past the contract —
+    // a fourth routine, a 300-minute commitment — is the same kind of mistake as
+    // one that breaks a guardrail, and it must come back as the same 400 with a
+    // sentence naming what is wrong rather than as a Zod stack trace.
+    const parsed = onboardingProposalSchema.safeParse(edited);
+
+    if (!parsed.success) {
+      throw new BadRequestException({
+        message: 'This plan does not fit the rules a first Path is held to.',
+        details: {
+          reason: 'PROPOSAL_INVALID',
+          rules: parsed.error.issues.map(
+            (issue) => `${issue.path.join('.') || 'proposal'}: ${issue.message}`,
+          ),
+        },
+      });
+    }
+
+    const proposal = parsed.data;
     const answers = this.answersOf(profile);
     const guardrails = this.guardrailsFor(profile, answers, now);
 
