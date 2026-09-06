@@ -144,7 +144,16 @@ export interface TodayResponse {
     version: string;
     interventionMode: string;
   } | null;
-  domains: Array<{ domain: Domain; mode: string; commitments: Array<{ id: string }> }>;
+  domains: Array<{
+    domain: Domain;
+    mode: string;
+    commitments: Array<{
+      id: string;
+      rescheduleCount: number;
+      /** Epic E07's ladder reading. Null on every non-WORK card. */
+      avoidance: { level: number; suggestedAction: string } | null;
+    }>;
+  }>;
 }
 
 export async function getToday(page: Page): Promise<TodayResponse> {
@@ -155,6 +164,8 @@ export interface EvidenceRow {
   evidenceType: string;
   source: string;
   commitmentId: string | null;
+  /** Minutes for a `TIMER focus_session` row (epic E07); null for most rows. */
+  quantitativeValue: number | null;
 }
 
 /**

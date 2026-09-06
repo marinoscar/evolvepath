@@ -50,7 +50,49 @@ function serialize(body) {
   return parts.join('\n');
 }
 
+/**
+ * The E07-03 friction reply (issue #122, epic E07).
+ *
+ * Selected by `requiredInterventionType`, which `FrictionService` puts in the
+ * input — the coach is being asked for WORDING for a decision that has already
+ * been made, and echoing the type is what a well-behaved model does.
+ *
+ * The sentinel `force-wrong-intervention` in the user's own free text makes it
+ * misbehave instead, claiming `GOAL_CHALLENGE`. A HEADER would have been the
+ * obvious lever and is unusable here for the reason this file's header gives:
+ * the API calls this server, the browser does not, so the only thing a
+ * Playwright spec can influence is what the user types.
+ */
+function workFrictionReply(input) {
+  const required = /"requiredInterventionType":"([A-Z_]+)"/.exec(input)?.[1];
+  if (!required) return null;
+
+  const commitmentId = /"commitment":\{"id":"([0-9a-fA-F-]{36})"/.exec(input)?.[1] ?? null;
+  const misbehave = /force-wrong-intervention/i.test(input);
+
+  return {
+    intervention_type: misbehave ? 'GOAL_CHALLENGE' : required,
+    reasoning_summary: 'They said what is making it hard; this is the smallest next move.',
+    user_message:
+      "Let's stop treating this like one task. Write only the storyline: decision, recommendation, three arguments.",
+    recommended_action: {
+      title: 'Write only the storyline: decision, recommendation, three arguments',
+      duration_minutes: 10,
+      commitmentId,
+    },
+    fallback_action: null,
+    proposal: null,
+    friction_question: null,
+  };
+}
+
 function coachReply(input) {
+  // E07-03's friction turn, which is the coach being asked for wording rather
+  // than for a decision. Checked first: its input carries a required
+  // intervention type that no other coach call does.
+  const friction = workFrictionReply(input);
+  if (friction) return friction;
+
   // "My schedule changed. I can't work out Wednesday anymore." — PRD §68's
   // sentence, and the one the epic's whole loop is named after.
   if (/wednesday/i.test(input)) {
@@ -427,8 +469,87 @@ function progressionExplanation() {
   };
 }
 
+/**
+ * A five-session work plan (issue #122, epic E07).
+ *
+ * DATES ARE COMPUTED AT REQUEST TIME, from the `today` the planner was given,
+ * so the guardrails hold whenever the suite runs. A canned set of timestamps
+ * would pass on the day it was written and turn into a 503 the following week —
+ * a failure that reads like a broken planner rather than a stale fixture.
+ *
+ * Times are NOON UTC. It is the one hour that lands on the same calendar day in
+ * every zone from UTC-11 to UTC+11, which is what keeps the "at most two
+ * sessions per local day" and "not in the past" rules satisfied without this
+ * server having to resolve a wall-clock time in an arbitrary timezone.
+ */
+function workSessionPlan(input) {
+  const today = /"today":"(\d{4}-\d{2}-\d{2})"/.exec(input)?.[1];
+  if (!today) return null;
+
+  const targetDate = /"targetDate":"(\d{4}-\d{2}-\d{2})"/.exec(input)?.[1] ?? null;
+  const budget = Number(/"availableMinutesPerDay":(\d+)/.exec(input)?.[1] ?? 45);
+
+  // 25/45/30/30/15 as the epic asks, clamped to what the user said they have
+  // and never below the contract's ten-minute floor.
+  const durations = [25, 45, 30, 30, 15].map((minutes) =>
+    Math.max(10, Math.min(minutes, budget)),
+  );
+
+  const titles = [
+    'Storyline: decision, recommendation, three arguments',
+    'Build the evidence slides for the recommendation',
+    'Draft the financial case',
+    'Tighten the narrative and cut the filler',
+    'Read it end to end and fix what jars',
+  ];
+
+  const days = [];
+  const cursor = new Date(`${today}T12:00:00.000Z`);
+
+  while (days.length < 5) {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+
+    const weekday = cursor.getUTCDay();
+    if (weekday === 0 || weekday === 6) continue;
+
+    const iso = cursor.toISOString();
+    if (targetDate && iso.slice(0, 10) > targetDate) break;
+
+    days.push(iso);
+  }
+
+  if (days.length === 0) return null;
+
+  return {
+    milestones: [
+      { title: 'One-page storyline exists', order: 0 },
+      { title: 'A complete rough deck exists', order: 1 },
+      { title: 'The deck is ready to present', order: 2 },
+    ],
+    sessions: days.map((scheduledStart, index) => ({
+      title: `${durations[index]} min — ${titles[index]}`,
+      scheduledStart,
+      durationMinutes: durations[index],
+      milestoneIndex: Math.min(2, Math.floor((index * 3) / days.length)),
+      minimumStart: {
+        title: 'Open the deck and write the decision sentence',
+        minutes: Math.max(2, Math.min(10, durations[index] - 5)),
+      },
+    })),
+    implementationIntention: {
+      when: 'After I sit down with coffee',
+      then: 'I open the deck and start the next session',
+    },
+    reviewCadence: 'WEEKLY',
+    rationale:
+      'Five weekday blocks, front-loaded on the storyline: the argument has to exist before ' +
+      'the slides are worth making.',
+  };
+}
+
 const SCENARIOS = {
   coach_reply: coachReply,
+  work_session_plan: workSessionPlan,
   safety_decision: safetyDecision,
   insight_proposal: insightProposal,
   weekly_review: weeklyReview,

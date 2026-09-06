@@ -330,6 +330,39 @@ Two rules that are easy to break and expensive to rediscover:
   elapsed value would need writing on a schedule and would be quietly wrong the
   moment a client stopped sending it.
 
+## The Work domain
+
+Session planning, the focus-session record, the seven-rung intervention ladder,
+the friction question and the weekly summary have their own written contract in
+[`docs/specs/work-domain.md`](docs/specs/work-domain.md): the plan contract and
+every guardrail with its constant, the template's rules, the apply transaction,
+the ladder rule copied verbatim from the detector's own header, the eight
+answers with their interventions and obstacle types, the protected reschedule,
+the summary's count definitions, and the rejected alternatives.
+
+Read it before changing anything under `apps/api/src/work/` or
+`apps/web/src/components/work/`.
+`apps/api/test/docs/work-domain-doc.spec.ts` fails if a constant, a threshold, a
+rung or an answer's routing changes without the document changing with it —
+including when only the VALUE moves, which is the realistic mistake.
+
+Three rules that are easy to break and expensive to rediscover:
+
+- **A single reschedule, a single skip and a single "later" are never
+  avoidance.** PRD §25, and the first thing the detector's spec asserts. A
+  product that escalates on a Tuesday is one people stop opening — every other
+  rung on the ladder is only defensible because that floor holds.
+- **There is no stored `avoidanceLevel` column, deliberately.** The signals move
+  every day — "untouched for three days" becomes four overnight without anybody
+  touching a row — so a persisted level would contradict `GET /today` within
+  hours of being written, invisibly. It is derived on every read from a batched
+  query whose cost does not grow with the number of cards.
+- **The coach writes the sentence; it does not make the decision.**
+  `requiredInterventionType` is computed from the user's answer BEFORE the model
+  is called, and a reply claiming a different type — or recommending over 15
+  minutes, or naming another commitment — is discarded whole for the template.
+  A reader cannot tell a confident wrong sentence from a right one.
+
 ## The domain model
 
 The EvolvePath product tables — the PRD §9 hierarchy from Best Self down to
