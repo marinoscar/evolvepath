@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import type { Commitment } from '@prisma/client';
 
 import { CandidateLoaderService, type TodayCandidates } from './nba/candidate-loader.service';
+import { MomentumService } from '../progress/momentum/momentum.service';
 import { versionsOf } from '../commitments/commitment-card.mapper';
 import { TodayService } from './today.service';
 import { todayResponseSchema } from './today.schema';
@@ -106,15 +107,49 @@ function loaded(over: Partial<TodayCandidates> = {}): TodayCandidates {
 describe('TodayService (#38)', () => {
   let service: TodayService;
   let loader: { load: jest.Mock };
+  let momentum: { summary: jest.Mock };
 
   beforeEach(async () => {
     loader = { load: jest.fn() };
+    momentum = {
+      summary: jest.fn().mockResolvedValue({
+        WORK: { state: 'STEADY', headline: '5 of 6 planned work actions completed' },
+        FAMILY: { state: 'INSUFFICIENT_DATA', headline: null },
+        HEALTH: { state: 'BUILDING', headline: '2 of 3 planned workouts completed' },
+      }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [TodayService, { provide: CandidateLoaderService, useValue: loader }],
+      providers: [
+        TodayService,
+        { provide: CandidateLoaderService, useValue: loader },
+        { provide: MomentumService, useValue: momentum },
+      ],
     }).compile();
 
     service = module.get(TodayService);
+  });
+
+  describe('momentum (#98)', () => {
+    it('carries all three domains, so the day screen never has to ask twice', async () => {
+      loader.load.mockResolvedValue(loaded());
+
+      const result = await service.getToday('u1', NOW);
+
+      expect(Object.keys(result.momentum).sort()).toEqual(['FAMILY', 'HEALTH', 'WORK']);
+      expect(result.momentum.HEALTH.state).toBe('BUILDING');
+    });
+
+    it('still returns the day when momentum throws — Progress is secondary here', async () => {
+      loader.load.mockResolvedValue(loaded());
+      momentum.summary.mockRejectedValue(new Error('window load failed'));
+
+      const result = await service.getToday('u1', NOW);
+
+      expect(todayResponseSchema.safeParse(result).success).toBe(true);
+      expect(result.momentum.WORK).toEqual({ state: 'INSUFFICIENT_DATA', headline: null });
+      expect(result.nextBestAction).not.toBeNull();
+    });
   });
 
   it('returns a body that satisfies the published schema', async () => {
@@ -285,12 +320,11 @@ describe('TodayService (#38)', () => {
   });
 
   describe('the fields later epics own', () => {
-    it('leaves momentum and coachInsight null', async () => {
+    it('leaves coachInsight null — the sentence is a separate request', async () => {
       loader.load.mockResolvedValue(loaded());
 
       const result = await service.getToday('u1', NOW);
 
-      expect(result.momentum).toBeNull();
       expect(result.coachInsight).toBeNull();
     });
   });
