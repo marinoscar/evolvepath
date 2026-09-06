@@ -21,6 +21,7 @@ import { EmailModule } from './email/email.module';
 import { CoachingNotificationsModule } from './coaching-notifications/coaching-notifications.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AiModule } from './ai/ai.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
 import { PathModule } from './path/path.module';
 import { CommitmentsModule } from './commitments/commitments.module';
 import { ProgressModule } from './progress/progress.module';
@@ -102,6 +103,10 @@ import configuration from './config/configuration';
     // plans, routines and commitments to the same module rather than new ones,
     // so the hierarchy stays one graph rather than three that must agree.
     PathModule,
+    // The first gate after the BYOK key setup (epic E04). Registered next to
+    // `PathModule` because everything it approves lands in those tables — and
+    // before it in the list for the same reason it comes first for the user.
+    OnboardingModule,
     // The commitment lifecycle, evidence and reflections (#47, epic #33).
     // Separate from PathModule because the boundary is real: Path is the shape
     // of a life, edited deliberately; commitments are the record of days,
