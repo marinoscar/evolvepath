@@ -13,6 +13,8 @@ import { AvoidanceService } from './avoidance/avoidance.service';
 import { AvoidanceSignalsService } from './avoidance/avoidance-signals.service';
 import { FrictionController } from './avoidance/friction.controller';
 import { FrictionService } from './avoidance/friction.service';
+import { WorkSummaryController } from './summary/work-summary.controller';
+import { WorkSummaryService } from './summary/work-summary.service';
 
 /**
  * The Work domain: turning an outcome into sessions somebody actually starts
@@ -34,17 +36,30 @@ import { FrictionService } from './avoidance/friction.service';
   // and the redirect path has to work when the provider is down, which is why
   // it is a regex first and a persona second.
   imports: [PrismaModule, AiModule, UserProfileModule, CommitmentsModule, SafetyModule],
-  controllers: [WorkSessionPlanningController, FocusSessionController, FrictionController],
+  controllers: [
+    WorkSessionPlanningController,
+    FocusSessionController,
+    FrictionController,
+    WorkSummaryController,
+  ],
   providers: [
     WorkSessionPlanningService,
     FocusSessionService,
     AvoidanceSignalsService,
     AvoidanceService,
     FrictionService,
+    WorkSummaryService,
   ],
   // `AvoidanceService` is exported for two readers: E05-01's Today service,
   // which puts the assessment on every WORK card, and E07-05's weekly summary,
   // which reports the ladder level of everything repeatedly postponed.
-  exports: [WorkSessionPlanningService, FocusSessionService, AvoidanceService],
+  // `WorkSummaryService` is exported for E10-02's weekly reviewer, which reads
+  // these counts as its deterministic input.
+  exports: [
+    WorkSessionPlanningService,
+    FocusSessionService,
+    AvoidanceService,
+    WorkSummaryService,
+  ],
 })
 export class WorkModule {}
