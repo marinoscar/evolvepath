@@ -14,6 +14,7 @@ import { resetProgressState } from './mocks/progressHandlers';
 import { resetTodayState } from './mocks/todayHandlers';
 import { resetWeeklyState } from './mocks/weeklyHandlers';
 import { resetWorkSpies, resetWorkState } from './mocks/workHandlers';
+import { resetOnboardingState } from './mocks/onboardingHandlers';
 
 // Set base URL for fetch
 const BASE_URL = 'http://localhost:3000';
@@ -235,6 +236,7 @@ afterEach(() => {
   // The EvolvePath handlers keep a real in-memory store (#56), so unlike the
   // stateless handlers `resetHandlers` alone is not enough: without this a
   // test would inherit the previous one's outcomes and plans.
+  resetOnboardingState();
   resetPathState();
   resetFamilyState();
   resetHealthState();

@@ -2215,3 +2215,65 @@ export async function getWorkSummary(weekStart?: string): Promise<WorkWeeklySumm
   const suffix = weekStart ? `?weekStart=${weekStart}` : '';
   return api.get<WorkWeeklySummary>(`/work/summary${suffix}`);
 }
+
+// =============================================================================
+// Onboarding (epic E04)
+// =============================================================================
+//
+// Same rule as the blocks above: the ONLY place this app names these endpoints.
+
+import type {
+  ApprovedOnboardingPath,
+  OnboardingAnswersPatch,
+  OnboardingConfidenceResult,
+  OnboardingProposal,
+  OnboardingProposalResult,
+  OnboardingState,
+} from '../types';
+
+/** The state the wizard resumes from. Safe to call on every boot. */
+export async function getOnboardingState(): Promise<OnboardingState> {
+  return api.get<OnboardingState>('/onboarding');
+}
+
+/**
+ * Step 1. The timezone comes from the browser — the server does not guess it,
+ * and every commitment this flow creates is an instant computed from it.
+ */
+export async function startOnboarding(body: {
+  timezone: string;
+  locale?: string;
+}): Promise<OnboardingState> {
+  return api.post<OnboardingState>('/onboarding/start', body);
+}
+
+/** Steps 2–7. A merge patch: an absent key is left alone. */
+export async function patchOnboardingAnswers(
+  patch: OnboardingAnswersPatch,
+): Promise<OnboardingState> {
+  return api.patch<OnboardingState>('/onboarding/answers', patch);
+}
+
+/** Asks the coach. Stores on the profile and writes no domain rows (PRD §15). */
+export async function proposeOnboarding(): Promise<OnboardingProposalResult> {
+  return api.post<OnboardingProposalResult>('/onboarding/propose', {});
+}
+
+/** The deterministic Path. Never reaches the model (PRD §120). */
+export async function skipOnboardingAi(): Promise<OnboardingProposalResult> {
+  return api.post<OnboardingProposalResult>('/onboarding/skip-ai', {});
+}
+
+/** PRD §72. A score of 1 or 2 comes back with a smaller plan. */
+export async function submitOnboardingConfidence(
+  score: number,
+): Promise<OnboardingConfidenceResult> {
+  return api.post<OnboardingConfidenceResult>('/onboarding/confidence', { score });
+}
+
+/** The only call in this flow that turns the proposal into a Path. */
+export async function approveOnboarding(
+  proposal: OnboardingProposal,
+): Promise<ApprovedOnboardingPath> {
+  return api.post<ApprovedOnboardingPath>('/onboarding/approve', { proposal });
+}

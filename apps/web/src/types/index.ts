@@ -2867,3 +2867,152 @@ export interface WorkWeeklySummary {
   worstWindow: WorkTimeWindow | null;
   distractionNoteCount: number;
 }
+
+// =============================================================================
+// Onboarding (epic E04)
+// =============================================================================
+//
+// Hand-maintained, mirroring `apps/api/src/onboarding/`. Generating them would
+// put the API's build output on this app's critical path for values that change
+// about once an epic.
+//
+// `OnboardingProposal` is deliberately the SAME shape the API proposes, stores
+// and accepts back at approve. The review screen edits it in place and sends it
+// whole, so a second "edited proposal" type would be a second contract nobody
+// validates.
+
+/** PRD §20's nine screens, as the server names them. */
+export type OnboardingStep =
+  | 'PROMISE'
+  | 'VISION'
+  | 'DOMAINS'
+  | 'REALITY'
+  | 'TIME'
+  | 'HEALTH_BASELINE'
+  | 'COACHING_STYLE'
+  | 'PROPOSAL'
+  | 'NOTIFICATIONS'
+  | 'DONE';
+
+/** PRD §20 step 4. Stable keys, never the user-facing sentence. */
+export type ObstacleKey =
+  | 'PROCRASTINATE'
+  | 'TOO_AMBITIOUS'
+  | 'FORGET'
+  | 'SCHEDULE_CHANGES'
+  | 'LOSE_MOTIVATION'
+  | 'OVERWHELMED'
+  | 'DONT_KNOW_WHAT'
+  | 'OTHER';
+
+export type CoachingStyle = 'GENTLE' | 'BALANCED' | 'DIRECT';
+
+export interface HealthBaseline {
+  experience: 'NONE' | 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
+  daysPerWeek: number;
+  minutesPerSession: number;
+  equipment: string[];
+  preferences?: string;
+  limitations?: string;
+}
+
+export interface DomainReflections {
+  work?: string;
+  family?: string;
+  health?: string;
+}
+
+export interface OnboardingAnswers {
+  sixMonthVision: string | null;
+  domains: Domain[];
+  domainReflections: DomainReflections | null;
+  obstacles: ObstacleKey[];
+  weekdayMinutes: number | null;
+  healthBaseline: HealthBaseline | null;
+  coachingStyle: CoachingStyle;
+}
+
+export interface OnboardingProposalRoutine {
+  domain: Domain;
+  title: string;
+  triggerType: 'AFTER' | 'AT_TIME' | 'WEEKDAYS';
+  triggerValue: string;
+  frequency: string;
+  idealMinutes: number;
+  minimumMinutes: number;
+  fallbackBehavior: string;
+}
+
+export interface OnboardingProposalCommitment {
+  domain: Domain;
+  title: string;
+  /** An ISO instant. Edited in place by the review screen. */
+  scheduledStart: string;
+  durationMinutes: number;
+  fullVersion: string;
+  shortVersion: string;
+  minimumVersion: string;
+}
+
+export interface OnboardingProposalOutcome {
+  domain: Domain;
+  title: string;
+  whyItMatters: string;
+  successDefinition: string;
+}
+
+export interface OnboardingProposal {
+  bestSelf: {
+    identityStatement: string;
+    workIdentity: string | null;
+    familyIdentity: string | null;
+    healthIdentity: string | null;
+    sixMonthVision: string;
+  };
+  outcomes: OnboardingProposalOutcome[];
+  routines: OnboardingProposalRoutine[];
+  firstWeekCommitments: OnboardingProposalCommitment[];
+  rationale: string;
+  /** True for the smaller plan a low confidence answer produced (PRD §72). */
+  reducedFromRequest: boolean;
+}
+
+export type OnboardingProposalSource = 'ai' | 'template';
+
+export interface OnboardingState {
+  step: OnboardingStep;
+  completed: boolean;
+  answers: OnboardingAnswers;
+  pendingProposal: OnboardingProposal | null;
+  proposalSource: OnboardingProposalSource | null;
+  confidenceScore: number | null;
+}
+
+export interface OnboardingProposalResult {
+  proposal: OnboardingProposal;
+  source: OnboardingProposalSource;
+}
+
+export interface OnboardingConfidenceResult extends OnboardingProposalResult {
+  reproposed: boolean;
+}
+
+export interface ApprovedOnboardingPath {
+  bestSelfId: string;
+  outcomeIds: string[];
+  planVersionIds: string[];
+  routineIds: string[];
+  commitmentIds: string[];
+}
+
+/** The merge patch `PATCH /onboarding/answers` accepts. */
+export interface OnboardingAnswersPatch {
+  step?: Exclude<OnboardingStep, 'DONE'>;
+  sixMonthVision?: string;
+  domains?: Domain[];
+  domainReflections?: DomainReflections;
+  obstacles?: ObstacleKey[];
+  weekdayMinutes?: number;
+  healthBaseline?: HealthBaseline;
+  coachingStyle?: CoachingStyle;
+}

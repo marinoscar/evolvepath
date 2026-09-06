@@ -63,6 +63,10 @@ const UserAiMemoryPage = lazy(() => import('./pages/UserAiMemoryPage'));
 // Epic E10 (#84) — the day and time the weekly review is prepared.
 const UserWeeklyRhythmPage = lazy(() => import('./pages/UserWeeklyRhythmPage'));
 const AiKeySetupPage = lazy(() => import('./pages/AiKeySetupPage'));
+// The first-Path wizard (epic E04, #102). Full screen by route placement, like
+// `/setup/ai-key` above — inside `RequireAiKey` (step 8 needs the key) and
+// outside `Layout`, because nothing in the shell has anything in it yet.
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
 
 // Console — the hub (#93) plus one route per card in
 // `config/adminSections.tsx` (#92, epic #90).
@@ -152,6 +156,19 @@ function AppRoutes() {
                   signed in?" question and the "do they have a key?" question
                   stay one component each. */}
               <Route element={<RequireAiKey />}>
+                {/* THE ONBOARDING WIZARD (#102, epic E04). Inside the key gate
+                    because step 8 asks the coach for a plan, and outside
+                    `Layout` for the same reason `/setup/ai-key` is: Today,
+                    Path and Progress are all empty until this flow finishes,
+                    so offering them would invite the user to bounce off the
+                    gate repeatedly.
+
+                    The page itself redirects a COMPLETED user to `/`, so this
+                    route cannot be used to re-run onboarding. #106 adds the
+                    `RequireOnboarding` gate around the shell and this route
+                    stays outside it — a gate that redirected its own
+                    destination would loop forever. */}
+                <Route path="/onboarding" element={<OnboardingPage />} />
                 {/* The Start flow (#48, epic E05). INSIDE the gate — a session
                     can end with "Make it smaller", which is a coach call — but
                     OUTSIDE `Layout`, like `/activate` above. PRD §11 lets an
