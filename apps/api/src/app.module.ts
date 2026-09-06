@@ -14,6 +14,7 @@ import { HealthModule } from './health/health.module';
 import { AllowlistModule } from './allowlist/allowlist.module';
 import { DeviceAuthModule } from './device-auth/device-auth.module';
 import { StorageModule } from './storage/storage.module';
+import { MediaModule } from './media/media.module';
 import { PatModule } from './pat/pat.module';
 import { CredentialsModule } from './credentials/credentials.module';
 import { EmailModule } from './email/email.module';
@@ -68,6 +69,8 @@ import configuration from './config/configuration';
     AllowlistModule,
     DeviceAuthModule,
     StorageModule,
+    // After StorageModule: MediaModule depends on ObjectsService (issue #83).
+    MediaModule,
     PatModule,
     // Encrypted credential store (#115). Registered here so it is part of the
     // module graph; consumers still import CredentialsModule explicitly (it is

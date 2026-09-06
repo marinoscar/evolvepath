@@ -721,6 +721,18 @@ request on boot. Reading `onboarding` never creates a `user_profiles` row.
 - `POST /api/today/reflection` - End-of-day quick option + optional text, stored as a `relatedType: 'day'` reflection
 - `GET /api/today/reflection` - Today's latest day reflection, or null
 
+### Media Attachments (epic E03)
+The product-level view of an upload: what it is for, what it belongs to, how far
+processing has got, and what the coach said. Own data only; a foreign or unknown
+id answers **404, never 403** — unlike the generic Storage API, which answers
+403 because it is permission-based and admins reach other people's objects
+through `storage:*_any`.
+- `POST /api/media/attachments` - Give an upload a `purpose` and optionally a target. `kind` is derived from the MIME type, never sent. 409 if that upload is already attached — one attachment per upload
+- `GET /api/media/attachments?targetType=&targetId=&purpose=` - The caller's rows, newest first
+- `GET /api/media/attachments/{id}` - One attachment. `processingStatus` collapses storage's five statuses into the three a client can act on (wait / ask / retry), and `media.*` saves every client from reading `_processing` JSON
+- `DELETE /api/media/attachments/{id}` - 204. Removes the attachment, the object and every derived object (frames, AI variant) through `ObjectsService.delete`
+- `GET /api/media/attachments/{id}/preview?variant=&frameIndex=` - Signed URL. `variant` in the **response** says what was actually served: `ai` falls back to the original rather than failing
+
 ### Best Self (current user)
 - `GET /api/me/best-self` - The caller's Best Self profile; `data: null` until saved
 - `PUT /api/me/best-self` - Replace it whole and stamp `lastReviewedAt` (no PATCH by design)

@@ -231,6 +231,13 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'Accepting one is the only path in the product that turns AI output into a plan ' +
           'version; editing one re-attributes it to the user; rejecting one touches nothing.',
       },
+      {
+        name: 'Media',
+        description:
+          'User photos and videos attached to product objects for coaching. Private to the ' +
+          'uploader; processing state is derived from storage rather than reported separately. ' +
+          'A foreign or unknown id answers 404, never 403 \u2014 unlike the generic Storage API.',
+      },
     ],
   },
   {
@@ -279,7 +286,9 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
         name: 'Storage',
         description:
           'File objects: simple upload, resumable multipart upload, signed download URLs, metadata, ' +
-          'and deletion. A caller sees only the objects they uploaded.',
+          'and deletion. A caller sees only the objects they uploaded, unless they hold ' +
+          '`storage:read_any`, `storage:write_any` or `storage:delete_any`. Uploads are ' +
+          'checked against an allowlist of content types and a size limit.',
       },
     ],
   },

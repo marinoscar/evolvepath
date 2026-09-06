@@ -545,6 +545,32 @@ export class ObjectsService {
   }
 
   /**
+   * Sign a GET for a key whose ACCESS HAS ALREADY BEEN DECIDED by the caller.
+   *
+   * `getDownloadUrl` is the route-facing method and does its own ownership
+   * check against a `StorageObject` id. Media previews (#83) need to sign a
+   * DERIVED object — a video frame, a normalized variant — whose owner is
+   * established transitively through the parent attachment the caller already
+   * proved they own. Making them look the child up as a first-class object
+   * would be a second, weaker ownership story for rows a user never handles
+   * directly.
+   *
+   * The contract is in the name: this method authorizes NOTHING. Do not call
+   * it with a key that came from a request.
+   */
+  async getSignedUrlForKey(
+    storageKey: string,
+    expiresIn?: number,
+  ): Promise<string> {
+    const expiry =
+      expiresIn ?? this.config.get<number>('storage.signedUrlExpiry', 3600);
+
+    return this.storageProvider.getSignedDownloadUrl(storageKey, {
+      expiresIn: expiry,
+    });
+  }
+
+  /**
    * Delete object from storage and database
    */
   async delete(id: string, user: RequestUser): Promise<void> {
