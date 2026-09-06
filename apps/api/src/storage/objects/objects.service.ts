@@ -552,6 +552,32 @@ export class ObjectsService {
 
     this.logger.log(`Deleting object ${id} from storage and database`);
 
+    // Issue #79: objects derived from this one — sampled video frames, and
+    // later the normalized AI variant — are ordinary StorageObject rows with
+    // no foreign key back to their parent, so nothing cascades them. Leaving
+    // them behind leaks bytes the user believes they deleted and, worse,
+    // leaves images of a video the product says is gone.
+    //
+    // Deleting a derived object DIRECTLY is allowed and leaves a dangling
+    // entry in the parent's `frames[]`; the resolver already skips objects
+    // that are absent or not `ready`, so this is documented rather than
+    // guarded.
+    const derived = await this.prisma.storageObject.findMany({
+      where: { metadata: { path: ['derivedFrom'], equals: id } },
+      select: { id: true, storageKey: true },
+    });
+
+    for (const child of derived) {
+      await this.bestEffortDeleteKey(child.storageKey);
+    }
+
+    if (derived.length > 0) {
+      await this.prisma.storageObject.deleteMany({
+        where: { id: { in: derived.map((child) => child.id) } },
+      });
+      this.logger.log(`Deleted ${derived.length} derived objects of ${id}`);
+    }
+
     // Delete from storage provider
     await this.storageProvider.delete(object.storageKey);
 

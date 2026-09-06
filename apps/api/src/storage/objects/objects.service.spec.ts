@@ -107,6 +107,11 @@ describe('ObjectsService', () => {
     }).compile();
 
     service = module.get<ObjectsService>(ObjectsService);
+
+    // `delete` looks for objects derived from the one being removed (#79).
+    // Default to none so every pre-existing delete test keeps describing the
+    // ordinary case; the derived-object tests override it.
+    mockPrisma.storageObject.findMany.mockResolvedValue([] as any);
   });
 
   afterEach(() => {
@@ -1069,6 +1074,58 @@ describe('ObjectsService', () => {
       await expect(
         service.getOwnedById(mockStorageObject.id, adminUser.id),
       ).rejects.toThrow(ForbiddenException);
+    });
+  });
+  describe('derived objects (issue #79)', () => {
+    it('deletes every frame of a video before the video itself', async () => {
+      // Frames are ordinary StorageObject rows with no foreign key back to
+      // their parent, so nothing cascades them. Leaving them behind leaks
+      // bytes the user believes they deleted, and leaves images of a video the
+      // product says is gone.
+      mockPrisma.storageObject.findUnique.mockResolvedValue(
+        mockStorageObject as any,
+      );
+      mockPrisma.storageObject.findMany.mockResolvedValue([
+        { id: 'frame-1', storageKey: 'derived/obj-123/frame-0.jpg' },
+        { id: 'frame-2', storageKey: 'derived/obj-123/frame-1.jpg' },
+      ] as any);
+      mockPrisma.storageObject.deleteMany.mockResolvedValue({ count: 2 } as any);
+      mockPrisma.storageObject.delete.mockResolvedValue({} as any);
+      mockStorageProvider.delete.mockResolvedValue(undefined);
+      mockPrisma.auditEvent.create.mockResolvedValue({} as any);
+
+      await service.delete(mockStorageObject.id, testUser);
+
+      expect(mockPrisma.storageObject.findMany).toHaveBeenCalledWith({
+        where: { metadata: { path: ['derivedFrom'], equals: mockStorageObject.id } },
+        select: { id: true, storageKey: true },
+      });
+      expect(mockPrisma.storageObject.deleteMany).toHaveBeenCalledWith({
+        where: { id: { in: ['frame-1', 'frame-2'] } },
+      });
+      // Two frames plus the parent.
+      expect(mockStorageProvider.delete).toHaveBeenCalledTimes(3);
+      expect(mockStorageProvider.delete).toHaveBeenCalledWith(
+        'derived/obj-123/frame-0.jpg',
+      );
+      expect(mockStorageProvider.delete).toHaveBeenCalledWith(
+        mockStorageObject.storageKey,
+      );
+    });
+
+    it('deletes an object with no derived children exactly as before', async () => {
+      mockPrisma.storageObject.findUnique.mockResolvedValue(
+        mockStorageObject as any,
+      );
+      mockPrisma.storageObject.findMany.mockResolvedValue([] as any);
+      mockPrisma.storageObject.delete.mockResolvedValue({} as any);
+      mockStorageProvider.delete.mockResolvedValue(undefined);
+      mockPrisma.auditEvent.create.mockResolvedValue({} as any);
+
+      await service.delete(mockStorageObject.id, testUser);
+
+      expect(mockPrisma.storageObject.deleteMany).not.toHaveBeenCalled();
+      expect(mockStorageProvider.delete).toHaveBeenCalledTimes(1);
     });
   });
 });

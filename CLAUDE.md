@@ -1043,6 +1043,10 @@ Note: `DATABASE_URL` is constructed automatically from these variables at runtim
 - `AI_REQUEST_TIMEOUT_MS` - Hard deadline for one generation (default: 60000)
 - `AI_MAX_IMAGE_BYTES` - Largest image the gateway will inline (default: 20971520). Bounds one AI call, not one upload.
 - `AI_MAX_IMAGES_PER_CALL` - Images per call, counted after a video expands to its sampled frames (default: 10)
+- `AI_VIDEO_MAX_FRAMES` - Frames sampled from one video (default: 8, **clamped** to 1-16). A clamp rather than a validation: the failure mode of too many frames is a bill, not a broken deploy.
+- `AI_VIDEO_MAX_SECONDS` - Longest video the sampler will process (default: 120). A **refusal**, not a clamp — silently sampling the first two minutes of a ten-minute video hands the coach frames of something the user did not ask about.
+- `FFMPEG_PATH` / `FFPROBE_PATH` - Binary locations (default: `ffmpeg` / `ffprobe`). Both are installed in the API image's base stage, so production has them.
+- `TMPDIR` - Where the sampler writes the video it is about to read (default: the platform temp dir). ffmpeg needs a **seekable file**: MP4 `moov` atoms are routinely at the end, so a streamed input makes ffprobe report nothing for exactly the format phones produce.
 
 **Weekly review (epic E10):**
 - `WEEKLY_LOAD_SOFT_CAP` - The number of recurring commitments past which the product says "replace something rather than add another habit" (PRD §48, default 8). A **soft** cap: the warning is data on the response, never an exception, because a person who deliberately wants a heavy week is not making a mistake the software should refuse.

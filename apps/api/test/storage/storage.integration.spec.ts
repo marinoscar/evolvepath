@@ -426,6 +426,9 @@ describe('Storage Integration', () => {
         uploadedById: user.id,
       });
       mockStorageProvider.delete.mockResolvedValue(undefined);
+      // Issue #79: delete first looks for objects derived from this one
+      // (sampled video frames) — none here.
+      context.prismaMock.storageObject.findMany.mockResolvedValue([]);
       context.prismaMock.storageObject.delete.mockResolvedValue({});
       context.prismaMock.auditEvent.create.mockResolvedValue({});
 

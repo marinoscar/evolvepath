@@ -114,4 +114,15 @@ describe('the api image installs no build-only packages', () => {
   it('keeps --ignore-scripts, which is what makes the above true', () => {
     expect(dockerfile).toContain('--ignore-scripts');
   });
+
+  it('installs ffmpeg in the base stage, so every stage inherits it', () => {
+    // The video-frames processor (#79) shells out to ffmpeg and ffprobe from
+    // the same process that serves requests, so it has to be in PRODUCTION —
+    // not just in the dev image, where it would work locally and silently
+    // mark every uploaded video `failed` in a deployment.
+    expect(dockerfile).toMatch(/apk add --no-cache[^\n]*\bffmpeg\b/);
+
+    const baseStage = dockerfile.slice(0, dockerfile.indexOf('AS deps'));
+    expect(baseStage).toMatch(/apk add[^\n]*\bffmpeg\b/);
+  });
 });

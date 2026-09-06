@@ -209,9 +209,32 @@ make a forged `_processing` blob a read primitive.
 - **Images** are downloaded and inlined as base64 data URLs, aborting mid-stream
   once `AI_MAX_IMAGE_BYTES` (20 MiB) is passed. The storage key is read with
   Prisma *after* the ownership check: `ObjectResponseDto` omits it deliberately.
-- **Videos** expand to the frames E03-03 recorded at
+- **Videos** expand to the frames the video-frames processor recorded at
   `metadata._processing['video-frames'] = { frames: [{ objectId, timestampMs }], … }`,
   in `timestampMs` order. An unprocessed video is a clear `attachment` error.
+
+  That processor ships in
+  `storage/processing/processors/video-frames.processor.ts` (issue #79) and
+  writes the shape verbatim:
+
+  ```json
+  {
+    "frames": [{ "objectId": "uuid", "timestampMs": 250 }],
+    "durationMs": 2000,
+    "width": 320,
+    "height": 240,
+    "frameCount": 4
+  }
+  ```
+
+  **The key is the processor's `name`**, because `ObjectProcessingService`
+  stores results at `allMetadata[processor.name]`. There is no shared constant
+  between the two files, so renaming the processor breaks every video the coach
+  has been shown, silently. Frames are ordinary `StorageObject` rows carrying
+  `metadata.derivedFrom = <parent id>`, sized to a longest edge of 1024 px, and
+  owned by the same user — which is why running the ownership check per frame
+  is not redundant paranoia but the thing that makes a forged `_processing`
+  blob useless.
 - Anything else is "Unsupported attachment type".
 - The `AI_MAX_IMAGES_PER_CALL` (10) check runs **once, at the end**, against the
   expanded count — a per-attachment check would let ten videos through as a
