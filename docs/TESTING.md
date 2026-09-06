@@ -950,6 +950,38 @@ PRD §106 → spec-case table.
 cd tests/e2e && npx playwright test specs/health.spec.ts
 ```
 
+`specs/work.spec.ts` (epic E07) covers PRD §104's acceptance list: create a work
+outcome, have the coach break it into dated sessions, start a focus action,
+reschedule, watch **two** reschedules (and not one) trigger the friction
+intervention, and see starting recorded separately from completing.
+
+Three of its assertions are about things that do **not** happen. Case 1 reads
+`GET /outcomes/:id/work-plan` after the proposal and before Apply and finds it
+empty — PRD §15's promise that AI output waits on a human is invisible to any
+assertion that only reads a response body. Case 2 moves a second session **once**
+and asserts it stays at level 0, which is PRD §25's rule that avoidance is never
+inferred from one miss. The last case makes the fake coach claim an intervention
+type it was not asked for and asserts the deterministic template answer wins.
+
+Two things about running it:
+
+- **The friction override is driven from what the user TYPES**, not from a
+  header. `tools/fake-openai/scenarios/index.mjs` explains why in its own
+  header: the API calls that server, the browser does not, so a Playwright spec
+  has no way to set a header on the request that matters. The sentinel is
+  `force-wrong-intervention` in the answer's free text.
+- **The "Continue another 15?" case waits for a real minute.** The countdown is
+  derived from the server's `activeSince`, and `page.clock` cannot move a clock
+  that lives in Postgres — so the case starts a **one-minute** session and waits
+  for `time-is-up` with a 90-second budget rather than faking time.
+
+The rules it asserts are written down in
+[`docs/specs/work-domain.md`](specs/work-domain.md).
+
+```bash
+cd tests/e2e && npx playwright test specs/work.spec.ts
+```
+
 `specs/media-attachments.spec.ts` (epic E03) is the fifth, and it is the one
 that needs the **most infrastructure**: a phone upload becoming coach advice
 crosses MinIO, ffmpeg, sharp, the processing pipeline, the attachment API, the

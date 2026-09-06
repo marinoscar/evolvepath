@@ -380,3 +380,148 @@ describe('media advice (epic E03, issue #96)', () => {
     assert.doesNotMatch(text, /kcal|calorie|protein_g|carb|macro/i);
   });
 });
+
+// =============================================================================
+// The Work domain (issue #122, epic E07)
+// =============================================================================
+
+describe('the Work domain (epic E07)', () => {
+  /** The friction input, shaped the way `FrictionService` serialises one. */
+  const frictionInput = (over = {}) =>
+    JSON.stringify({
+      commitment: { id: COMMITMENT, title: 'Finish the strategy presentation' },
+      outcome: { title: 'Win the budget', motivation: 'The board decides on it' },
+      answer: 'TOO_BIG',
+      text: null,
+      requiredInterventionType: 'DECOMPOSITION',
+      level: 3,
+      coachingStyle: 'BALANCED',
+      ...over,
+    });
+
+  describe('work_session_plan', () => {
+    const planInput = (over = {}) =>
+      JSON.stringify({
+        today: '2026-09-07',
+        timezone: 'UTC',
+        outcome: { title: 'Finish the strategy presentation' },
+        availableMinutesPerDay: 45,
+        existingSessions: [],
+        ...over,
+      });
+
+    it('returns five weekday sessions and three milestones', () => {
+      const plan = matchScenario(request('work_session_plan', planInput()));
+
+      assert.equal(plan.sessions.length, 5);
+      assert.equal(plan.milestones.length, 3);
+      assert.equal(plan.reviewCadence, 'WEEKLY');
+    });
+
+    // A canned set of timestamps would pass on the day it was written and turn
+    // into a 503 the week after — a failure that reads like a broken planner.
+    it('computes the dates from the `today` it was given', () => {
+      const plan = matchScenario(request('work_session_plan', planInput({ today: '2027-03-01' })));
+
+      for (const session of plan.sessions) {
+        assert.ok(session.scheduledStart > '2027-03-01', session.scheduledStart);
+      }
+    });
+
+    it('never schedules on a Saturday or a Sunday', () => {
+      const plan = matchScenario(request('work_session_plan', planInput()));
+
+      for (const session of plan.sessions) {
+        const weekday = new Date(session.scheduledStart).getUTCDay();
+        assert.ok(weekday !== 0 && weekday !== 6, session.scheduledStart);
+      }
+    });
+
+    it('puts one session on each day, so the two-a-day guardrail holds', () => {
+      const plan = matchScenario(request('work_session_plan', planInput()));
+      const days = plan.sessions.map((session) => session.scheduledStart.slice(0, 10));
+
+      assert.equal(new Set(days).size, days.length);
+    });
+
+    it('never exceeds the minutes the user said they have', () => {
+      const plan = matchScenario(
+        request('work_session_plan', planInput({ availableMinutesPerDay: 20 })),
+      );
+
+      for (const session of plan.sessions) {
+        assert.ok(session.durationMinutes <= 20, String(session.durationMinutes));
+      }
+    });
+
+    it('keeps every minimum start strictly shorter than its session', () => {
+      for (const budget of [10, 20, 45, 120]) {
+        const plan = matchScenario(
+          request('work_session_plan', planInput({ availableMinutesPerDay: budget })),
+        );
+
+        for (const session of plan.sessions) {
+          assert.ok(
+            session.minimumStart.minutes < session.durationMinutes,
+            `${session.minimumStart.minutes} < ${session.durationMinutes}`,
+          );
+        }
+      }
+    });
+
+    it('stops at the target date', () => {
+      const plan = matchScenario(
+        request('work_session_plan', planInput({ targetDate: '2026-09-09' })),
+      );
+
+      assert.equal(plan.sessions.length, 2);
+    });
+
+    it('leaves the schema alone when there is no `today` to compute from', () => {
+      assert.equal(matchScenario(request('work_session_plan', 'no dates here')), null);
+    });
+  });
+
+  describe('coach_reply for a friction answer', () => {
+    it('echoes the intervention type the server already decided', () => {
+      const reply = matchScenario(request('coach_reply', frictionInput()));
+
+      assert.equal(reply.intervention_type, 'DECOMPOSITION');
+    });
+
+    it('recommends ten minutes and names the commitment it was given', () => {
+      const reply = matchScenario(request('coach_reply', frictionInput()));
+
+      assert.equal(reply.recommended_action.duration_minutes, 10);
+      assert.equal(reply.recommended_action.commitmentId, COMMITMENT);
+      assert.equal(reply.proposal, null);
+      assert.equal(reply.friction_question, null);
+    });
+
+    // The lever a Playwright spec can actually pull: this server never sees a
+    // header the browser set, so misbehaviour is selected from what the user
+    // typed. See `workFrictionReply`'s own comment.
+    it('claims the wrong type when the user text carries the sentinel', () => {
+      const reply = matchScenario(
+        request(
+          'coach_reply',
+          frictionInput({
+            requiredInterventionType: 'PERFECTIONISM_REFRAME',
+            text: 'force-wrong-intervention',
+          }),
+        ),
+      );
+
+      assert.equal(reply.intervention_type, 'GOAL_CHALLENGE');
+    });
+
+    it('leaves every other coach turn untouched', () => {
+      const reply = matchScenario(
+        request('coach_reply', `${context}\nMy schedule changed. Not Wednesday anymore.`),
+      );
+
+      assert.equal(reply.intervention_type, 'PLAN_CHALLENGE');
+      assert.equal(reply.proposal.planId, PLAN);
+    });
+  });
+});
