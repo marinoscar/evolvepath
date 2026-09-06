@@ -226,6 +226,47 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     // nobody outside the admin console can tell. Not silenceable.
     mandatory: true,
   },
+  {
+    key: 'account.data_reset',
+    label: 'Your data was reset',
+    description:
+      'Sent when everything you have built in this application is erased from your account. Your account itself is kept.',
+    // ---------------------------------------------------------------------
+    // EMAIL ONLY, and not because the other channels have not shipped
+    // ---------------------------------------------------------------------
+    //
+    // `browser` and `push` both exist, and `security.role_changed` above uses
+    // browser. They are still wrong here, for a reason specific to WHEN this
+    // event fires: a browser notification renders in the SAME TAB that just
+    // watched the confirmation screen report success. Its reader has no
+    // information they do not already have, one second old.
+    //
+    // Email is the only channel that reaches this person somewhere OTHER than
+    // where the action happened — which is exactly where a "did I really mean
+    // that, and did it actually happen" record belongs, and the only place it
+    // can reach an account holder who was NOT the person at the keyboard.
+    channels: ['email'],
+    defaultEnabled: true,
+    // ---------------------------------------------------------------------
+    // `mandatory: true`, for two independent reasons
+    // ---------------------------------------------------------------------
+    //
+    // 1. Irreversible destruction of everything a person has built is a fact
+    //    they must not be able to silence — the same class of "the user must
+    //    always be told" event `security.role_changed` above carries the flag
+    //    for, applied to data loss instead of a privilege change.
+    //
+    // 2. It sidesteps an ordering hazard unique to this one event.
+    //    `AccountResetService.reset` deletes `user_settings` — which is where
+    //    a non-mandatory event's stored channel preference lives — MOMENTS
+    //    before this notification dispatches. A resolver reading stored
+    //    preferences here would be reading a row the very call that triggers
+    //    it just deleted, and would fall back to the registry default anyway.
+    //    `mandatory` removes the question: resolution ignores stored
+    //    preferences, so there is no preference row to race against its own
+    //    deletion.
+    mandatory: true,
+  },
 
   // ---------------------------------------------------------------------------
   // The coaching categories N1-N9 (issue #54, epic E12)

@@ -90,6 +90,7 @@ export const EVENT_EMAIL_TEMPLATES: Partial<Record<string, EmailTemplateName>> =
     'user.welcome': 'user-welcome',
     'allowlist.invitation': 'allowlist-invitation',
     'security.role_changed': 'role-changed',
+    'account.data_reset': 'account-data-reset',
 
     // The one coaching category worth an email — see the template's header for
     // why the other eight are browser and push only.

@@ -60,6 +60,15 @@ const SAMPLE_DATA: { [K in EmailTemplateName]: EmailTemplateDataMap[K] } = {
     changedAt: new Date('2026-01-01T00:00:00.000Z'),
     appUrl: 'https://app.example.com',
   },
+  // E13 (epic #220). The hostile fragment goes in `recipientEmail`, which this
+  // template renders into both the HTML table and the text part.
+  'account-data-reset': {
+    recipientEmail: '<script>alert(document.cookie)</script>@example.com',
+    scope: 'data_and_key',
+    aiKeyRemoved: true,
+    resetAt: new Date('2026-01-01T00:00:00.000Z'),
+    appUrl: 'https://app.example.com',
+  },
   // E12 (#54). `weekStart` is rendered into both parts, so the hostile fragment
   // goes there rather than in the URL, which the layout puts through `safeUrl`.
   'weekly-review-ready': {

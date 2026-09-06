@@ -4,6 +4,10 @@ import {
   allowlistInvitationEmail,
 } from './allowlist-invitation.email';
 import { type RoleChangedEmailData, roleChangedEmail } from './role-changed.email';
+import {
+  type AccountDataResetEmailData,
+  accountDataResetEmail,
+} from './account-data-reset.email';
 import { type TestEmailData, testEmail } from './test-email.email';
 import { type UserWelcomeEmailData, userWelcomeEmail } from './user-welcome.email';
 import {
@@ -70,6 +74,7 @@ export interface EmailTemplateDataMap {
   'user-welcome': UserWelcomeEmailData;
   'allowlist-invitation': AllowlistInvitationEmailData;
   'role-changed': RoleChangedEmailData;
+  'account-data-reset': AccountDataResetEmailData;
   'weekly-review-ready': WeeklyReviewReadyEmailData;
 }
 
@@ -102,6 +107,7 @@ export const EMAIL_TEMPLATES: {
   'user-welcome': userWelcomeEmail,
   'allowlist-invitation': allowlistInvitationEmail,
   'role-changed': roleChangedEmail,
+  'account-data-reset': accountDataResetEmail,
   'weekly-review-ready': weeklyReviewReadyEmail,
 };
 
@@ -206,6 +212,7 @@ export { testEmail } from './test-email.email';
 export { userWelcomeEmail } from './user-welcome.email';
 export { allowlistInvitationEmail } from './allowlist-invitation.email';
 export { roleChangedEmail } from './role-changed.email';
+export { accountDataResetEmail } from './account-data-reset.email';
 export { weeklyReviewReadyEmail } from './weekly-review-ready.email';
 
 export type { PlainTextOptions, RenderLayoutOptions } from './layout';
@@ -220,4 +227,5 @@ export type { TestEmailData } from './test-email.email';
 export type { UserWelcomeEmailData } from './user-welcome.email';
 export type { AllowlistInvitationEmailData } from './allowlist-invitation.email';
 export type { RoleChangedEmailData } from './role-changed.email';
+export type { AccountDataResetEmailData } from './account-data-reset.email';
 export type { WeeklyReviewReadyEmailData } from './weekly-review-ready.email';
