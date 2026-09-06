@@ -87,11 +87,16 @@ export class DomainWindowLoader {
           now,
           timeZone,
           firstActivityAt: firstActivity[domain as Domain] ?? null,
+          // NO UPPER BOUND, deliberately. `isDecided` is the authority on
+          // what counts, and it already excludes a still-open row whose time
+          // has not come. Filtering on `scheduledStart < now` here as well
+          // dropped something COMPLETED EARLY — which is exactly what the
+          // comeback restart is (scheduled an hour out, done immediately) and
+          // what any user who finishes this evening's run at lunchtime
+          // produces. A completion the engine cannot see is a completion the
+          // user did and the product denies.
           commitments: history.filter(
-            (row) =>
-              row.domain === domain &&
-              row.scheduledStart >= windowStart &&
-              row.scheduledStart < now,
+            (row) => row.domain === domain && row.scheduledStart >= windowStart,
           ),
         } satisfies DomainWindow,
       ]),

@@ -104,7 +104,7 @@ export default function ComebackDonePage() {
 
   return (
     <FullScreen>
-      <Container maxWidth="sm" sx={{ py: 6 }}>
+      <Container maxWidth="sm" sx={{ py: 6 }} data-testid="comeback-done">
         <Typography variant="h4" component="h1" tabIndex={-1} ref={headingRef} gutterBottom>
           {COMEBACK_COPY.done.title}
         </Typography>
@@ -118,7 +118,7 @@ export default function ComebackDonePage() {
           </Alert>
         )}
 
-        <Card variant="outlined" sx={{ mb: 3 }}>
+        <Card variant="outlined" sx={{ mb: 3 }} data-testid="comeback-next-commitment">
           <CardContent>
             <Typography variant="overline" color="text.secondary" component="h2">
               {COMEBACK_COPY.done.nextUp}
@@ -150,6 +150,8 @@ export default function ComebackDonePage() {
           {result?.planReviewSuggested && (
             <Button
               size="large"
+              variant="outlined"
+              color="inherit"
               sx={{ minHeight: 48 }}
               onClick={() =>
                 navigate('/coach', { state: { prompt: COMEBACK_COPY.fellOffPrompt } })

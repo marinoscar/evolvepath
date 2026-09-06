@@ -1352,6 +1352,28 @@ which runs **the same `runOnce` the cron calls**, not a stand-in. The optional
 happens "at the scheduled start" without sleeping. It returns
 `{ scanned, sent, suppressed, skipped }`.
 
+### E11's two specs
+
+```bash
+cd tests/e2e && npx playwright test progress.spec.ts comeback.spec.ts
+```
+
+Fourteen cases on both the `chromium` and `mobile-chromium` projects.
+`progress.spec.ts` seeds a history through the API and proves the momentum
+states the engine computed are the states the user reads — asserting each one
+twice, once on the screen and once against `GET /api/progress`, because a screen
+that disagrees with the engine is the failure mode neither side can catch alone.
+It also sweeps `body.innerText` on `/progress`, `/progress/timeline` and `/` for
+`N/100`, a percentage and the word "score" (PRD P13, §54).
+
+`comeback.spec.ts` proves PRD §109's acceptance list in one case: after the
+sweep no open commitment is left in the past, the evidence count is **identical**
+to what it was before (the assertion that would catch a sweep that "tidied" a
+history), and Today shows one restart offer and no list of what was missed. The
+remaining cases walk the three screens to "Back on Path.", check that momentum
+then reads `RECOVERING` on both Progress and Today, and run the whole loop with
+the provider pointed at an unreachable port.
+
 ### Driving the comeback loop locally (epic E11)
 
 The inactivity sweep runs daily at 04:00 and its trigger is three days of

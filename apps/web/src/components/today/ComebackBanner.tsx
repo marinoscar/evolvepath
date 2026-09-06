@@ -28,7 +28,7 @@ export default function ComebackBanner({ comeback, onDismiss }: Props) {
       severity="info"
       icon={<ReplayIcon aria-hidden />}
       role="status"
-      data-testid="comeback-banner"
+      data-testid="today-comeback-banner"
       sx={{ mb: 2 }}
     >
       <AlertTitle>{COMEBACK_COPY.banner.title}</AlertTitle>

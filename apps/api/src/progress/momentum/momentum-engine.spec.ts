@@ -296,6 +296,24 @@ describe('computeMomentum (#98)', () => {
       );
     });
 
+    it('counts something completed before its scheduled time', () => {
+      // The comeback restart is exactly this: scheduled an hour out, done
+      // immediately. So is any user who finishes this evening's run at lunch.
+      const result = computeMomentum(
+        window({
+          days: [
+            { offset: 1, status: 'COMPLETED' },
+            { offset: 3, status: 'COMPLETED' },
+            { offset: 5, status: 'MISSED' },
+            { offset: -1, status: 'COMPLETED' },
+          ],
+        }),
+      );
+
+      expect(result.signals.planned).toBe(4);
+      expect(result.signals.completed).toBe(3);
+    });
+
     it('does not count a future PLANNED row against the user', () => {
       const result = computeMomentum(
         window({

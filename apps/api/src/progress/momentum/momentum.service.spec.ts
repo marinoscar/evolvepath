@@ -112,6 +112,23 @@ describe('MomentumService (#98)', () => {
       expect(loaded.windows.WORK.commitments.map((row) => row.id)).toEqual(['work']);
       expect(loaded.history).toHaveLength(3);
     });
+
+    it('keeps a row scheduled ahead but already finished', async () => {
+      // The window has NO upper bound on purpose: `isDecided` excludes a still
+      // open future row, and cutting at `now` here dropped the comeback restart
+      // — scheduled an hour out, completed immediately.
+      prisma.commitment.findMany.mockResolvedValue([
+        commitmentRow({
+          id: 'done-early',
+          scheduledStart: new Date(NOW.getTime() + 3_600_000),
+          completedAt: NOW,
+        }),
+      ]);
+
+      const loaded = await service.load('u1', NOW);
+
+      expect(loaded.windows.HEALTH.commitments.map((row) => row.id)).toEqual(['done-early']);
+    });
   });
 
   describe('summary', () => {

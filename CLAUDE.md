@@ -436,6 +436,39 @@ Three rules that are easy to break and expensive to rediscover:
   `acknowledgeWarnings: true`, which means the user has read the warning — not
   that the software agreed with them.
 
+## Momentum, progress and recovery
+
+Per-domain momentum states, the week-counted consistency run, the evidence
+timeline, milestones and the comeback loop have their own written contract in
+[`docs/specs/momentum-and-recovery.md`](docs/specs/momentum-and-recovery.md):
+every constant and its value, the state precedence table, the decided/success
+definitions, the evidence-bullet templates, the sweep algorithm, the restart
+picker's ordering, the timeline mapping table, the milestone rules, the
+`simulate-idle` decision, and the rejected alternatives.
+
+Read it before changing anything under `apps/api/src/progress/`,
+`apps/web/src/components/progress/` or the comeback screens.
+`apps/api/test/docs/momentum-doc.spec.ts` fails if a constant, a state, a prompt
+version or one of the three deterministic sentences changes without the document
+changing with it — including when only the VALUE moves, which is the realistic
+mistake.
+
+Three rules that are easy to break and expensive to rediscover:
+
+- **The engine's ratios never leave the server.** PRD P13, §54. `computeMomentum`
+  compares ratios to detect a trend and `progress.schema.ts` serialises counts
+  only; a ratio on the wire is one pull request away from a percentage badge.
+  The one `ratio` in any payload is `independence.ratio`, which measures the
+  product, not the person.
+- **The sweep changes commitment STATUS and nothing else.** `evidence_items` is
+  never written, updated or deleted by it (PRD §109: prior misses remain
+  evidence), and a `STARTED` row is never closed — the matrix has no
+  `STARTED → MISSED`, and only the user knows whether it was partial or skipped.
+- **The momentum window has no upper bound.** `isDecided` already excludes a
+  still-open future row, so cutting at `now` in the loader as well drops
+  anything completed EARLY — every comeback restart, and every user who
+  finishes tonight's run at lunchtime.
+
 ## The Family domain
 
 Family members, rituals, recurrence materialization, the behaviour lint and the

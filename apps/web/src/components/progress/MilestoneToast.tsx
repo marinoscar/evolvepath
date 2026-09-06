@@ -28,8 +28,19 @@ export default function MilestoneToast({ milestone, onClose }: Props) {
       onClose={onClose}
       anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       role="status"
+      // Above the bottom bar on a phone, exactly as `QuickAddFab` is: at the
+      // default 24px the celebration sits UNDER the navigation, where it is
+      // both unreadable and unclosable. Same numbers as that component; this
+      // is a local accommodation of the bar's height, not one of the five
+      // coupled breakpoint gates.
+      sx={{ bottom: { xs: 80, sm: 24 } }}
     >
-      <Alert severity="success" onClose={onClose} variant="filled">
+      <Alert
+        severity="success"
+        onClose={onClose}
+        variant="filled"
+        data-testid="milestone-toast"
+      >
         {milestone ? `${milestone.title} — ${milestone.body}` : ''}
       </Alert>
     </Snackbar>

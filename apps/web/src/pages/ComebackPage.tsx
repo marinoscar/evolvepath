@@ -98,7 +98,7 @@ export default function ComebackPage() {
             user has just been moved to, once, rather than every card. */}
         <Box aria-live="polite">
           {step === 1 && (
-            <>
+            <Box data-testid="comeback-step-1">
               <Typography variant="h5" component="h1" tabIndex={-1} ref={headingRef} gutterBottom>
                 {COMEBACK_COPY.step1.title}
               </Typography>
@@ -120,8 +120,13 @@ export default function ComebackPage() {
                 >
                   {COMEBACK_COPY.step1.continueLabel}
                 </Button>
+                {/* `color="inherit"`: MUI's primary blue on the default
+                    background is 4.22:1, under WCAG AA. A secondary action
+                    reading in body ink is both accessible and more honest
+                    about its weight. */}
                 <Button
                   size="large"
+                  color="inherit"
                   onClick={async () => {
                     await dismiss();
                     navigate('/');
@@ -131,11 +136,11 @@ export default function ComebackPage() {
                   {COMEBACK_COPY.step1.dismissLabel}
                 </Button>
               </Stack>
-            </>
+            </Box>
           )}
 
           {step === 2 && (
-            <>
+            <Box data-testid="comeback-step-2">
               <Typography variant="h5" component="h1" tabIndex={-1} ref={headingRef} gutterBottom>
                 {COMEBACK_COPY.step2.title}
               </Typography>
@@ -170,6 +175,7 @@ export default function ComebackPage() {
                         setStep(3);
                       }}
                       sx={{ minHeight: 48 }}
+                      data-testid={`comeback-choose-${alternative.domain}`}
                       aria-label={`${COMEBACK_COPY.step2.chooseLabel} ${
                         DOMAIN_LABELS[alternative.domain]
                       }`}
@@ -194,15 +200,16 @@ export default function ComebackPage() {
                     setStep(3);
                   }}
                   sx={{ minHeight: 48 }}
+                  data-testid="comeback-take-recommendation"
                 >
                   {COMEBACK_COPY.step2.takeRecommendation}
                 </Button>
               </Stack>
-            </>
+            </Box>
           )}
 
           {step === 3 && restart && (
-            <>
+            <Box data-testid="comeback-step-3">
               <Typography variant="h5" component="h1" tabIndex={-1} ref={headingRef} gutterBottom>
                 {restart.title}
               </Typography>
@@ -222,6 +229,7 @@ export default function ComebackPage() {
                   variant="contained"
                   size="large"
                   sx={{ minHeight: 48 }}
+                  data-testid="comeback-start"
                   onClick={() =>
                     navigate(`/start/${restart.id}`, {
                       // The Start flow is the ordinary execution screen; the
@@ -233,11 +241,16 @@ export default function ComebackPage() {
                 >
                   {COMEBACK_COPY.step3.startLabel}
                 </Button>
-                <Button size="large" sx={{ minHeight: 48 }} onClick={() => setStep(2)}>
+                <Button
+                  size="large"
+                  color="inherit"
+                  sx={{ minHeight: 48 }}
+                  onClick={() => setStep(2)}
+                >
                   {COMEBACK_COPY.step3.changeLabel}
                 </Button>
               </Stack>
-            </>
+            </Box>
           )}
         </Box>
       </Container>

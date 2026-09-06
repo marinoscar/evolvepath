@@ -31,7 +31,7 @@ export default function ConsistencyChart({ run }: Props) {
   const grace = graceCaption(run);
 
   return (
-    <Card>
+    <Card data-testid="progress-consistency">
       <CardContent>
         <Stack spacing={0.5} sx={{ mb: 2 }}>
           <Typography variant="h6" component="p">
