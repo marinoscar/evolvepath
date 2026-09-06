@@ -33,20 +33,36 @@ import type { AiAttachment } from '../gateway/ai-gateway.types';
 // passed would make a forged `_processing` blob a read primitive.
 //
 // -----------------------------------------------------------------------------
-// INLINE BASE64, NOT SIGNED URLS
+// INLINE BASE64 BY DEFAULT; SIGNED URLS BY DELIBERATE CHOICE
 // -----------------------------------------------------------------------------
 //
 // A signed URL means handing OpenAI a credential that reaches this deployment's
-// storage, with a lifetime we would have to reason about and a fetch we cannot
-// observe. Inlining keeps the whole exchange inside one request the user's own
-// key pays for. `mode` is declared so E03 can add the alternative deliberately;
-// selecting it today throws AT BOOT rather than at the first attachment, so a
-// misconfiguration is a failed deploy and not a broken coaching reply.
+// storage, with a lifetime to reason about and a fetch we cannot observe.
+// Inlining keeps the whole exchange inside one request the user's own key pays
+// for, and stays the DEFAULT for that reason. `AI_ATTACHMENT_MODE=signed-url`
+// (issue #87) is the alternative PRD §118 asks for — a much smaller request
+// body — and it is opt-in per installation. An unknown value still throws AT
+// BOOT, so a typo is a failed deploy rather than a broken coaching reply.
+//
+// -----------------------------------------------------------------------------
+// THE NORMALIZED VARIANT IS PREFERRED OVER THE ORIGINAL
+// -----------------------------------------------------------------------------
+//
+// `image-normalize` (#87) writes an EXIF-stripped, 1024 px JPEG beside every
+// uploaded photo. Sending the ORIGINAL would ship the user's GPS coordinates to
+// a third party (PRD §85, §86) and spend roughly fifty times the tokens on an
+// image the model reads at 1024 px anyway. The original is used only when no
+// variant exists, and then only if it fits under `AI_MAX_IMAGE_BYTES`.
 // =============================================================================
 
-/** What `_processing['video-frames']` looks like once E03-03 (#79) has run. */
+/** What `_processing['video-frames']` looks like once #79 has run. */
 interface VideoFramesMetadata {
   frames?: Array<{ objectId?: unknown; timestampMs?: unknown }>;
+}
+
+/** What `_processing['image-normalize']` looks like once #87 has run. */
+interface ImageNormalizeMetadata {
+  aiVariantObjectId?: unknown;
 }
 
 @Injectable()
@@ -55,6 +71,8 @@ export class AiAttachmentResolverService {
 
   private readonly maxImageBytes: number;
   private readonly maxImagesPerCall: number;
+  private readonly mode: 'inline' | 'signed-url';
+  private readonly signedUrlTtlSeconds: number;
 
   constructor(
     private readonly objects: ObjectsService,
@@ -65,12 +83,32 @@ export class AiAttachmentResolverService {
     this.maxImageBytes = config.get<number>('ai.attachments.maxImageBytes') ?? 20971520;
     this.maxImagesPerCall = config.get<number>('ai.attachments.maxImagesPerCall') ?? 10;
 
+    this.signedUrlTtlSeconds =
+      config.get<number>('ai.attachments.signedUrlTtlSeconds') ?? 300;
+
     const mode = config.get<string>('ai.attachments.mode') ?? 'inline';
-    if (mode !== 'inline') {
+    if (mode !== 'inline' && mode !== 'signed-url') {
       // At boot, deliberately. See the header.
       throw new Error(
-        `Unsupported AI attachment mode "${mode}". Only "inline" is implemented.`,
+        `Unsupported AI attachment mode "${mode}". Use "inline" or "signed-url".`,
       );
+    }
+    this.mode = mode;
+
+    if (this.mode === 'signed-url') {
+      const endpoint = config.get<string>('storage.s3.publicEndpoint');
+      if (endpoint?.startsWith('http://')) {
+        // A WARNING, not a refusal: a public MinIO behind a load balancer that
+        // terminates TLS is a legitimate deployment, and this process cannot
+        // tell it from `http://minio:9000`. What it can do is say the thing an
+        // operator would otherwise learn from an opaque provider error.
+        this.logger.warn(
+          `AI_ATTACHMENT_MODE=signed-url with a plain-http endpoint (${endpoint}). ` +
+            'The provider fetches these URLs itself and cannot reach a private ' +
+            'address; set S3_PUBLIC_ENDPOINT to a publicly resolvable host, or ' +
+            'use inline mode.',
+        );
+      }
     }
   }
 
@@ -93,12 +131,13 @@ export class AiAttachmentResolverService {
       const object = await this.loadOwnedObject(userId, attachment.storageObjectId);
 
       if (object.mimeType.startsWith('image/')) {
+        const source = await this.selectImageSource(
+          attachment.storageObjectId,
+          object.mimeType,
+          object.metadata,
+        );
         parts.push(
-          await this.toImagePart(
-            attachment.storageObjectId,
-            object.mimeType,
-            attachment.detail,
-          ),
+          await this.toImagePart(source.id, source.mimeType, attachment.detail),
         );
         continue;
       }
@@ -186,11 +225,21 @@ export class AiAttachmentResolverService {
   ): Promise<AiContentPart> {
     const row = await this.prisma.storageObject.findUnique({
       where: { id },
-      select: { storageKey: true },
+      select: { storageKey: true, size: true },
     });
 
     if (!row) {
       throw new AiProviderError('attachment', `Attachment ${id} was not found.`);
+    }
+
+    if (this.mode === 'signed-url') {
+      const url = await this.storage.getSignedDownloadUrl(row.storageKey, {
+        expiresIn: this.signedUrlTtlSeconds,
+      });
+
+      // Deliberately no download: the whole point of this mode is that the
+      // bytes never pass through this process.
+      return { type: 'image_url', url, detail };
     }
 
     const buffer = await this.readAll(id, row.storageKey);
@@ -208,6 +257,59 @@ export class AiAttachmentResolverService {
       base64: buffer.toString('base64'),
       detail,
     };
+  }
+
+  /**
+   * Pick which object's bytes actually go to the model: the normalized variant
+   * when one is ready, the original otherwise.
+   *
+   * The size check on the fallback is the reason this returns an error rather
+   * than silently proceeding. Without a variant, a 25 MiB phone photo is an
+   * attachment the provider will refuse anyway — and it would refuse it after
+   * we had spent the upload bandwidth, with a message about base64 length that
+   * nobody could act on.
+   */
+  private async selectImageSource(
+    id: string,
+    mimeType: string,
+    metadata: Record<string, unknown> | null,
+  ): Promise<{ id: string; mimeType: string }> {
+    const processing = (metadata?._processing ?? null) as Record<
+      string,
+      unknown
+    > | null;
+    const normalized = (processing?.['image-normalize'] ??
+      null) as ImageNormalizeMetadata | null;
+    const variantId = normalized?.aiVariantObjectId;
+
+    if (typeof variantId === 'string') {
+      const variant = await this.prisma.storageObject.findUnique({
+        where: { id: variantId },
+        select: { status: true, mimeType: true },
+      });
+
+      if (variant?.status === 'ready') {
+        return { id: variantId, mimeType: variant.mimeType };
+      }
+    }
+
+    const original = await this.prisma.storageObject.findUnique({
+      where: { id },
+      select: { size: true },
+    });
+
+    if (
+      original &&
+      this.mode === 'inline' &&
+      original.size > BigInt(this.maxImageBytes)
+    ) {
+      throw new AiProviderError(
+        'attachment',
+        `Image ${id} is too large and has no normalized variant.`,
+      );
+    }
+
+    return { id, mimeType };
   }
 
   /**
@@ -264,6 +366,9 @@ export class AiAttachmentResolverService {
         );
       }
 
+      // No variant lookup for a frame: the sampler already produced it at
+      // 1024 px from a decoded video, so there is no EXIF and nothing to
+      // shrink.
       parts.push(
         await this.toImagePart(frame.objectId, frameObject.mimeType, detail),
       );

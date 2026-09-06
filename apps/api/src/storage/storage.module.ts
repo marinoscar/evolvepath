@@ -5,6 +5,8 @@ import { CommonModule } from '../common/common.module';
 import { ObjectsController } from './objects/objects.controller';
 import { ObjectsService } from './objects/objects.service';
 import { StorageCleanupTask } from './tasks/storage-cleanup.task';
+import { StorageQuotaService } from './objects/storage-quota.service';
+import { StorageQuotaController } from './objects/storage-quota.controller';
 
 @Module({
   imports: [
@@ -12,8 +14,8 @@ import { StorageCleanupTask } from './tasks/storage-cleanup.task';
     ObjectProcessingModule,
     CommonModule,
   ],
-  controllers: [ObjectsController],
-  providers: [ObjectsService, StorageCleanupTask],
-  exports: [ObjectsService],
+  controllers: [ObjectsController, StorageQuotaController],
+  providers: [ObjectsService, StorageQuotaService, StorageCleanupTask],
+  exports: [ObjectsService, StorageQuotaService],
 })
 export class StorageModule {}

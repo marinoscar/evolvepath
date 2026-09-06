@@ -224,11 +224,151 @@ describe('AiAttachmentResolverService', () => {
     });
   });
 
-  it('refuses to construct with an unimplemented attachment mode', async () => {
+  it('refuses to construct with an unknown attachment mode', async () => {
     // At BOOT, so a misconfiguration is a failed deploy rather than a broken
-    // coaching reply.
-    expect(() => build({ 'ai.attachments.mode': 'signed-url' })).toThrow(
-      /Only "inline" is implemented/,
+    // coaching reply. `signed-url` is implemented as of issue #87; a typo is
+    // still fatal.
+    expect(() => build({ 'ai.attachments.mode': 'signed-urls' })).toThrow(
+      /Use "inline" or "signed-url"/,
     );
+    expect(() => build({ 'ai.attachments.mode': 'signed-url' })).not.toThrow();
+  });
+  // ---------------------------------------------------------------------------
+  // Issue #87 — the normalized variant, and signed-url mode
+  // ---------------------------------------------------------------------------
+  describe('variant preference', () => {
+    const normalized = (variantId: string) => ({
+      id: 'obj-1',
+      mimeType: 'image/jpeg',
+      status: 'ready',
+      metadata: {
+        _processing: { 'image-normalize': { aiVariantObjectId: variantId } },
+      },
+    });
+
+    it('sends the normalized variant rather than the original', async () => {
+      // The original carries the user's GPS coordinates and roughly fifty
+      // times the tokens, for an image the model reads at 1024 px anyway.
+      objects.getOwnedById.mockResolvedValue(normalized('variant-1'));
+      prisma.storageObject.findUnique.mockImplementation(
+        async ({ where }: any) =>
+          where.id === 'variant-1'
+            ? { status: 'ready', mimeType: 'image/jpeg', storageKey: 'derived/obj-1/ai.jpg', size: BigInt(100) }
+            : { status: 'ready', mimeType: 'image/jpeg', storageKey: 'uploads/1/photo.jpg', size: BigInt(999999) },
+      );
+
+      await build().resolve(USER_ID, [{ storageObjectId: 'obj-1' }]);
+
+      expect(storage.download).toHaveBeenCalledWith('derived/obj-1/ai.jpg');
+    });
+
+    it('falls back to the original when the variant is not ready yet', async () => {
+      objects.getOwnedById.mockResolvedValue(normalized('variant-1'));
+      prisma.storageObject.findUnique.mockImplementation(
+        async ({ where }: any) =>
+          where.id === 'variant-1'
+            ? { status: 'processing', mimeType: 'image/jpeg' }
+            : { storageKey: 'uploads/1/photo.jpg', size: BigInt(10) },
+      );
+
+      await build().resolve(USER_ID, [{ storageObjectId: 'obj-1' }]);
+
+      expect(storage.download).toHaveBeenCalledWith('uploads/1/photo.jpg');
+    });
+
+    it('refuses an oversize original that has no variant', async () => {
+      // Without this the provider refuses it anyway — after the upload
+      // bandwidth is spent, with a message about base64 length nobody can act
+      // on.
+      objects.getOwnedById.mockResolvedValue(imageObject('obj-1'));
+      prisma.storageObject.findUnique.mockResolvedValue({
+        storageKey: 'uploads/1/photo.jpg',
+        size: BigInt(999999),
+      });
+
+      await expect(
+        build().resolve(USER_ID, [{ storageObjectId: 'obj-1' }]),
+      ).rejects.toMatchObject({
+        code: 'attachment',
+        message: expect.stringContaining('no normalized variant'),
+      });
+      expect(storage.download).not.toHaveBeenCalled();
+    });
+
+    it('accepts an original under the cap with no variant', async () => {
+      objects.getOwnedById.mockResolvedValue(imageObject('obj-1'));
+      prisma.storageObject.findUnique.mockResolvedValue({
+        storageKey: 'uploads/1/photo.jpg',
+        size: BigInt(10),
+      });
+
+      const parts = await build().resolve(USER_ID, [
+        { storageObjectId: 'obj-1' },
+      ]);
+
+      expect(parts).toHaveLength(1);
+    });
+  });
+
+  describe('signed-url mode', () => {
+    const signedMode = { 'ai.attachments.mode': 'signed-url' };
+
+    it('emits an image_url part and never reads the bytes', async () => {
+      // The whole point of this mode is that the bytes do not pass through
+      // this process (PRD §118).
+      objects.getOwnedById.mockResolvedValue(imageObject('obj-1'));
+      prisma.storageObject.findUnique.mockResolvedValue({
+        storageKey: 'uploads/1/photo.jpg',
+        size: BigInt(10),
+      });
+      storage.getSignedDownloadUrl.mockResolvedValue(
+        'https://minio.example/uploads/1/photo.jpg?X-Amz-Signature=abc',
+      );
+
+      const parts = await build(signedMode).resolve(USER_ID, [
+        { storageObjectId: 'obj-1', detail: 'low' },
+      ]);
+
+      expect(parts).toEqual([
+        {
+          type: 'image_url',
+          url: 'https://minio.example/uploads/1/photo.jpg?X-Amz-Signature=abc',
+          detail: 'low',
+        },
+      ]);
+      expect(storage.download).not.toHaveBeenCalled();
+    });
+
+    it('signs with the configured short TTL', async () => {
+      objects.getOwnedById.mockResolvedValue(imageObject('obj-1'));
+      prisma.storageObject.findUnique.mockResolvedValue({
+        storageKey: 'uploads/1/photo.jpg',
+        size: BigInt(10),
+      });
+
+      await build({
+        ...signedMode,
+        'ai.attachments.signedUrlTtlSeconds': 120,
+      }).resolve(USER_ID, [{ storageObjectId: 'obj-1' }]);
+
+      expect(storage.getSignedDownloadUrl).toHaveBeenCalledWith(
+        'uploads/1/photo.jpg',
+        { expiresIn: 120 },
+      );
+    });
+
+    it('does not apply the inline size cap, which is about a request body', async () => {
+      // A 25 MiB original is fine when the provider fetches it itself; the cap
+      // exists because base64 in a request body is the expensive part.
+      objects.getOwnedById.mockResolvedValue(imageObject('obj-1'));
+      prisma.storageObject.findUnique.mockResolvedValue({
+        storageKey: 'uploads/1/photo.jpg',
+        size: BigInt(999999),
+      });
+
+      await expect(
+        build(signedMode).resolve(USER_ID, [{ storageObjectId: 'obj-1' }]),
+      ).resolves.toHaveLength(1);
+    });
   });
 });

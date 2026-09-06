@@ -194,6 +194,17 @@ export class OpenAiProvider implements AiProvider {
       return { type: 'input_text', text: part.text };
     }
 
+    if (part.type === 'image_url') {
+      // Passed through untouched. `image_url` takes a data URL or an http(s)
+      // one, so signed-url mode needs no second wire shape — the URL is simply
+      // one the provider fetches rather than one it decodes.
+      return {
+        type: 'input_image',
+        image_url: part.url,
+        detail: part.detail ?? 'auto',
+      };
+    }
+
     return {
       type: 'input_image',
       // Inline, in the request body. See the AiContentPart docs for why bytes

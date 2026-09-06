@@ -5,6 +5,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  PayloadTooLargeException,
 } from '@nestjs/common';
 import { Readable } from 'node:stream';
 
@@ -14,6 +15,7 @@ import { STORAGE_PROVIDER } from '../providers/storage-provider.interface';
 import { createMockPrismaService, MockPrismaService } from '../../../test/mocks/prisma.mock';
 import { createMockStorageProvider } from '../../../test/mocks/storage-provider.mock';
 import { OBJECT_UPLOADED_EVENT } from '../processing/events/object-uploaded.event';
+import { StorageQuotaService } from './storage-quota.service';
 import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
 
 describe('ObjectsService', () => {
@@ -22,6 +24,7 @@ describe('ObjectsService', () => {
   let mockStorageProvider: ReturnType<typeof createMockStorageProvider>;
   let mockConfig: jest.Mocked<ConfigService>;
   let configValues: Record<string, unknown>;
+  let mockQuota: { assertCanStore: jest.Mock; usedBytes: jest.Mock };
   let mockEventEmitter: jest.Mocked<EventEmitter2>;
 
   const testUserId = 'user-123';
@@ -95,6 +98,12 @@ describe('ObjectsService', () => {
     mockEventEmitter = {
       emit: jest.fn(),
     } as any;
+    // Quota is exercised in storage-quota.service.spec.ts; here it is a
+    // collaborator, and the tests that care assert it was CALLED.
+    mockQuota = {
+      assertCanStore: jest.fn().mockResolvedValue(undefined),
+      usedBytes: jest.fn().mockResolvedValue(BigInt(0)),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -103,6 +112,7 @@ describe('ObjectsService', () => {
         { provide: STORAGE_PROVIDER, useValue: mockStorageProvider },
         { provide: ConfigService, useValue: mockConfig },
         { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: StorageQuotaService, useValue: mockQuota },
       ],
     }).compile();
 
@@ -1126,6 +1136,54 @@ describe('ObjectsService', () => {
 
       expect(mockPrisma.storageObject.deleteMany).not.toHaveBeenCalled();
       expect(mockStorageProvider.delete).toHaveBeenCalledTimes(1);
+    });
+  });
+  describe('quota (issue #87)', () => {
+    it('checks the quota before the provider is touched on initUpload', async () => {
+      // A rejected upload must not leave an open multipart session behind.
+      mockQuota.assertCanStore.mockRejectedValue(
+        new PayloadTooLargeException('Storage quota exceeded: 1 of 1 bytes used'),
+      );
+
+      await expect(
+        service.initUpload(
+          { name: 'x.jpg', size: 100, mimeType: 'image/jpeg' },
+          testUserId,
+        ),
+      ).rejects.toBeInstanceOf(PayloadTooLargeException);
+
+      expect(mockQuota.assertCanStore).toHaveBeenCalledWith(testUserId, 100);
+      expect(mockStorageProvider.initMultipartUpload).not.toHaveBeenCalled();
+    });
+
+    it('re-checks the simple path with the counted bytes and deletes the key', async () => {
+      // The length was never declared, so the only honest ordering is: write
+      // the bytes, measure them, then refuse and clean up.
+      mockStorageProvider.upload.mockImplementation(async (_key, stream) => {
+        for await (const chunk of stream as Readable) void chunk;
+        return { key: 'k', bucket: 'b', location: 'l', eTag: 'e' };
+      });
+      mockStorageProvider.delete.mockResolvedValue(undefined);
+      mockQuota.assertCanStore
+        .mockResolvedValueOnce(undefined) // the up-front check, nothing declared
+        .mockRejectedValueOnce(
+          new PayloadTooLargeException('Storage quota exceeded: 0 of 10 bytes used'),
+        );
+
+      await expect(
+        service.simpleUpload(
+          {
+            filename: 'photo.jpg',
+            mimetype: 'image/jpeg',
+            file: Readable.from([Buffer.alloc(50)]),
+          },
+          testUserId,
+        ),
+      ).rejects.toBeInstanceOf(PayloadTooLargeException);
+
+      expect(mockQuota.assertCanStore).toHaveBeenNthCalledWith(2, testUserId, 50);
+      expect(mockStorageProvider.delete).toHaveBeenCalled();
+      expect(mockPrisma.storageObject.create).not.toHaveBeenCalled();
     });
   });
 });

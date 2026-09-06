@@ -243,11 +243,44 @@ make a forged `_processing` blob a read primitive.
   them would tell a caller whether an id they do not own exists, which is the
   enumeration the ownership check exists to prevent.
 
-**Inline, not signed URLs.** A signed URL means handing OpenAI a credential that
-reaches this deployment's storage, with a lifetime to reason about and a fetch we
-cannot observe. `mode` is declared so E03 can add the alternative deliberately;
-selecting it today throws **at boot**, so a misconfiguration is a failed deploy
-rather than a broken coaching reply.
+### Variant preference
+
+For an `image/*` attachment the resolver sends the **normalized variant** —
+`metadata._processing['image-normalize'].aiVariantObjectId`, an EXIF-stripped
+1024 px JPEG written beside the upload by `image-normalize` (issue #87) — and
+falls back to the original only when no variant is `ready`.
+
+That fallback is size-checked. An original over `AI_MAX_IMAGE_BYTES` with no
+variant is an `attachment` error, not an attempt: the provider would refuse it
+anyway, after the upload bandwidth was spent, with a message about base64 length
+nobody can act on.
+
+Sending the original instead would ship the user's GPS coordinates to a third
+party (PRD §85, §86) and spend roughly fifty times the tokens on an image the
+model reads at 1024 px regardless. **Video frames need no variant** — the
+sampler already produced them at 1024 px from a decoded video, so there is no
+EXIF and nothing to shrink.
+
+### Attachment modes
+
+**Inline is the default**, and stays the default. A signed URL means handing
+OpenAI a credential that reaches this deployment's storage, with a lifetime to
+reason about and a fetch we cannot observe; inlining keeps the whole exchange
+inside one request the user's own key pays for.
+
+`AI_ATTACHMENT_MODE=signed-url` is the alternative PRD §118 asks for: the
+resolver emits an `image_url` part carrying a short-lived signed GET
+(`AI_ATTACHMENT_SIGNED_URL_TTL`, 300 s) and **never reads the bytes**, which is
+the whole point. The inline size cap does not apply there — it exists because
+base64 in a request body is the expensive part.
+
+In that mode `S3_PUBLIC_ENDPOINT` must be a host the *provider* can resolve.
+`http://minio:9000` cannot be, and the resolver logs a warning at boot rather
+than refusing: a public MinIO behind a TLS-terminating proxy is a legitimate
+deployment, and this process cannot tell the two apart.
+
+An **unknown** mode still throws at boot, so a typo is a failed deploy rather
+than a broken coaching reply.
 
 ---
 

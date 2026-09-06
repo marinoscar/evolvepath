@@ -492,7 +492,10 @@ export class AiGatewayService {
     return {
       instructions: req.instructions,
       input: req.input,
-      attachments: (req.attachments ?? []).map((a) => a.storageObjectId),
+      // IDs only, and named for what they are (issue #87). The bytes are
+      // already in storage; copying twenty megabytes of image into a telemetry
+      // row would be useless and expensive.
+      attachmentObjectIds: (req.attachments ?? []).map((a) => a.storageObjectId),
       schemaName: req.schemaName,
     };
   }

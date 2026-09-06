@@ -127,6 +127,13 @@ export default () => {
       .map((value) => value.trim())
       .filter(Boolean),
     signedUrlExpiry: parseInt(process.env.SIGNED_URL_EXPIRY || '3600', 10), // 1 hour default
+    // Bytes one user may hold across every object they own, derived children
+    // included — those are their bytes too (issue #87). 0 disables the check
+    // entirely, which is what a single-tenant install wants.
+    userQuotaBytes: parseInt(
+      process.env.STORAGE_USER_QUOTA_BYTES || '2147483648',
+      10,
+    ),
     partSize: parseInt(process.env.STORAGE_PART_SIZE || '10485760', 10), // 10MB default
   },
 
@@ -195,7 +202,26 @@ export default () => {
         process.env.AI_MAX_IMAGES_PER_CALL || '10',
         10,
       ),
-      mode: 'inline' as const,
+      // Largest ORIGINAL the normalizer will decode (issue #87). Distinct from
+      // `maxImageBytes`, which bounds what reaches the model: a 25 MiB phone
+      // photo is normal and normalizes to ~150 KiB, so refusing it up front
+      // would refuse the product's main input.
+      maxSourceImageBytes: parseInt(
+        process.env.AI_MAX_SOURCE_IMAGE_BYTES || '26214400',
+        10,
+      ),
+      // 'inline' (default) puts base64 in the request the user's own key pays
+      // for; 'signed-url' hands the provider a short-lived GET it fetches
+      // itself, which is smaller on the wire (PRD §118) at the cost of a
+      // credential reaching this deployment's storage. Selecting an unknown
+      // value still throws at boot.
+      mode: (process.env.AI_ATTACHMENT_MODE || 'inline') as
+        | 'inline'
+        | 'signed-url',
+      signedUrlTtlSeconds: parseInt(
+        process.env.AI_ATTACHMENT_SIGNED_URL_TTL || '300',
+        10,
+      ),
     },
 
     // Video → frames (issue #79, epic #67).

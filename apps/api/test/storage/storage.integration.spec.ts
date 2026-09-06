@@ -619,4 +619,31 @@ describe('Storage Integration', () => {
         .expect(403);
     });
   });
+  describe('GET /api/storage/quota (issue #87)', () => {
+    it('reports used, quota and remaining as strings', async () => {
+      const user = await createMockTestUser(context);
+      context.prismaMock.storageObject.aggregate.mockResolvedValue({
+        _sum: { size: BigInt(1024) },
+      });
+
+      const response = await request(context.app.getHttpServer())
+        .get('/api/storage/quota')
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      // Strings, not numbers: `size` is a BigInt, and a quota expressed as a
+      // JSON number is fine right up until somebody sets a larger one.
+      expect(response.body.data).toEqual({
+        usedBytes: '1024',
+        quotaBytes: expect.any(String),
+        remainingBytes: expect.any(String),
+      });
+    });
+
+    it('requires authentication', async () => {
+      await request(context.app.getHttpServer())
+        .get('/api/storage/quota')
+        .expect(401);
+    });
+  });
 });

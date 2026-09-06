@@ -677,6 +677,7 @@ above. Don't restate any of that here; extend those three instead.
 - `GET /api/storage/objects/:id/download` - Get signed download URL
 - `DELETE /api/storage/objects/:id` - Delete object
 - `PATCH /api/storage/objects/:id/metadata` - Update metadata
+- `GET /api/storage/quota` - Bytes used, the per-user ceiling and what is left. All three are **strings** (`size` is a BigInt); `quotaBytes`/`remainingBytes` are `null` when quotas are disabled, so a client renders "unlimited" rather than a meaningless bar
 
 ### Personal Access Tokens
 - `POST /api/pat` - Create a new personal access token
@@ -1058,6 +1059,10 @@ Note: `DATABASE_URL` is constructed automatically from these variables at runtim
 - `AI_VIDEO_MAX_FRAMES` - Frames sampled from one video (default: 8, **clamped** to 1-16). A clamp rather than a validation: the failure mode of too many frames is a bill, not a broken deploy.
 - `AI_VIDEO_MAX_SECONDS` - Longest video the sampler will process (default: 120). A **refusal**, not a clamp — silently sampling the first two minutes of a ten-minute video hands the coach frames of something the user did not ask about.
 - `FFMPEG_PATH` / `FFPROBE_PATH` - Binary locations (default: `ffmpeg` / `ffprobe`). Both are installed in the API image's base stage, so production has them.
+- `AI_ATTACHMENT_MODE` - `inline` (default) or `signed-url`. Inline puts base64 in the request the user's own key pays for and keeps the whole exchange observable; signed-url hands the provider a short-lived GET it fetches itself — smaller on the wire (PRD §118), at the cost of a credential reaching this deployment's storage. An unknown value **throws at boot**, so a typo is a failed deploy rather than a broken coaching reply.
+- `AI_ATTACHMENT_SIGNED_URL_TTL` - Lifetime of those URLs, in seconds (default: 300)
+- `AI_MAX_SOURCE_IMAGE_BYTES` - Largest **original** the normalizer will decode (default: 26214400 = 25 MiB). Distinct from `AI_MAX_IMAGE_BYTES`, which bounds what reaches the model: a 25 MiB phone photo is normal and normalizes to ~150 KiB, so refusing it up front would refuse the product's main input.
+- `STORAGE_USER_QUOTA_BYTES` - Bytes one user may hold, derived children included (default: 2147483648 = 2 GiB). `0` disables the check; `GET /api/storage/quota` then reports nulls and never rejects.
 - `TMPDIR` - Where the sampler writes the video it is about to read (default: the platform temp dir). ffmpeg needs a **seekable file**: MP4 `moov` atoms are routinely at the end, so a streamed input makes ffprobe report nothing for exactly the format phones produce.
 
 **Weekly review (epic E10):**
