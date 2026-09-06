@@ -153,7 +153,13 @@ export function pickRestart(candidates: RestartCandidate[]): RestartPlan {
   };
 }
 
-/** The candidate a `POST /comeback/choose` names, or undefined. */
+/**
+ * The restart for a domain the user named, or null when there is none.
+ *
+ * The alternatives are recomputed against the CHOSEN domain rather than reused
+ * from the original offer — after switching to Work, "Health" has to be
+ * offerable again or the user cannot change their mind twice.
+ */
 export function pickForDomain(
   candidates: RestartCandidate[],
   domain: Domain,
@@ -164,5 +170,15 @@ export function pickForDomain(
   if (inDomain.length === 0) return null;
 
   const plan = pickRestart(inDomain);
-  return { ...plan, alternatives: pickRestart(candidates).alternatives };
+  const others = pickRestart(
+    candidates.filter((candidate) => candidate.domain !== domain),
+  );
+
+  return {
+    ...plan,
+    alternatives: others.routineId === null ? [] : [
+      { domain: others.domain, title: others.title, minutes: others.minutes },
+      ...others.alternatives,
+    ].filter((alt) => alt.domain !== domain),
+  };
 }
