@@ -1,10 +1,13 @@
 import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
+import { CommitmentsModule } from '../commitments/commitments.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { UserProfileModule } from '../user-profile/user-profile.module';
 import { WorkSessionPlanningController } from './planning/work-session-planning.controller';
 import { WorkSessionPlanningService } from './planning/work-session-planning.service';
+import { FocusSessionController } from './focus/focus-session.controller';
+import { FocusSessionService } from './focus/focus-session.service';
 
 /**
  * The Work domain: turning an outcome into sessions somebody actually starts
@@ -17,9 +20,13 @@ import { WorkSessionPlanningService } from './planning/work-session-planning.ser
  * product whose failure mode is a person quietly not starting.
  */
 @Module({
-  imports: [PrismaModule, AiModule, UserProfileModule],
-  controllers: [WorkSessionPlanningController],
-  providers: [WorkSessionPlanningService],
-  exports: [WorkSessionPlanningService],
+  // `CommitmentsModule` for one reason: focus sessions call E05-02's action
+  // service rather than re-implementing the status machine or the timer. That
+  // import is the coupling, and it points one way — nothing in Commitments
+  // knows this module exists.
+  imports: [PrismaModule, AiModule, UserProfileModule, CommitmentsModule],
+  controllers: [WorkSessionPlanningController, FocusSessionController],
+  providers: [WorkSessionPlanningService, FocusSessionService],
+  exports: [WorkSessionPlanningService, FocusSessionService],
 })
 export class WorkModule {}

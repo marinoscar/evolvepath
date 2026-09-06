@@ -83,6 +83,7 @@ model User {
   // The Work domain (epic E07)
   workMilestones           WorkMilestone[]           @relation("UserWorkMilestones")
   workSessionPlanProposals WorkSessionPlanProposal[] @relation("UserWorkSessionPlanProposals")
+  focusSessions            FocusSession[]            @relation("UserFocusSessions")
 
   // The Health domain (epic E09)
   customExercises Exercise[]       @relation("UserCustomExercises")
@@ -1491,6 +1492,7 @@ model Commitment {
 
   // The Work domain (epic E07)
   workMilestone WorkMilestone? @relation(fields: [workMilestoneId], references: [id], onDelete: SetNull)
+  focusSessions FocusSession[]
 
   /// The profiles pointing at this row as their open restart (epic E11). A
   /// list because Prisma requires the back side of a nullable one-to-many; in
@@ -1539,8 +1541,10 @@ model Evidence {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  user       User        @relation("UserEvidence", fields: [userId], references: [id], onDelete: Cascade)
-  commitment Commitment? @relation(fields: [commitmentId], references: [id], onDelete: SetNull)
+  user         User          @relation("UserEvidence", fields: [userId], references: [id], onDelete: Cascade)
+  commitment   Commitment?   @relation(fields: [commitmentId], references: [id], onDelete: SetNull)
+  /// The focus session this row measures, when it is one (epic E07).
+  focusSession FocusSession?
 
   @@index([userId, occurredAt])
   @@index([commitmentId])
@@ -2670,4 +2674,72 @@ model WorkSessionPlanProposal {
 
   @@index([userId, outcomeId, status])
   @@map("work_session_plan_proposals")
+}
+
+// =============================================================================
+// The Work domain — focus sessions (issue #110, epic E07)
+// =============================================================================
+//
+// A LAYER OVER E05's TIMER, NOT A SECOND ONE. `commitments.activeSince` /
+// `activeSeconds` / `timerMinutes` remain the only clock; this table records
+// what a `FocusSession` IS — how long the user meant to focus, how many times
+// they continued, what distracted them, and how it ended. E05 knows none of
+// those, and PRD §27–§28 needs all of them.
+//
+// STARTING IS RECORDED SEPARATELY FROM COMPLETING (PRD §104, VISION §10). The
+// `APP_FLOW started` evidence comes from E05's `start` action; the `TIMER
+// focus_session` row this table links is written on `stop`, whatever the
+// outcome — including `ABANDONED`, because ten minutes on something avoided for
+// three days is progress and the record has to be able to say so.
+//
+// "ONE ACTIVE SESSION PER USER" IS ENFORCED IN THE SERVICE, deliberately, and
+// not by a partial unique index. A crashed client must always be able to
+// recover through `GET /focus-sessions/active` and take the old one over; a
+// database constraint would turn that recovery into a 500.
+// =============================================================================
+
+enum FocusSessionOutcome {
+  DONE
+  PARTIAL
+  ABANDONED
+}
+
+model FocusSession {
+  id             String  @id @default(uuid()) @db.Uuid
+  userId         String  @map("user_id") @db.Uuid
+  commitmentId   String  @map("commitment_id") @db.Uuid
+  plannedMinutes Int     @map("planned_minutes")
+  /// The one sentence PRD §27 puts above the timer. User or coach content —
+  /// stored, rendered as text, never interpreted and never logged.
+  instruction    String?
+
+  startedAt DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  endedAt   DateTime? @map("ended_at") @db.Timestamptz
+
+  outcome       FocusSessionOutcome?
+  /// Derived from the commitment's banked seconds at `stop`, floored at 1.
+  actualMinutes Int?                 @map("actual_minutes")
+
+  /// How many times "Continue another 15?" was accepted. The number VISION §10
+  /// wants a user to see: continuing is the behaviour, not the total.
+  continuedCount Int @default(0) @map("continued_count")
+
+  /// PRD §28's distraction notes. Server-side because E05-05 kept them in React
+  /// state and a reload lost them — the user typed them while distracted, which
+  /// is exactly when a page gets reloaded.
+  distractionNotes String[] @default([]) @map("distraction_notes")
+
+  /// The `TIMER` evidence row this session produced. SetNull: deleting the
+  /// evidence must not delete the session that explains it.
+  evidenceId String? @unique @map("evidence_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user       User       @relation("UserFocusSessions", fields: [userId], references: [id], onDelete: Cascade)
+  commitment Commitment @relation(fields: [commitmentId], references: [id], onDelete: Cascade)
+  evidence   Evidence?  @relation(fields: [evidenceId], references: [id], onDelete: SetNull)
+
+  @@index([userId, startedAt])
+  @@index([commitmentId])
+  @@map("focus_sessions")
 }
