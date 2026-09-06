@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { commitmentCardSchema } from '../commitments/commitment-card.schema';
+import { momentumStateEnum } from '../progress/progress.schema';
 import { domainModeKindSchema, domainSchema } from '../path/domain.schema';
 import { INTERVENTION_MODES } from './nba/intervention-mode';
 
@@ -48,6 +49,20 @@ export const todayDomainSchema = z.object({
   commitments: z.array(commitmentCardSchema),
 });
 
+/**
+ * The Today slot (issue #98, epic E11).
+ *
+ * A state word and ONE sentence — deliberately not the signals. Today is a
+ * screen about the next hour; `/progress` is where the window is read.
+ */
+export const momentumSummarySchema = z.object({
+  state: momentumStateEnum,
+  /** The first evidence bullet, or null when there is nothing to say yet. */
+  headline: z.string().nullable(),
+});
+
+export type MomentumSummaryPayload = z.infer<typeof momentumSummarySchema>;
+
 export const todayResponseSchema = z.object({
   /** "Good morning, Alex" — resolved in the user's own timezone. */
   greeting: z.string(),
@@ -60,8 +75,16 @@ export const todayResponseSchema = z.object({
   nextBestAction: nextBestActionSchema.nullable(),
   /** Always three, in canonical order, including any that are empty or paused. */
   domains: z.array(todayDomainSchema).length(3),
-  /** E11 replaces this with its own schema. */
-  momentum: z.null(),
+  /**
+   * Per-domain momentum (E11-01, #98). Always three entries; a domain the
+   * momentum service could not compute degrades to `INSUFFICIENT_DATA` rather
+   * than failing the day screen.
+   */
+  momentum: z.object({
+    WORK: momentumSummarySchema,
+    FAMILY: momentumSummarySchema,
+    HEALTH: momentumSummarySchema,
+  }),
   /**
    * ALWAYS null here. The coach's sentence is fetched separately from
    * `GET /today/insight` so a slow or dead provider cannot delay this response

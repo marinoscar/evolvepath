@@ -1,9 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { Commitment } from '@prisma/client';
 
 import { toCommitmentCard } from '../commitments/commitment-card.mapper';
 import { DOMAINS } from '../path/domain.schema';
 import { elapsedSeconds } from '../commitments/actions/commitment-timer';
+import { DOMAINS as ALL_DOMAINS } from '../path/domain.schema';
+import { MomentumService } from '../progress/momentum/momentum.service';
+import type { MomentumSummaryPayload } from './today.schema';
 import { greetingFor } from './local-date';
 import { CandidateLoaderService, type TodayCandidates } from './nba/candidate-loader.service';
 import { resolveInterventionMode } from './nba/intervention-mode';
@@ -33,10 +36,18 @@ import type { NextBestAction, TodayResponse } from './today.schema';
 
 @Injectable()
 export class TodayService {
-  constructor(private readonly loader: CandidateLoaderService) {}
+  private readonly logger = new Logger(TodayService.name);
+
+  constructor(
+    private readonly loader: CandidateLoaderService,
+    private readonly momentum: MomentumService,
+  ) {}
 
   async getToday(userId: string, now: Date = new Date()): Promise<TodayResponse> {
-    const loaded = await this.loader.load(userId, now);
+    const [loaded, momentum] = await Promise.all([
+      this.loader.load(userId, now),
+      this.momentumOrDegraded(userId, now),
+    ]);
 
     const scored = this.rank(loaded);
     const nextBestAction = this.buildNextBestAction(loaded, scored);
@@ -65,9 +76,39 @@ export class TodayService {
           .filter((row) => row.domain === domain)
           .map((row) => toCommitmentCard(row, now)),
       })),
-      momentum: null,
+      momentum,
       coachInsight: null,
     };
+  }
+
+  /**
+   * Momentum, or an honest shrug.
+   *
+   * Progress is a SECONDARY reading on this screen; the day still has to render
+   * when its query fails. Degrading to `INSUFFICIENT_DATA` says "no reading"
+   * rather than inventing a state, and the whole screen stays a 200.
+   */
+  private async momentumOrDegraded(
+    userId: string,
+    now: Date,
+  ): Promise<Record<'WORK' | 'FAMILY' | 'HEALTH', MomentumSummaryPayload>> {
+    try {
+      return (await this.momentum.summary(userId, now)) as Record<
+        'WORK' | 'FAMILY' | 'HEALTH',
+        MomentumSummaryPayload
+      >;
+    } catch (error) {
+      this.logger.warn(
+        `momentum unavailable for today: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
+
+      return Object.fromEntries(
+        ALL_DOMAINS.map((domain) => [
+          domain,
+          { state: 'INSUFFICIENT_DATA' as const, headline: null },
+        ]),
+      ) as Record<'WORK' | 'FAMILY' | 'HEALTH', MomentumSummaryPayload>;
+    }
   }
 
   /** Size each candidate, then rank. Sizing first: the score depends on it. */
