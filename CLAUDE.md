@@ -977,6 +977,15 @@ foreign or unknown id answers 404, never 403, and a non-`WORK` outcome answers
 - `POST /api/outcomes/{id}/plan-sessions/apply` - The approval step, and the only path that creates rows. One transaction: plan + v1 when the outcome had none, milestones, one `EVENT` routine on the **current ACTIVE** version, one `PLANNED` `FOCUS_SESSION` commitment per session. **No new `PlanVersion`**. An edited copy is re-validated against the same guardrails the model was held to (400 `PROPOSAL_INVALID` with readable `details.rules[]`); a second apply is 409
 - `GET /api/outcomes/{id}/work-plan` - Milestones in order with their sessions, plus the implementation intention and cadence read from the plan the user **applied**
 
+Focus sessions layer the PRD §27–§28 record over E05's timer — they never
+re-implement it:
+- `POST /api/focus-sessions` - Begin one. Moves the commitment to STARTED through E05's `start` action, so the `APP_FLOW started` evidence is written exactly once. 409 `FOCUS_SESSION_ACTIVE` carries the running session's id; `takeOver: true` ends it as ABANDONED first
+- `GET /api/focus-sessions/active` - How a crashed or reloaded client recovers. `serverNow` lets a skewed phone re-anchor
+- `POST /api/focus-sessions/{id}/extend` - "Continue another 15?". Raises `plannedMinutes` and `continuedCount` and grows `timerMinutes` through E05's `continue`
+- `POST /api/focus-sessions/{id}/note` - A distraction note, persisted the moment it is typed (E05-05 kept them in React state and a reload lost them)
+- `POST /api/focus-sessions/{id}/stop` - `done` / `partial` / `abandoned`. Writes one `TIMER` `focus_session` evidence row **for every outcome** — `abandoned` PAUSES the commitment rather than closing it, because starting is the behaviour the product reinforces (VISION §10)
+- `GET /api/focus-sessions?commitmentId=&outcomeId=&from=&to=` - Own rows, newest first, max 100
+
 ### Family (epic E08)
 Own data only; a foreign or unknown id answers 404, never 403.
 - `GET /api/family/members` - List; items carry exactly `id`, `nickname`, `relationship`, `birthday`, `createdAt` — PRD §33 fixes the record and there is nothing else to return
@@ -1070,6 +1079,7 @@ Behaviours, not calories: no macro, no food database, no BMI, no goal weight.
 - `domain_modes` - Per-domain posture (GROW, MAINTAIN, RECOVER, PAUSE); a missing row means GROW
 - `daily_check_ins` - "How does today feel?" — one row per user per local day, upserted; `date_local` is text in the user's own timezone, never a date column
 - `user_profiles` - Typed per-user preferences the product reasons about: `timezone` (what "today" means), `coachingStyle`, `weekdayMinutes`, quiet hours, the comeback loop's open offer (E11-02: `comebackState`/`comebackTrigger`/`comebackCommitmentId`, `lastActiveAt`, `planReviewSuggestedAt` — on the profile because there is at most ONE open offer per user by design), the weekly review rhythm (`weeklyReviewWeekday` 0-6 with a database check constraint, `weeklyReviewTime` `'HH:mm'`) and onboarding progress; one row per user, created lazily (a missing row means onboarding has not finished)
+- `focus_sessions` - One stretch of focused work (PRD §27–§28). A LAYER over E05's timer, never a second one: `commitments.activeSince`/`activeSeconds` stay the only clock, and this records what E05 has no column for — planned minutes, `continued_count`, `distraction_notes` and how it ended. "One active session per user" is enforced in the service and deliberately NOT by a partial unique index, so a crashed client can always recover through `GET /focus-sessions/active`
 - `work_milestones` - A deliverable inside a work outcome (PRD §24). **Not** E11's `milestones`, which is achievements: that name was taken and the two share nothing but a noun. `(outcome_id, order)` is unique, so "milestone 2" means one thing, and a second applied plan appends rather than colliding
 - `work_session_plan_proposals` - One planner proposal for one outcome, waiting on the user's Apply. `plan` is what the coach proposed and `applied_plan` is the copy that actually became commitments — an edit must not erase what was suggested
 - `family_members` - Someone the user shares a ritual with. Exactly `nickname`, `relationship`, optional date-only `birthday` — and nothing else, by design (PRD §33, VISION §50: the people in it never consented to being modeled)

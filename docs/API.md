@@ -3213,6 +3213,63 @@ are commitments, not a change of strategy.
 | 412 | `AI_KEY_REQUIRED` | The caller has no OpenAI key. The one AI failure the user can fix. |
 | 503 | `SERVICE_UNAVAILABLE` with `details = { reason: "AI_UNAVAILABLE", code, retryable }` | The provider failed. `retryable` is true for `rate_limit`/`timeout`/`network`/`provider`; use the template route either way. |
 
+#### Focus sessions
+
+PRD §27–§28. **This is a layer over the commitment timer, not a second one.**
+Every status change and every timer column still belongs to E05's
+`/commitments/:id/actions/*` — `start` on start, `continue` on extend,
+`complete` / `partial` / `pause` on stop. What a focus session adds is the
+thing a commitment has no column for: how long the user meant to focus, how many
+times they continued, what distracted them, and how it ended.
+
+| Method | Path | Body | Returns |
+|--------|------|------|---------|
+| POST | `/api/focus-sessions` | `{ commitmentId, plannedMinutes: 1..180, instruction?, takeOver? }` | 201 `FocusSession` |
+| GET | `/api/focus-sessions/active` | — | 200 `{ session \| null, serverNow }` |
+| POST | `/api/focus-sessions/{id}/extend` | `{ minutes: 1..60 }` | 200 `FocusSession` |
+| POST | `/api/focus-sessions/{id}/note` | `{ text: 1..280 }` | 200 `FocusSession` |
+| POST | `/api/focus-sessions/{id}/stop` | `{ outcome: 'done' \| 'partial' \| 'abandoned', notes? }` | 200 `{ session, evidenceId, commitmentStatus, actualMinutes }` |
+| GET | `/api/focus-sessions?commitmentId=&outcomeId=&from=&to=` | — | 200 `{ sessions[] }` — own rows, newest first, max 100, window ≤ 93 days |
+
+```ts
+FocusSession = {
+  id, commitmentId, plannedMinutes, instruction,
+  startedAt, endedAt, outcome,          // DONE | PARTIAL | ABANDONED | null
+  actualMinutes, continuedCount, distractionNotes: string[],
+  commitment: { title, status, timer },  // `timer` is GET /today's card timer
+}
+```
+
+`commitment.timer` is E05's `commitmentCardSchema.timer` verbatim, so a client
+derives the countdown with the maths it already has and nothing here duplicates
+it. `serverNow` on `active` lets a phone with a skewed clock re-anchor against
+the server.
+
+**`stop` writes a `TIMER` `focus_session` evidence row for every outcome**, with
+`quantitative_value` = the minutes actually focused (floored at 1) and
+`qualitative_value` = the outcome. That row is distinct from the `APP_FLOW
+started` row E05 wrote at the beginning: starting is recorded separately from
+completing (PRD §104).
+
+`abandoned` **pauses** the commitment rather than closing it, so the
+next-best-action engine keeps offering it — and the evidence row is still
+written. Ten minutes on something avoided for three days is progress
+(VISION §10).
+
+| Status | Code | When |
+|--------|------|------|
+| 400 | `BAD_REQUEST` with `details.reason = "COMMITMENT_NOT_WORK"` | Health has its own workout runner. |
+| 400 | `BAD_REQUEST` with `details.reason = "COMMITMENT_NOT_STARTABLE"` | The commitment is COMPLETED or CANCELLED. |
+| 400 | `BAD_REQUEST` with `details.reason = "TOO_MANY_NOTES"` | 20 is the cap. |
+| 404 | `NOT_FOUND` | Unknown session, or one that is not the caller's. |
+| 409 | `CONFLICT` with `details = { reason: "FOCUS_SESSION_ACTIVE", activeSessionId, commitmentId }` | One is already running. Send `takeOver: true` to end it as ABANDONED first. |
+| 409 | `CONFLICT` with `details.reason = "FOCUS_SESSION_ENDED"` | Any mutation on a session that has stopped. |
+
+"One active session per user" is enforced in the service, **not** by a partial
+unique index — a crashed client must always be able to recover through
+`GET /focus-sessions/active` and take the old one over, and a database
+constraint would turn that recovery into a 500.
+
 ---
 
 ### Family
