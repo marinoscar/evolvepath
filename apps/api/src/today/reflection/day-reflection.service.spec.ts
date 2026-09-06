@@ -4,6 +4,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { createMockPrismaService, MockPrismaService } from '../../../test/mocks/prisma.mock';
 import { UserProfileService } from '../../user-profile/user-profile.service';
 import { DayReflectionService } from './day-reflection.service';
+import { ActivityTrackerService } from '../../progress/comeback/activity-tracker.service';
+
+/** `record` is fire-and-forget; these specs only need it not to explode. */
+const activity = { touch: jest.fn(), record: jest.fn() };
 
 const EVENING = new Date('2026-03-02T23:30:00.000Z');
 
@@ -41,6 +45,7 @@ describe('DayReflectionService (#43)', () => {
         DayReflectionService,
         { provide: PrismaService, useValue: prisma },
         { provide: UserProfileService, useValue: userProfile },
+        { provide: ActivityTrackerService, useValue: activity },
       ],
     }).compile();
 

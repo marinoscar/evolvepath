@@ -19,6 +19,7 @@ import { ProposalsService } from '../../src/coach/proposals/proposals.service';
 import { COACH_PROMPT_VERSION } from '../../src/coach/prompts/coach.prompt';
 import { SAFETY_REDIRECT_COPY } from '../../src/coach/safety/safety-copy';
 import type { CoachReply } from '../../src/coach/contracts/coach-reply.contract';
+import { ActivityTrackerService } from '../../src/progress/comeback/activity-tracker.service';
 
 // =============================================================================
 // One coaching turn, end to end (issue #70, epic E06)
@@ -132,6 +133,7 @@ describeWithDb('Coach messages (integration, real DB)', () => {
       conversations,
       proposals,
       profiles,
+      new ActivityTrackerService(service, profiles),
     );
   });
 

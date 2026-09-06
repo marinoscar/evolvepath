@@ -6,6 +6,7 @@ import { TestAuthController } from './test-auth.controller';
 import { TestAuthService } from './test-auth.service';
 import { AiModule } from '../ai/ai.module';
 import { CoachingNotificationsModule } from '../coaching-notifications/coaching-notifications.module';
+import { ProgressModule } from '../progress/progress.module';
 
 @Module({
   imports: [
@@ -29,6 +30,9 @@ import { CoachingNotificationsModule } from '../coaching-notifications/coaching-
 
     // `run-job` drives the real coaching engine, not a stand-in for it (#59).
     CoachingNotificationsModule,
+
+    // `run-job comeback` drives the real sweep, not a stand-in for it (#112).
+    ProgressModule,
   ],
   controllers: [TestAuthController],
   providers: [TestAuthService],

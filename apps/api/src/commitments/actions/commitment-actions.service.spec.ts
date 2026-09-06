@@ -7,6 +7,10 @@ import { CommitmentsService } from '../commitments.service';
 import { DecompositionService } from '../decomposition/decomposition.service';
 import { templateProposal } from '../decomposition/decomposition.schema';
 import { CommitmentActionsService } from './commitment-actions.service';
+import { ActivityTrackerService } from './../../progress/comeback/activity-tracker.service';
+
+/** `record` is fire-and-forget; these specs only need it not to explode. */
+const activity = { touch: jest.fn(), record: jest.fn() };
 
 describe('CommitmentActionsService (#40)', () => {
   let service: CommitmentActionsService;
@@ -82,6 +86,7 @@ describe('CommitmentActionsService (#40)', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: CommitmentsService, useValue: commitments },
         { provide: DecompositionService, useValue: decomposition },
+        { provide: ActivityTrackerService, useValue: activity },
       ],
     }).compile();
 

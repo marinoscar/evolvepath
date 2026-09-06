@@ -717,6 +717,28 @@ enum CoachingStyle {
   DIRECT
 }
 
+/// Where the user is in the comeback loop (issue #112, epic E11).
+///
+/// Three values, not a boolean: "we have offered you a restart" and "you have
+/// picked one up" are different facts, and PRD §57 wants the second one to
+/// survive a reload so the Start screen can be re-entered.
+enum ComebackState {
+  NONE
+  OFFERED
+  IN_PROGRESS
+
+  @@map("comeback_state")
+}
+
+/// Why the loop opened. Recorded because the copy differs and because the
+/// recovery evidence row keeps it (PRD §57).
+enum ComebackTrigger {
+  INACTIVITY
+  REPEATED_MISSES
+
+  @@map("comeback_trigger")
+}
+
 model UserProfile {
   id     String @id @default(uuid()) @db.Uuid
   userId String @unique @map("user_id") @db.Uuid
@@ -776,13 +798,47 @@ model UserProfile {
   /// so the minutes are documentation rather than a promise.
   weeklyReviewTime    String @default("17:00") @map("weekly_review_time")
 
+  // ---------------------------------------------------------------------------
+  // The comeback loop (issue #112, epic E11)
+  // ---------------------------------------------------------------------------
+  //
+  // ON THE PROFILE RATHER THAN IN A NEW TABLE. There is at most one open offer
+  // per user by design — PRD §56 asks for "one restart action", and a table
+  // would make "two offers" representable, which is the state the whole feature
+  // exists to avoid. The history of comebacks lives where history belongs: in
+  // `evidence_items` as `recovery` rows, and in `milestones`.
+
+  comebackState        ComebackState    @default(NONE) @map("comeback_state")
+  comebackTrigger      ComebackTrigger? @map("comeback_trigger")
+  comebackOfferedAt    DateTime?        @map("comeback_offered_at") @db.Timestamptz
+  comebackCommitmentId String?          @map("comeback_commitment_id") @db.Uuid
+
+  /// When the user last DID something. Behaviour, never a page load: PRD §57
+  /// counts commitments, evidence, check-ins and coaching turns, because a
+  /// person who opens the app every morning and does nothing has not been
+  /// active in any sense the product should reward.
+  lastActiveAt DateTime? @map("last_active_at") @db.Timestamptz
+  lastSweepAt  DateTime? @map("last_sweep_at") @db.Timestamptz
+
+  /// Set when the misses look like plan drift rather than a bad week. A FLAG
+  /// and a link, never a plan change: PRD §15 means nothing here writes a
+  /// `PlanVersion`.
+  planReviewSuggestedAt DateTime? @map("plan_review_suggested_at") @db.Timestamptz
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   user User @relation("UserProfile", fields: [userId], references: [id], onDelete: Cascade)
 
+  /// SetNull, like every other history pointer: deleting the restart
+  /// commitment must not delete the profile that pointed at it.
+  comebackCommitment Commitment? @relation("ComebackRestart", fields: [comebackCommitmentId], references: [id], onDelete: SetNull)
+
   /// "Who is stuck mid-onboarding?" — the only non-key query this table has.
   @@index([onboardingStep])
+  /// The sweep's two questions: who has an offer open, and who has gone quiet.
+  @@index([comebackState])
+  @@index([lastActiveAt])
   @@map("user_profiles")
 }
 
@@ -1359,6 +1415,11 @@ model Commitment {
   // The Health domain (epic E09)
   workoutTemplate WorkoutTemplate? @relation(fields: [workoutTemplateId], references: [id], onDelete: SetNull)
   workoutSession  WorkoutSession?
+
+  /// The profiles pointing at this row as their open restart (epic E11). A
+  /// list because Prisma requires the back side of a nullable one-to-many; in
+  /// practice it holds at most one profile.
+  comebackFor UserProfile[] @relation("ComebackRestart")
 
   /// MATERIALIZATION IDEMPOTENCY (issue #37, epic E08). Re-running the
   /// materializer over the same horizon must not double-book an occurrence, and

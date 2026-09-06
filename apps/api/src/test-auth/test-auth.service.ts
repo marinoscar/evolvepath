@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { TestLoginDto } from './dto/test-login.dto';
+import { SimulateIdleDto } from './dto/simulate-idle.dto';
 import { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { DEFAULT_USER_SETTINGS } from '../common/types/settings.types';
 import { UserAiKeyService } from '../ai/user-key/user-ai-key.service';
@@ -30,6 +31,75 @@ export class TestAuthService {
     private readonly configService: ConfigService,
     private readonly userAiKey: UserAiKeyService,
   ) {}
+
+  /**
+   * Move a user's history backwards so they read as idle (issue #112, epic E11).
+   *
+   * Shifts `last_active_at`, every commitment timestamp and every evidence
+   * timestamp by the same number of days — the whole of the user's past moves
+   * together, so relative distances (which miss came before which completion)
+   * survive and the sweep sees a coherent history rather than a doctored one.
+   *
+   * Raw SQL because Prisma has no column-relative update, and a read-modify-
+   * write over a seeded month would be hundreds of round trips. The interval is
+   * bound as an integer, never interpolated.
+   */
+  async simulateIdle(dto: SimulateIdleDto): Promise<{
+    userId: string;
+    shiftedCommitments: number;
+    shiftedEvidence: number;
+    lastActiveAt: string;
+  }> {
+    const email = dto.email.toLowerCase();
+    const user = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
+
+    if (!user) {
+      throw new NotFoundException(`No test user with email ${email}`);
+    }
+
+    const days = dto.idleDays;
+    const lastActiveAt = new Date(Date.now() - days * 24 * 3_600_000);
+
+    const shiftedCommitments = await this.prisma.$executeRaw`
+      UPDATE commitments SET
+        scheduled_start = scheduled_start - make_interval(days => ${days}),
+        scheduled_end   = scheduled_end   - make_interval(days => ${days}),
+        started_at      = started_at      - make_interval(days => ${days}),
+        completed_at    = completed_at    - make_interval(days => ${days})
+      WHERE user_id = ${user.id}::uuid`;
+
+    const shiftedEvidence = await this.prisma.$executeRaw`
+      UPDATE evidence_items SET
+        occurred_at = occurred_at - make_interval(days => ${days})
+      WHERE user_id = ${user.id}::uuid`;
+
+    await this.prisma.userProfile.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id, lastActiveAt },
+      update: { lastActiveAt },
+    });
+
+    this.logger.log(`Simulated ${days} idle days for ${email}`);
+
+    return {
+      userId: user.id,
+      shiftedCommitments,
+      shiftedEvidence,
+      lastActiveAt: lastActiveAt.toISOString(),
+    };
+  }
+
+  /** Resolve an email to a user id for the per-user jobs. */
+  async userIdForEmail(email: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      select: { id: true },
+    });
+
+    if (!user) throw new NotFoundException(`No test user with email ${email}`);
+
+    return user.id;
+  }
 
   /**
    * Login as test user - bypass OAuth and allowlist for testing

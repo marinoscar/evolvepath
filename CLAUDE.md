@@ -794,6 +794,20 @@ Note: `GET /api/today` carries the same engine's summary — a state word and on
 sentence per domain. A failure there degrades to `INSUFFICIENT_DATA` and the day
 still returns 200; Progress is a secondary reading on a screen about the next hour.
 
+### Comeback (epic E11)
+Returning after a pause. **There is no route that reports what the user missed** —
+that is the feature (PRD §109). The daily 04:00 sweep changes commitment status
+only; `evidence_items` is never written, updated or deleted, and a `STARTED` row
+is never closed (the matrix has no `STARTED → MISSED`).
+- `GET /api/comeback` - The open loop: trigger, idle days, `closedCount` (a **count**, never a list), the restart `CommitmentCard`, why that domain, and one alternative per other domain
+- `POST /api/comeback/choose` - Restart somewhere else; cancels the old row through the matrix. 409 `NO_COMEBACK_OFFER`, 400 `NO_RESTART_IN_DOMAIN`
+- `POST /api/comeback/start` - Marks the loop `IN_PROGRESS`; the client then uses the ordinary `/start/:commitmentId` route
+- `POST /api/comeback/complete` - Completes the restart through the ordinary action service, then writes one `recovery` `APP_FLOW` evidence row. **Idempotent by refusal**: a second call is 409
+- `POST /api/comeback/dismiss` - 204. PRD §127: the user may decline being helped
+
+Note: `GET /api/today` carries `comeback: { state, restartCommitmentId, offeredAt }`
+or `null` — a pointer and three keys, never a backlog.
+
 ### Best Self (current user)
 - `GET /api/me/best-self` - The caller's Best Self profile; `data: null` until saved
 - `PUT /api/me/best-self` - Replace it whole and stamp `lastReviewedAt` (no PATCH by design)
@@ -1006,7 +1020,7 @@ Behaviours, not calories: no macro, no food database, no BMI, no goal weight.
 - `reflections` - What the user made of a commitment, outcome, plan version or day
 - `domain_modes` - Per-domain posture (GROW, MAINTAIN, RECOVER, PAUSE); a missing row means GROW
 - `daily_check_ins` - "How does today feel?" — one row per user per local day, upserted; `date_local` is text in the user's own timezone, never a date column
-- `user_profiles` - Typed per-user preferences the product reasons about: `timezone` (what "today" means), `coachingStyle`, `weekdayMinutes`, quiet hours, the weekly review rhythm (`weeklyReviewWeekday` 0-6 with a database check constraint, `weeklyReviewTime` `'HH:mm'`) and onboarding progress; one row per user, created lazily (a missing row means onboarding has not finished)
+- `user_profiles` - Typed per-user preferences the product reasons about: `timezone` (what "today" means), `coachingStyle`, `weekdayMinutes`, quiet hours, the comeback loop's open offer (E11-02: `comebackState`/`comebackTrigger`/`comebackCommitmentId`, `lastActiveAt`, `planReviewSuggestedAt` — on the profile because there is at most ONE open offer per user by design), the weekly review rhythm (`weeklyReviewWeekday` 0-6 with a database check constraint, `weeklyReviewTime` `'HH:mm'`) and onboarding progress; one row per user, created lazily (a missing row means onboarding has not finished)
 - `family_members` - Someone the user shares a ritual with. Exactly `nickname`, `relationship`, optional date-only `birthday` — and nothing else, by design (PRD §33, VISION §50: the people in it never consented to being modeled)
 - `rituals` - A recurring family behaviour the user is protecting: the recurrence rule (`weekdays`, `HH:mm`, `everyNWeeks`), ideal and minimum minutes, fallback text and the materialization horizon. A rule, not a schedule — the materializer turns it into ordinary `commitments`
 - `notification_interactions` - The coaching decision log: one `SENT`, `OPENED`, `ACTIONED`, `DISMISSED` or `SUPPRESSED` row per decision or response. The only place that records **why a message was not sent** (`suppress_reason`), what the user did with one, and which commitment it concerned. The unique `(user_id, event_key, dedupe_key)` index is the scheduler's idempotency; responses carry a null dedupe key and are unconstrained by it
@@ -1060,6 +1074,7 @@ The application uses an **email allowlist** to restrict access to pre-authorized
 - Input validation on all endpoints
 - File uploads: images and videos only (`ALLOWED_MIME_TYPES`), size limit (`MAX_FILE_SIZE`, 500 MiB default), per-user quota (`STORAGE_USER_QUOTA_BYTES`), randomized object keys, **EXIF stripped before AI use**. Both limits are enforced on both upload paths, and the simple path counts the bytes it stores rather than recording `0`
 - Email allowlist restricts application access to pre-authorized users
+- Test-auth helpers (`login`, `run-job`, `simulate-idle`) exist only when `NODE_ENV !== 'production'`: the module is not registered in a production build at all, and `TestEnvironmentGuard` refuses them independently of that
 - OpenAI keys (platform and per-user) are encrypted in `credentials` under two
   distinct purposes, write-only through the API, and redacted from every error,
   log line, audit row, OTel span and `ai_invocations` row. The gateway uses only

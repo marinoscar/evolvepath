@@ -16,6 +16,7 @@ import {
   decompositionProposalSchema,
   type DecompositionProposal,
 } from '../decomposition/decomposition.schema';
+import { ActivityTrackerService } from '../../progress/comeback/activity-tracker.service';
 import { DecompositionService } from '../decomposition/decomposition.service';
 import type {
   CompleteActionDto,
@@ -61,6 +62,7 @@ export class CommitmentActionsService {
     private readonly prisma: PrismaService,
     private readonly commitments: CommitmentsService,
     private readonly decomposition: DecompositionService,
+    private readonly activity: ActivityTrackerService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -695,6 +697,18 @@ export class CommitmentActionsService {
     return toCommitmentCard(row, now);
   }
 
+  /**
+   * The audit row, and the activity stamp that rides with it.
+   *
+   * EVERY mutating action in this class lands here exactly once, after its
+   * transaction has committed — which makes this the one honest place to record
+   * "the user did something" for E11's comeback loop (#112). Sprinkling
+   * `activity.record` through nine methods would eventually miss the tenth.
+   *
+   * `record` is detached and swallows its own failures: a comeback offer that
+   * is a day early is a kind sentence; a completion that 500s because a
+   * bookkeeping write failed is the user's lost work.
+   */
   private async audit(
     userId: string,
     action: string,
@@ -704,5 +718,7 @@ export class CommitmentActionsService {
     await this.prisma.auditEvent.create({
       data: { actorUserId: userId, action, targetType: 'commitment', targetId, meta },
     });
+
+    this.activity.record(userId);
   }
 }

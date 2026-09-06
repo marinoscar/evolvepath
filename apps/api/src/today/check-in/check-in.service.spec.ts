@@ -6,6 +6,10 @@ import { createMockPrismaService, MockPrismaService } from '../../../test/mocks/
 import { UserProfileService } from '../../user-profile/user-profile.service';
 import { TodayInsightCache } from '../insight/today-insight.cache';
 import { CheckInService } from './check-in.service';
+import { ActivityTrackerService } from '../../progress/comeback/activity-tracker.service';
+
+/** `record` is fire-and-forget; these specs only need it not to explode. */
+const activity = { touch: jest.fn(), record: jest.fn() };
 
 // 23:30 UTC is still 2 March in Costa Rica, and already 3 March in UTC.
 const LATE = new Date('2026-03-02T23:30:00.000Z');
@@ -39,6 +43,7 @@ describe('CheckInService (#43)', () => {
         TodayInsightCache,
         { provide: PrismaService, useValue: prisma },
         { provide: UserProfileService, useValue: userProfile },
+        { provide: ActivityTrackerService, useValue: activity },
       ],
     }).compile();
 
