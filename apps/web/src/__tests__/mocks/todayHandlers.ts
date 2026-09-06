@@ -282,7 +282,12 @@ function buildToday(): TodayResponse {
       mode: state.modes[domain],
       commitments: state.commitments.filter((card) => card.domain === domain),
     })),
-    momentum: null,
+    momentum: {
+      WORK: { state: 'STEADY', headline: '3 of 4 planned work actions completed' },
+      FAMILY: { state: 'INSUFFICIENT_DATA', headline: null },
+      HEALTH: { state: 'STEADY', headline: '5 of 6 planned workouts completed' },
+    },
+    comeback: null,
     coachInsight: null,
   };
 }

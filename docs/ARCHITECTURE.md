@@ -1068,7 +1068,8 @@ for genuinely parallel content only.
 | Path | `/path` | Required | Any | Best Self, outcomes, plans and routines |
 | — Outcome | `/path/outcomes/:id` | Required | Any | One outcome: plan, versions, routines, commitments |
 | Coach | `/coach` | Required | Any | The AI coach (placeholder until E06) |
-| Progress | `/progress` | Required | Any | Momentum and evidence (placeholder until E11) |
+| Progress | `/progress` | Required | Any | Momentum per domain, evidence, consistency, recovery, coach dependency, insights |
+| — Evidence | `/progress/timeline` | Required | Any | The full evidence timeline, filterable by domain |
 | User Settings hub | `/settings` | Required | Any (authenticated) | Searchable hub over the user's own settings |
 | — Profile | `/settings/profile` | Required | Any (authenticated) | Display name, avatar, email |
 | — Appearance | `/settings/appearance` | Required | Any (authenticated) | Personal theme preference |
@@ -1210,7 +1211,35 @@ running an older bundle cannot offer a move the API would refuse.
 
 ---
 
-### 9.6 Progressive Web App
+### 9.6 The Progress screen has no score
+
+PRD P13 and §54 are explicit: a single "quality of life" number is replaced by
+per-domain momentum **states** with evidence sentences, and "Health Score:
+77/100" is named as the thing to avoid. That promise is kept structurally rather
+than by discipline, at three layers:
+
+1. **The API does not serialise a ratio.** `computeMomentum` compares ratios
+   internally to detect a trend; `progress.schema.ts` emits counts only. The one
+   `ratio` in the payload is `independence.ratio`, which measures the product —
+   how often the user acts unprompted — not the person.
+2. **The copy lives in one pure module.** `apps/web/src/utils/momentumCopy.ts`
+   holds every sentence the screen says, so a test can run the whole module and
+   assert nothing it produces matches `/\d+\s*%|\/\s*100|score/i`. PRD §75 asks
+   for "percent completed without reminder"; the screen renders it as
+   "7 of 10 completed without a reminder", because a percentage is the shape a
+   score wears.
+3. **The rendered page is swept.** `ProgressPage.test.tsx` asserts the same
+   regexes over `container.textContent`, including in the state where a ratio
+   genuinely exists.
+
+The accessibility rule that shapes the charts is PRD §122: colour is never the
+only carrier. Momentum state is a word plus an icon; the trend's two series are
+**dashed (planned) and solid (completed)** with the encoding named in the legend
+text; the consistency bars ship a visually hidden `<table>` carrying the same
+numbers and each week's result in words. A chart that reads correctly in
+greyscale, in a printout and in forced-colors mode is the test.
+
+### 9.7 Progressive Web App
 
 PRD §123 makes mobile the primary platform, so the web app is installable to a
 home screen and launches without a network round trip for its shell.

@@ -190,7 +190,7 @@ describe('destinations — segment-boundary matching', () => {
   it('lets Progress own the weekly review and its wizard', () => {
     // Epic E10 (#84). `/progress/*` is already owned by prefix, so these two
     // routes need no `DESTINATION_ROUTES` entry — and the tab still lights up.
-    for (const path of ['/progress/week', '/progress/week/plan']) {
+    for (const path of ['/progress/week', '/progress/week/plan', '/progress/timeline']) {
       expect(resolveActiveDestination(path)).toBe('progress');
     }
   });

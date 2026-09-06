@@ -1439,12 +1439,15 @@ export interface TodayResponse {
   nextBestAction: NextBestAction | null;
   /** Always three, in canonical order, including the empty and the paused. */
   domains: TodayDomainSection[];
+  /** Per-domain momentum: a state word and one sentence (epic E11). */
+  momentum: Record<Domain, MomentumSummary>;
   /**
-   * `null` until E11 and E05-01 respectively fill them. Typed here rather than
-   * omitted so those epics change one line in one place.
+   * `null` until E05-01's separate `/today/insight` request fills it. Typed
+   * here rather than omitted so that epic changes one line in one place.
    */
-  momentum: null;
   coachInsight: null;
+  /** The open comeback loop, or null. A pointer — never a backlog (epic E11). */
+  comeback: TodayComeback | null;
 }
 
 export interface TodayInsight {
@@ -2479,3 +2482,179 @@ export type MediaAskResult =
       askedAt: string;
     }
   | { ok: false; error: { code: string; message: string } };
+
+
+// =============================================================================
+// Progress, momentum and the comeback loop (epic E11)
+// =============================================================================
+//
+// Mirrors `apps/api/src/progress/progress.schema.ts` and
+// `comeback.schema.ts` field for field. Hand-maintained on purpose: generating
+// them would put the API's build output on this app's critical path for values
+// that change about once an epic.
+//
+// NOTE WHAT IS ABSENT. There is no `ratio` on a momentum object and no score
+// anywhere — the API deliberately does not serialise them (PRD P13, §54), and
+// a type that declared one would be an invitation to render a percentage the
+// server never sent.
+
+export type MomentumState =
+  | 'BUILDING'
+  | 'IMPROVING'
+  | 'STEADY'
+  | 'SLIPPING'
+  | 'RECOVERING'
+  | 'INSUFFICIENT_DATA';
+
+export interface MomentumSignals {
+  planned: number;
+  completed: number;
+  partial: number;
+  /** Completions done at the short or minimum size. Still completions. */
+  fallback: number;
+  missed: number;
+  skipped: number;
+  consecutiveMisses: number;
+  rescheduledTwice: number;
+  lastCompletionAt: string | null;
+  lastMissAt: string | null;
+  returnedAfterIdleDays: number | null;
+}
+
+export interface TrendPoint {
+  weekStart: string;
+  planned: number;
+  completed: number;
+}
+
+export interface Momentum {
+  domain: Domain;
+  state: MomentumState;
+  /** At most three sentences made of counts. Never a percentage. */
+  evidence: string[];
+  signals: MomentumSignals;
+  /** Always four points, oldest first. */
+  trend: TrendPoint[];
+}
+
+/** The two fields Today carries. Deliberately not the whole reading. */
+export interface MomentumSummary {
+  state: MomentumState;
+  headline: string | null;
+}
+
+export interface WeekStat {
+  weekStart: string;
+  planned: number;
+  completed: number;
+  success: boolean;
+  /** A missed week the run forgave. */
+  graced: boolean;
+  /** The week in progress: reported, never counted. */
+  current: boolean;
+}
+
+export type MilestoneKind =
+  | 'FIRST_FULL_WEEK'
+  | 'FOUR_WEEKS'
+  | 'TEN_WORKOUTS'
+  | 'FIRST_COMEBACK'
+  | 'REDUCED_REMINDERS'
+  | 'FIRST_START_AFTER_POSTPONE';
+
+export interface Milestone {
+  id: string;
+  kind: MilestoneKind;
+  sequence: number;
+  domain: Domain | null;
+  achievedAt: string;
+  /** Null until the user has been shown it. */
+  acknowledgedAt: string | null;
+  title: string;
+  body: string;
+  meta: Record<string, unknown>;
+}
+
+export interface ProgressResponse {
+  generatedAt: string;
+  windowDays: 28;
+  momentum: Record<Domain, Momentum>;
+  consistencyRun: { weeks: number; graceUsed: number; weekly: WeekStat[] };
+  recovery: { medianDays: number | null; samples: number };
+  /** `ratio` is null until epic E12 records which completions followed a reminder. */
+  independence: {
+    ratio: number | null;
+    completedWithoutReminder: number;
+    sampleSize: number;
+  };
+  milestones: Milestone[];
+  insights: Array<{ id: string; category: string; statement: string }>;
+}
+
+export type TimelineKind =
+  | 'completed'
+  | 'completed_fallback'
+  | 'partially_completed'
+  | 'started_after_postpone'
+  | 'family_kept'
+  | 'returned_after_miss'
+  | 'plan_change_accepted'
+  | 'comeback_completed'
+  | 'milestone';
+
+/** How loudly to render it (PRD §77: no constant confetti). */
+export type TimelineSignificance = 'ordinary' | 'notable' | 'milestone';
+
+export interface TimelineEvent {
+  id: string;
+  at: string;
+  kind: TimelineKind;
+  significance: TimelineSignificance;
+  domain: Domain | null;
+  title: string;
+  detail: string | null;
+  commitmentId: string | null;
+  milestoneId: string | null;
+}
+
+export interface TimelinePage {
+  items: TimelineEvent[];
+  nextCursor: string | null;
+}
+
+export type ComebackState = 'NONE' | 'OFFERED' | 'IN_PROGRESS';
+export type ComebackTrigger = 'INACTIVITY' | 'REPEATED_MISSES';
+
+export interface TodayComeback {
+  state: 'OFFERED' | 'IN_PROGRESS';
+  restartCommitmentId: string | null;
+  offeredAt: string;
+}
+
+export interface RestartAlternative {
+  domain: Domain;
+  title: string;
+  minutes: number;
+}
+
+export interface ComebackStatus {
+  state: ComebackState;
+  trigger: ComebackTrigger | null;
+  offeredAt: string | null;
+  idleDays: number | null;
+  /** How many stale intentions became history. A count, never a list. */
+  closedCount: number;
+  planReviewSuggested: boolean;
+  restart: CommitmentCard | null;
+  recommendation: { domain: Domain; reason: string } | null;
+  alternatives: RestartAlternative[];
+  wording: { note: string };
+}
+
+export interface ComebackCompletion {
+  celebration: { title: string; body: string };
+  evidenceId: string;
+  milestone: Milestone | null;
+  nextCommitment: CommitmentCard | null;
+  planReviewSuggested: boolean;
+}

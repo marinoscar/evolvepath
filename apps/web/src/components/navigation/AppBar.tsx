@@ -117,6 +117,9 @@ const PRODUCT_DRILLDOWNS: ReadonlyArray<{ pattern: RegExp; title: string; upPath
   // Epic E03. `/media` is reached from Coach, which owns the route.
   { pattern: /^\/media$/, title: 'Media', upPath: '/coach' },
   { pattern: /^\/progress\/week$/, title: 'Your Week', upPath: '/progress' },
+  // Epic E11. The full evidence list is a longer view of the Progress screen's
+  // Evidence section, not a sixth place to go.
+  { pattern: /^\/progress\/timeline$/, title: 'Evidence', upPath: '/progress' },
   { pattern: /^\/progress\/week\/plan$/, title: 'Plan next week', upPath: '/progress/week' },
 ];
 
