@@ -253,6 +253,14 @@ function AppRoutes() {
                       element={<WorkoutProgramPage />}
                     />
                     <Route path="/coach" element={<CoachPage />} />
+                  {/* The empty conversation, as a screen (issue #227). The
+                      narrow layout renders the composer only under a
+                      `/coach/*` child, so without this route "New
+                      conversation" had nowhere to go and a phone user could
+                      not start a first thread at all. A static segment
+                      outranks `:conversationId` however they are ordered, and
+                      a conversation id is a uuid, so there is no collision. */}
+                  <Route path="/coach/new" element={<CoachPage />} />
                   {/* One thread, its own URL. `/coach/:id` is what the narrow
                       layout navigates to and what a link to a conversation is;
                       `DESTINATION_ROUTES.coach` already owns the prefix, so the
