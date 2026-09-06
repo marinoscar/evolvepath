@@ -15,6 +15,7 @@ import { resetTodayState } from './mocks/todayHandlers';
 import { resetWeeklyState } from './mocks/weeklyHandlers';
 import { resetWorkSpies, resetWorkState } from './mocks/workHandlers';
 import { resetOnboardingState } from './mocks/onboardingHandlers';
+import { resetAccountState } from './mocks/accountHandlers';
 
 // Set base URL for fetch
 const BASE_URL = 'http://localhost:3000';
@@ -250,6 +251,7 @@ afterEach(() => {
   resetProgressState();
   resetComebackState();
   resetWeeklyState();
+  resetAccountState();
   resetViewportWidth();
   mediaQueryListRegistry.clear();
 });

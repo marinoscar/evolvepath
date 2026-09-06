@@ -178,3 +178,75 @@ describe('USER_SETTINGS_SECTIONS - Weekly rhythm card (issue #84)', () => {
     ).toBe('Weekly rhythm');
   });
 });
+
+/**
+ * Epic #220 (#224). The Danger zone card, following the same MANDATORY
+ * settings-registry pattern every other `/settings/*` card does — declared
+ * once, here, with NO `permission` field, because `POST /api/account/reset` is
+ * `@Auth()` with no permissions and takes no user id.
+ *
+ * The group placement is the assertion worth having. `Security` is the group
+ * for long-lived CREDENTIALS — a personal access token, and by adjacency the
+ * API key above it — and a reset erases DATA while leaving every credential
+ * that proves who you are intact. Filing it there would say the opposite, and
+ * would put "erase everything you have built" one row below "create a bearer
+ * token".
+ */
+describe('USER_SETTINGS_SECTIONS - Danger zone card (epic #220)', () => {
+  function findResetCard() {
+    for (const section of USER_SETTINGS_SECTIONS) {
+      const card = section.cards.find((c) => c.path === '/settings/reset');
+      if (card) return card;
+    }
+    return undefined;
+  }
+
+  it('is present in the registry', () => {
+    const card = findResetCard();
+    expect(card).toBeDefined();
+    expect(card?.title).toBe('Reset your data');
+  });
+
+  it('declares no permission - erasing your own data is not a privilege, it is what owning the account already means', () => {
+    const card = findResetCard();
+    expect(card).toBeDefined();
+    expect('permission' in (card as object)).toBe(false);
+    expect(card?.permission).toBeUndefined();
+  });
+
+  it('points at /settings/reset', () => {
+    expect(findResetCard()?.path).toBe('/settings/reset');
+  });
+
+  it('is its own Danger zone group, never a card under Security, which is for credentials', () => {
+    const dangerZone = USER_SETTINGS_SECTIONS.find(
+      (s) => s.label === 'Danger zone',
+    );
+    expect(dangerZone).toBeDefined();
+    expect(dangerZone?.cards.map((c) => c.path)).toEqual(['/settings/reset']);
+
+    const security = USER_SETTINGS_SECTIONS.find((s) => s.label === 'Security');
+    expect(security?.cards.some((c) => c.path === '/settings/reset')).toBe(false);
+  });
+
+  it('is the LAST group, so the destructive surface is never the first thing scanned', () => {
+    expect(USER_SETTINGS_SECTIONS[USER_SETTINGS_SECTIONS.length - 1].label).toBe(
+      'Danger zone',
+    );
+  });
+
+  it('warns in its own description that the action cannot be undone', () => {
+    expect(findResetCard()?.description).toMatch(/cannot be undone/i);
+  });
+
+  it('resolves the AppBar title from the registry, with no per-surface branch', () => {
+    expect(
+      settingsPageTitle(
+        USER_SETTINGS_SECTIONS,
+        USER_HUB_PATH,
+        USER_HUB_TITLE,
+        '/settings/reset',
+      ),
+    ).toBe('Reset your data');
+  });
+});

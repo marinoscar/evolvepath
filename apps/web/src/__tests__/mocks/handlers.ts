@@ -12,6 +12,7 @@ import { weeklyHandlers } from './weeklyHandlers';
 import { healthHandlers } from './healthHandlers';
 import { workoutHandlers } from './workoutHandlers';
 import { mediaHandlers } from './mediaHandlers';
+import { accountHandlers } from './accountHandlers';
 import { workHandlers } from './workHandlers';
 
 // Use wildcard pattern to match relative URLs
@@ -653,4 +654,7 @@ export const handlers = [
   ...healthHandlers,
   ...workoutHandlers,
   ...mediaHandlers,
+  // The Danger zone (epic #220). Stateful, and it enforces the phrase rule —
+  // see the module header for why a permissive mock would be worse than none.
+  ...accountHandlers,
 ];
