@@ -39,6 +39,7 @@ const WorkoutRunnerPage = lazy(() => import('./pages/WorkoutRunnerPage'));
 const CoachPage = lazy(() => import('./pages/CoachPage'));
 const MediaLibraryPage = lazy(() => import('./pages/MediaLibraryPage'));
 const ProgressPage = lazy(() => import('./pages/ProgressPage'));
+const ProgressTimelinePage = lazy(() => import('./pages/ProgressTimelinePage'));
 // Progress surfaces, not sixth destinations: `DESTINATION_ROUTES.progress`
 // already owns `/progress/*` by prefix, so the weekly review and its planning
 // wizard need no registry entry (epic E10).
@@ -201,6 +202,9 @@ function AppRoutes() {
                     tab. */}
                 <Route path="/media" element={<MediaLibraryPage />} />
                   <Route path="/progress" element={<ProgressPage />} />
+                  {/* Owned by the `progress` destination through its `/progress`
+                      prefix — no registry change (epic E11). */}
+                  <Route path="/progress/timeline" element={<ProgressTimelinePage />} />
                   {/* Epic E10. `/progress/week` rather than `/review`: the
                       review IS the weekly view of progress, so it belongs under
                       the destination whose rail and bottom-bar tab light up for

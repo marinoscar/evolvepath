@@ -267,6 +267,9 @@ describe('AppBar', () => {
     it.each([
       ['/progress/week', 'Your Week'],
       ['/progress/week/plan', 'Plan next week'],
+      // Epic E11 (#117): the full evidence list is a longer view of the
+      // Progress screen's Evidence section, not a sixth destination.
+      ['/progress/timeline', 'Evidence'],
     ])('shows Back + %s title on %s', (route, title) => {
       setViewportWidth(375);
       render(<AppBar />, { wrapperOptions: { route } });

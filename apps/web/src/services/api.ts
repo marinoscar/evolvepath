@@ -1999,3 +1999,74 @@ export async function askAboutMedia(
     ...(question?.trim() ? { question: question.trim() } : {}),
   });
 }
+
+import type {
+  ComebackCompletion,
+  ComebackStatus,
+  Milestone,
+  ProgressResponse,
+  TimelinePage,
+} from '../types';
+
+// =============================================================================
+// Progress, momentum and the comeback loop (epic E11)
+// =============================================================================
+//
+// The ONLY place this app names these endpoints. If a route or a field moves,
+// this block plus `types/index.ts` is the entire reconciliation surface.
+
+export async function getProgress(): Promise<ProgressResponse> {
+  return api.get<ProgressResponse>('/progress');
+}
+
+export async function getProgressTimeline(params: {
+  from?: string;
+  to?: string;
+  domain?: Domain;
+  limit?: number;
+  cursor?: string;
+} = {}): Promise<TimelinePage> {
+  const query = new URLSearchParams();
+  if (params.from) query.set('from', params.from);
+  if (params.to) query.set('to', params.to);
+  if (params.domain) query.set('domain', params.domain);
+  if (params.limit) query.set('limit', String(params.limit));
+  if (params.cursor) query.set('cursor', params.cursor);
+
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return api.get<TimelinePage>(`/progress/timeline${suffix}`);
+}
+
+export async function getMilestones(
+  params: { unacknowledged?: boolean } = {},
+): Promise<{ items: Milestone[] }> {
+  const suffix = params.unacknowledged ? '?unacknowledged=true' : '';
+  return api.get<{ items: Milestone[] }>(`/progress/milestones${suffix}`);
+}
+
+/** Marks a milestone as seen, so it is celebrated once (PRD §77). */
+export async function acknowledgeMilestone(id: string): Promise<Milestone> {
+  return api.post<Milestone>(`/progress/milestones/${id}/ack`, {});
+}
+
+export async function getComeback(): Promise<ComebackStatus> {
+  return api.get<ComebackStatus>('/comeback');
+}
+
+export async function chooseComebackDomain(domain: Domain): Promise<ComebackStatus> {
+  return api.post<ComebackStatus>('/comeback/choose', { domain });
+}
+
+export async function startComeback(): Promise<ComebackStatus> {
+  return api.post<ComebackStatus>('/comeback/start', {});
+}
+
+export async function completeComeback(notes?: string): Promise<ComebackCompletion> {
+  return api.post<ComebackCompletion>('/comeback/complete', {
+    ...(notes?.trim() ? { notes: notes.trim() } : {}),
+  });
+}
+
+export async function dismissComeback(): Promise<void> {
+  await api.post<void>('/comeback/dismiss', {});
+}

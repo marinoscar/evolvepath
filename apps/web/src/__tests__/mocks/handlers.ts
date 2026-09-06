@@ -4,6 +4,7 @@ import { coachHandlers } from './coachHandlers';
 import { familyHandlers } from './familyHandlers';
 import { memoryHandlers } from './memoryHandlers';
 import { pathHandlers } from './pathHandlers';
+import { progressHandlers } from './progressHandlers';
 import { todayHandlers } from './todayHandlers';
 import { weeklyHandlers } from './weeklyHandlers';
 import { healthHandlers } from './healthHandlers';
@@ -633,6 +634,7 @@ export const handlers = [
   // store with the transition matrix enforced, rather than canned responses.
   ...pathHandlers,
   ...todayHandlers,
+  ...progressHandlers,
   ...familyHandlers,
   ...coachHandlers,
   ...memoryHandlers,

@@ -173,25 +173,32 @@ describe('App', () => {
       });
     });
 
-    it('renders the placeholder at /progress', async () => {
-      // The last destination PRD §11 fixes and a later epic fills. Routed now
-      // so E11 lands on a destination that already exists — and so
-      // `destinations.test.ts` can assert every route is owned. `/path` is a
-      // real page since #56 and `/coach` since E06 (#86); both have their own
-      // page specs.
-      signInAs(['user_settings:read']);
+    it.each(['/progress', '/progress/timeline'])(
+      'renders the Progress screen at %s',
+      async (route) => {
+        // The last destination PRD §11 fixes, filled by epic E11. The timeline
+        // is a drill-down owned by the same `/progress` prefix, which is why
+        // `destinations.test.ts` needs no new entry for it.
+        signInAs(['user_settings:read']);
 
-      render(
-        <MemoryRouter initialEntries={['/progress']}>
-          <App />
-        </MemoryRouter>,
-      );
+        render(
+          <MemoryRouter initialEntries={[route]}>
+            <App />
+          </MemoryRouter>,
+        );
 
-      await waitFor(
-        () => expect(screen.getByTestId('progress-placeholder')).toBeInTheDocument(),
-        { timeout: 5000 },
-      );
-    });
+        await waitFor(
+          () =>
+            expect(
+              screen.getByRole('heading', {
+                level: 1,
+                name: route === '/progress' ? 'Progress' : 'Evidence',
+              }),
+            ).toBeInTheDocument(),
+          { timeout: 5000 },
+        );
+      },
+    );
 
     it.each(['/coach', '/coach/abc'])('renders the Coach screen at %s', async (route) => {
       signInAs(['user_settings:read']);

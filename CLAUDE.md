@@ -9,7 +9,7 @@ Web Application Foundation with React UI + Node API + PostgreSQL. Production-gra
 ## Technology Stack
 
 - **Backend**: Node.js + TypeScript, NestJS with Fastify adapter
-- **Frontend**: React + TypeScript, Material UI (MUI)
+- **Frontend**: React + TypeScript, Material UI (MUI), `@mui/x-charts` for the Progress screen's charts
 - **CLI**: TypeScript, Commander (subcommands) + ink (interactive menu)
 - **Database**: PostgreSQL with Prisma ORM
 - **Auth**: Passport strategies (Google OAuth required)
@@ -33,6 +33,7 @@ Web Application Foundation with React UI + Node API + PostgreSQL. Production-gra
     web/                    # Frontend React app
       src/
       src/components/path/  # Path screen components (Best Self, outcomes, plans, routines, commitments)
+      src/components/progress/  # Progress screen (momentum cards, evidence timeline, consistency chart, milestone toast)
       src/pwa/              # Service worker registration (production only)
       src/__tests__/
       build/                # Build-time Vite plugins (app-shell service worker)
