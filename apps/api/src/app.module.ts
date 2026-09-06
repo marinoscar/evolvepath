@@ -23,6 +23,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { AiModule } from './ai/ai.module';
 import { PathModule } from './path/path.module';
 import { CommitmentsModule } from './commitments/commitments.module';
+import { ProgressModule } from './progress/progress.module';
 import { TodayModule } from './today/today.module';
 import { WorkoutsModule } from './workouts/workouts.module';
 import { HealthDomainModule } from './health-domain/health-domain.module';
@@ -106,6 +107,10 @@ import configuration from './config/configuration';
     // written at volume by the flows E05/E07/E09 add.
     CommitmentsModule,
     TodayModule,
+    // Momentum, the consistency run and the evidence timeline (epic E11).
+    // Registered after TodayModule because Today reads its summary; the arrow
+    // never points back.
+    ProgressModule,
     WorkoutsModule,
     HealthDomainModule,
 

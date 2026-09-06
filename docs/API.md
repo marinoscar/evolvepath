@@ -2122,10 +2122,21 @@ with the provider down. The coach's sentence is a second, optional request.
     { "domain": "FAMILY", "mode": "GROW", "commitments": [] },
     { "domain": "HEALTH", "mode": "PAUSE", "commitments": [ "…" ] }
   ],
-  "momentum": null,
+  "momentum": {
+    "WORK": { "state": "SLIPPING", "headline": "3 in a row not started" },
+    "FAMILY": { "state": "INSUFFICIENT_DATA", "headline": "Not enough planned family commitments yet — momentum appears after 3" },
+    "HEALTH": { "state": "STEADY", "headline": "5 of 6 planned workouts completed" }
+  },
   "coachInsight": null
 }
 ```
+
+**`momentum` is the summary, not the reading.** A state word and one sentence
+per domain — the full window, its signals and the trend live on `GET /progress`
+(epic E11). It is computed from the same engine, so the two screens can never
+disagree; when that computation fails the field degrades to
+`INSUFFICIENT_DATA` with a null headline and the day still returns 200, because
+Progress is a secondary reading on a screen about the next hour.
 
 **`domains` always has three entries, in canonical order** — including the empty
 and the paused. A domain that vanished because nothing was scheduled would look
@@ -2739,6 +2750,112 @@ would make "how many times did you reflect?" meaningless.
 | 404 | `NOT_FOUND` | The id is unknown **or** belongs to another user — deliberately indistinguishable. |
 | 409 | `CONFLICT` | A state-machine violation: an edit to an archived outcome, a second plan for one outcome, a second draft, an activate/edit/reject on the wrong version status, a write to a read-only version's routines, a losing activation race, an edit to a terminal commitment, or a commitment hung off a superseded plan version. The message names the current status. |
 | 409 | `CONFLICT` with `details.reason = "INVALID_TRANSITION"` | A commitment transition the matrix forbids. `details` also carries `from` and `to`. |
+
+---
+
+### Progress
+
+Momentum, the consistency run, recovery and the evidence timeline (epic E11).
+
+**There is no score in this response, and its absence is the design** (PRD P13,
+§54). Every number is a count. The engine compares ratios internally to detect a
+trend and deliberately does not serialise them: a ratio on the wire is one pull
+request away from a percentage badge. The only `ratio` in the payload is
+`independence.ratio`, which measures the product — how often the user acts
+without being reminded — not the person.
+
+Deterministic and AI-free: the same data yields the same states, and the screen
+renders with the provider down (PRD §53, §120).
+
+---
+
+#### GET /progress
+**Requires Authentication** — the caller's own evolution. There is no id in the
+path; a user reads their own Progress or nobody's.
+
+```json
+{
+  "generatedAt": "2026-03-02T12:00:00.000Z",
+  "windowDays": 28,
+  "momentum": {
+    "HEALTH": {
+      "domain": "HEALTH",
+      "state": "STEADY",
+      "evidence": [
+        "5 of 6 planned workouts completed",
+        "1 completed with the short or minimum version"
+      ],
+      "signals": {
+        "planned": 6, "completed": 5, "partial": 0, "fallback": 1,
+        "missed": 1, "skipped": 0, "consecutiveMisses": 0, "rescheduledTwice": 0,
+        "lastCompletionAt": "2026-03-01T13:00:00.000Z",
+        "lastMissAt": "2026-02-20T13:00:00.000Z",
+        "returnedAfterIdleDays": null
+      },
+      "trend": [
+        { "weekStart": "2026-02-09", "planned": 3, "completed": 3 },
+        { "weekStart": "2026-02-16", "planned": 3, "completed": 2 },
+        { "weekStart": "2026-02-23", "planned": 3, "completed": 3 },
+        { "weekStart": "2026-03-02", "planned": 1, "completed": 1 }
+      ]
+    },
+    "WORK":   { "…": "same shape" },
+    "FAMILY": { "…": "same shape" }
+  },
+  "consistencyRun": {
+    "weeks": 3,
+    "graceUsed": 1,
+    "weekly": [
+      { "weekStart": "2026-02-09", "planned": 6, "completed": 5, "success": true, "graced": false, "current": false }
+    ]
+  },
+  "recovery": { "medianDays": 1.5, "samples": 4 },
+  "independence": { "ratio": null, "completedWithoutReminder": 0, "sampleSize": 0 },
+  "milestones": [],
+  "insights": [
+    { "id": "9c1…", "category": "PATTERN", "statement": "Mornings work better than evenings" }
+  ]
+}
+```
+
+**The six momentum states**, resolved by the FIRST matching rule — the order is
+part of the contract:
+
+| # | State | Rule |
+|---|-------|------|
+| 1 | `INSUFFICIENT_DATA` | fewer than 3 decided commitments in the window |
+| 2 | `RECOVERING` | the latest completion ended a gap of 3+ days that contained a miss |
+| 3 | `SLIPPING` | 3 not-started in a row, or the recent half fell 0.15 below the prior half |
+| 4 | `BUILDING` | the user is under 14 days old in this domain and keeping at least half |
+| 5 | `IMPROVING` | the recent half rose 0.15 above the prior half |
+| 6 | `STEADY` | otherwise |
+
+`RECOVERING` beats `SLIPPING` on purpose: a person who came back deserves to
+read that they came back, not that they lapsed (VISION §31).
+
+**What counts.** A commitment is *decided* when it is `COMPLETED`,
+`PARTIALLY_COMPLETED`, `MISSED`, `SKIPPED`, or still `PLANNED`/`READY` with its
+time already past — so the numbers are the same before and after the inactivity
+sweep closes a stale row. `CANCELLED` (removed by a plan change) and
+`RESCHEDULED` (closed by a reschedule whose successor carries the intention) are
+excluded entirely: neither a plan edit nor a postponement is a failure. A
+completion at the SHORT or MINIMUM size is a completion (PRD §44).
+
+**The run is counted in weeks, not days** (PRD §55). A week succeeds at 60% of
+what was planned; a week with nothing planned is neutral and neither extends nor
+breaks the run; one bad week per four counted weeks is forgiven, and `graceUsed`
+says so out loud. The week in progress is reported with `current: true` and
+never counted. Weeks are Monday-start in the user's own timezone, the same
+convention the family summary and the weekly review use.
+
+**`independence.ratio` is `null` until epic E12** records which completions
+followed a reminder. Null rather than zero, so a client can say "available once
+notifications learn your rhythm" instead of reporting a failure that has not
+been measured.
+
+| Status | Code | When |
+|--------|------|------|
+| 401 | `UNAUTHORIZED` | No bearer token, or an expired one. |
 
 ---
 

@@ -154,6 +154,12 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'no AI call — the screen renders with the provider down.',
       },
       {
+        name: 'Progress',
+        description:
+          'Momentum per domain, the consistency run, recovery, coach dependency, milestones ' +
+          'and the evidence timeline. Counts and states only — there is no score.',
+      },
+      {
         name: 'Best Self',
         description:
           "The calling user's Best Self profile — who they are trying to become (PRD §10.2). " +

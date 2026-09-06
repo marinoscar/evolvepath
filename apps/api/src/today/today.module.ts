@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { AiModule } from '../ai/ai.module';
 import { CommitmentsModule } from '../commitments/commitments.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { ProgressModule } from '../progress/progress.module';
 import { UserProfileModule } from '../user-profile/user-profile.module';
 import { CHECK_IN_READER } from './check-in-reader';
 import { CheckInService } from './check-in/check-in.service';
@@ -22,7 +23,7 @@ import { TodayService } from './today.service';
  * #38 land and be tested before the table existed.
  */
 @Module({
-  imports: [PrismaModule, AiModule, CommitmentsModule, UserProfileModule],
+  imports: [PrismaModule, AiModule, CommitmentsModule, UserProfileModule, ProgressModule],
   controllers: [TodayController],
   providers: [
     TodayService,
