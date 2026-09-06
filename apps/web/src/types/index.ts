@@ -3016,3 +3016,43 @@ export interface OnboardingAnswersPatch {
   healthBaseline?: HealthBaseline;
   coachingStyle?: CoachingStyle;
 }
+
+// =============================================================================
+// Account reset — the "Danger zone" (epic #220, issue #224)
+// =============================================================================
+//
+// A DATA reset, not an account deletion: the sign-in, the OAuth identity, the
+// roles and the audit trail all survive either scope. The wider scope adds the
+// stored OpenAI key to what is erased — here, not at OpenAI.
+
+export type AccountResetScope = 'data' | 'data_and_key';
+
+/**
+ * What a reset would erase, and the phrase each scope demands.
+ *
+ * `counts` is keyed by the API's own snake_case table names and is deliberately
+ * open-ended (`Record<string, number>`) rather than a fixed set of keys: the
+ * server decides what a reset touches, and a table added there must surface
+ * here as a line the user reads rather than a key this type silently drops.
+ *
+ * `phrases` comes down with the summary for the same reason it is passed into
+ * the dialog as a prop — see `ConfirmPhraseDialog`'s header. A copy of these
+ * strings in the web app would keep matching the user's typing on the day the
+ * server stopped accepting it.
+ */
+export interface AccountDataSummary {
+  counts: Record<string, number>;
+  phrases: Record<AccountResetScope, string>;
+}
+
+export interface ResetAccountInput {
+  scope: AccountResetScope;
+  confirmationPhrase: string;
+}
+
+/** What was actually erased. `deleted` is keyed like `AccountDataSummary.counts`. */
+export interface AccountResetResult {
+  scope: AccountResetScope;
+  deleted: Record<string, number>;
+  aiKeyRemoved: boolean;
+}

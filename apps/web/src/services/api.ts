@@ -2277,3 +2277,41 @@ export async function approveOnboarding(
 ): Promise<ApprovedOnboardingPath> {
   return api.post<ApprovedOnboardingPath>('/onboarding/approve', { proposal });
 }
+
+// =============================================================================
+// Account reset (epic #220)
+// =============================================================================
+//
+// Same rule as the blocks above: the ONLY place this app names these endpoints.
+// Both routes are `@Auth()` with no permissions and take no user id — every
+// authenticated user owns their own data.
+
+import type {
+  AccountDataSummary,
+  AccountResetResult,
+  ResetAccountInput,
+} from '../types';
+
+/**
+ * `GET /api/account/data-summary`
+ *
+ * Per-table row counts a reset would erase, plus the exact phrase each scope
+ * requires. The phrases are read from here and never hardcoded in the web app.
+ */
+export async function getAccountDataSummary(): Promise<AccountDataSummary> {
+  return api.get<AccountDataSummary>('/account/data-summary');
+}
+
+/**
+ * `POST /api/account/reset`
+ *
+ * Erases the caller's own data, and on `data_and_key` their stored OpenAI key
+ * as well. A phrase that does not match is a 400 and nothing is deleted — the
+ * server re-verifies what the dialog already checked, because nothing stops a
+ * direct POST from a script.
+ */
+export async function resetAccount(
+  input: ResetAccountInput,
+): Promise<AccountResetResult> {
+  return api.post<AccountResetResult>('/account/reset', input);
+}

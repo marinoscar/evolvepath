@@ -63,6 +63,9 @@ const UserAiKeyPage = lazy(() => import('./pages/UserAiKeyPage'));
 const UserAiMemoryPage = lazy(() => import('./pages/UserAiMemoryPage'));
 // Epic E10 (#84) — the day and time the weekly review is prepared.
 const UserWeeklyRhythmPage = lazy(() => import('./pages/UserWeeklyRhythmPage'));
+// Epic #220 (#224) — the Danger zone: erase your own data, optionally with the
+// stored OpenAI key.
+const UserDataResetPage = lazy(() => import('./pages/UserDataResetPage'));
 const AiKeySetupPage = lazy(() => import('./pages/AiKeySetupPage'));
 // The first-Path wizard (epic E04, #102). Full screen by route placement, like
 // `/setup/ai-key` above — inside `RequireAiKey` (step 8 needs the key) and
@@ -311,6 +314,15 @@ function AppRoutes() {
                         rhythm is two columns on the caller's own profile, and the
                         API route is plain `@Auth()` for the same reason. */}
                     <Route path="/settings/weekly-rhythm" element={<UserWeeklyRhythmPage />} />
+                    {/* Epic #220 (#224) — the Danger zone. Ungated like its
+                        siblings: `POST /api/account/reset` is `@Auth()` with no
+                        permissions and takes no user id, because every
+                        authenticated user owns their own data. Deliberately NOT
+                        exempt from either shell gate — a reset un-onboards the
+                        user (and, on the wider scope, un-keys them), and the page
+                        refreshes the auth user before navigating so both gates
+                        answer with the post-reset truth. */}
+                    <Route path="/settings/reset" element={<UserDataResetPage />} />
                     {/* Route-level AUTHORIZATION, not just authentication.
                         `ProtectedRoute` above only establishes that someone is
                         logged in — before this, a Viewer typing `/admin/settings`

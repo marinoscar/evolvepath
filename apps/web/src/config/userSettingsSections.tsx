@@ -26,6 +26,7 @@ import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import KeyIcon from '@mui/icons-material/Key';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import type { SettingsSectionDef } from './adminSections';
 
 /**
@@ -131,6 +132,38 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
         description: 'Create and revoke personal access tokens for API and CLI access.',
         Icon: VpnKeyIcon,
         path: '/settings/tokens',
+      },
+    ],
+  },
+  {
+    // Issue #224, epic #220. Its OWN group, last, rather than a third card
+    // under `Security`: that group is for long-lived CREDENTIALS — a personal
+    // access token, and by adjacency the API key above it — and what a reset
+    // erases is the user's data, not a way of proving who they are. Their
+    // sign-in, their identity and their roles all survive it. Grouping the two
+    // would say the opposite, and it would put "erase everything you have
+    // built" one row below "create a bearer token".
+    //
+    // A REGISTRY CARD PLUS A ROUTE, never a tab on `/settings/profile` or
+    // `/settings/ai-key`. CLAUDE.md's Settings UI Pattern rule 2 draws the
+    // line precisely: a destination gate is about REACHABILITY and a tab gate
+    // is about CONTENT. This is a destination — a place you go on purpose,
+    // that the hub, the Console rail and the AppBar title resolver all have to
+    // know exists — not a second view of the question either of those pages
+    // answers.
+    //
+    // NO `permission`, like every card here: `POST /api/account/reset` is
+    // `@Auth()` with no permissions and accepts no user id, because every
+    // authenticated user owns their own data. A gate here would invent an
+    // authorization rule the API does not enforce.
+    label: 'Danger zone',
+    cards: [
+      {
+        title: 'Reset your data',
+        description:
+          'Erase everything you have built in EvolvePath — outcomes, plans, commitments, evidence and coach history. This cannot be undone.',
+        Icon: DeleteForeverIcon,
+        path: '/settings/reset',
       },
     ],
   },
