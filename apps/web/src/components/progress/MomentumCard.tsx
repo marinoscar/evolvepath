@@ -52,7 +52,7 @@ export default function MomentumCard({ momentum }: Props) {
   );
 
   return (
-    <Card sx={{ height: '100%' }} data-testid={`momentum-${momentum.domain}`}>
+    <Card sx={{ height: '100%' }} data-testid={`progress-momentum-${momentum.domain}`}>
       <CardContent>
         <Typography variant="h6" component="h3" gutterBottom>
           {domainLabel(momentum.domain)} Momentum
@@ -60,6 +60,7 @@ export default function MomentumCard({ momentum }: Props) {
 
         <Chip
           size="small"
+          data-testid="progress-momentum-state"
           // The icon is decoration; the label is the fact. A reader who cannot
           // see the arrow still reads "Improving".
           icon={<StateIcon fontSize="small" aria-hidden />}
@@ -131,7 +132,13 @@ export default function MomentumCard({ momentum }: Props) {
         </Typography>
         <Box component="ul" data-testid="momentum-evidence" sx={{ m: 0, pl: 2.5 }}>
           {momentum.evidence.map((bullet) => (
-            <Typography key={bullet} component="li" variant="body2" color="text.secondary">
+            <Typography
+              key={bullet}
+              component="li"
+              variant="body2"
+              color="text.secondary"
+              data-testid="progress-evidence-bullet"
+            >
               {bullet}
             </Typography>
           ))}

@@ -37,7 +37,7 @@ describe('ComebackBanner (#119)', () => {
   it('is absent when there is no open loop', () => {
     renderBanner(null);
 
-    expect(screen.queryByTestId('comeback-banner')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('today-comeback-banner')).not.toBeInTheDocument();
   });
 
   it('greets rather than reckons', () => {
@@ -57,7 +57,7 @@ describe('ComebackBanner (#119)', () => {
   it('is announced politely rather than as an error', () => {
     renderBanner(OFFER);
 
-    expect(screen.getByTestId('comeback-banner')).toHaveAttribute('role', 'status');
+    expect(screen.getByTestId('today-comeback-banner')).toHaveAttribute('role', 'status');
   });
 
   it('opens the flow', async () => {

@@ -111,7 +111,7 @@ export default function EvidenceTimeline({
   }
 
   return (
-    <Card>
+    <Card data-testid="progress-timeline">
       <CardContent>
         <Stack spacing={2} divider={<Divider flexItem />}>
           {groups.map(([day, events]) => (

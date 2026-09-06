@@ -64,17 +64,17 @@ describe('ProgressPage (#117)', () => {
     it('shows one momentum card per domain, with its state word and its bullets', async () => {
       await renderPage();
 
-      const health = await screen.findByTestId('momentum-HEALTH');
+      const health = await screen.findByTestId('progress-momentum-HEALTH');
       expect(within(health).getByText('Health Momentum')).toBeInTheDocument();
       expect(within(health).getByText('Steady')).toBeInTheDocument();
       expect(
         within(health).getByText('5 of 6 planned workouts completed'),
       ).toBeInTheDocument();
 
-      const work = screen.getByTestId('momentum-WORK');
+      const work = screen.getByTestId('progress-momentum-WORK');
       expect(within(work).getByText('Slipping')).toBeInTheDocument();
 
-      const family = screen.getByTestId('momentum-FAMILY');
+      const family = screen.getByTestId('progress-momentum-FAMILY');
       expect(within(family).getByText('Not enough yet')).toBeInTheDocument();
     });
   });
@@ -82,7 +82,7 @@ describe('ProgressPage (#117)', () => {
   describe('the no-score rule (PRD P13, §54)', () => {
     it('renders no percentage, no /100 and no "score" in the default state', async () => {
       const { container } = await renderPage();
-      await screen.findByTestId('momentum-HEALTH');
+      await screen.findByTestId('progress-momentum-HEALTH');
 
       const text = container.textContent ?? '';
       expect(text).not.toMatch(NO_SCORE);
@@ -167,7 +167,7 @@ describe('ProgressPage (#117)', () => {
       setMilestones([]);
 
       await renderPage();
-      await screen.findByTestId('momentum-HEALTH');
+      await screen.findByTestId('progress-momentum-HEALTH');
 
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
@@ -175,7 +175,7 @@ describe('ProgressPage (#117)', () => {
 
   it('has no accessibility violations', async () => {
     const { container } = await renderPage();
-    await screen.findByTestId('momentum-HEALTH');
+    await screen.findByTestId('progress-momentum-HEALTH');
 
     expect(await axe(container)).toHaveNoViolations();
   });
