@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { commitmentCardSchema } from '../../commitments/commitment-card.schema';
 import { domainSchema } from '../../path/domain.schema';
+import { milestoneSchema } from '../progress.schema';
 
 // =============================================================================
 // The comeback contract (issue #112, epic E11)
@@ -42,8 +43,14 @@ export const comebackStatusSchema = z.object({
 export const comebackCompletionSchema = z.object({
   celebration: z.object({ title: z.string(), body: z.string() }),
   evidenceId: z.string().uuid(),
-  /** E11-03 (#115) fills this; null until then. */
-  milestone: z.unknown().nullable(),
+  /**
+   * The `FIRST_COMEBACK` row, on the first return only (E11-03).
+   *
+   * In the response rather than fetched afterwards because the celebration
+   * screen shows it in the same breath as "Back on Path."; a second request
+   * would put the milestone on the next page load instead.
+   */
+  milestone: milestoneSchema.nullable(),
   nextCommitment: commitmentCardSchema.nullable(),
   planReviewSuggested: z.boolean(),
 });

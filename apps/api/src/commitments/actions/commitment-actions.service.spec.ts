@@ -8,9 +8,13 @@ import { DecompositionService } from '../decomposition/decomposition.service';
 import { templateProposal } from '../decomposition/decomposition.schema';
 import { CommitmentActionsService } from './commitment-actions.service';
 import { ActivityTrackerService } from './../../progress/comeback/activity-tracker.service';
+import { MilestonesService } from './../../progress/milestones/milestones.service';
 
 /** `record` is fire-and-forget; these specs only need it not to explode. */
 const activity = { touch: jest.fn(), record: jest.fn() };
+
+/** `afterAction` is detached; these specs only need it not to explode. */
+const milestones = { afterAction: jest.fn(), evaluate: jest.fn().mockResolvedValue([]) };
 
 describe('CommitmentActionsService (#40)', () => {
   let service: CommitmentActionsService;
@@ -87,6 +91,7 @@ describe('CommitmentActionsService (#40)', () => {
         { provide: CommitmentsService, useValue: commitments },
         { provide: DecompositionService, useValue: decomposition },
         { provide: ActivityTrackerService, useValue: activity },
+        { provide: MilestonesService, useValue: milestones },
       ],
     }).compile();
 

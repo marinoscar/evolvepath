@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { MilestonesService } from '../milestones/milestones.service';
 import { ComebackService, type SweepResult } from './comeback.service';
 
 // =============================================================================
@@ -27,6 +28,7 @@ export class ComebackSweepTask {
   constructor(
     private readonly prisma: PrismaService,
     private readonly comeback: ComebackService,
+    private readonly milestones: MilestonesService,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_4AM)
@@ -36,7 +38,18 @@ export class ComebackSweepTask {
 
   /** Exposed for ops and for the non-production job route. */
   async runForUser(userId: string, now: Date = new Date()): Promise<SweepResult> {
-    return this.comeback.sweepUser(userId, now);
+    const result = await this.comeback.sweepUser(userId, now);
+
+    // The daily pass is what catches the milestones nothing else can: a week
+    // becomes successful at a week boundary, and no user action happens then.
+    await this.milestones.evaluate(userId, now).catch(() => []);
+
+    return result;
+  }
+
+  /** The milestone pass on its own, for the non-production job route (#115). */
+  async evaluateMilestonesFor(userId: string, now: Date = new Date()) {
+    return this.milestones.evaluate(userId, now);
   }
 
   async runAll(now: Date = new Date()): Promise<{
@@ -63,7 +76,7 @@ export class ComebackSweepTask {
       for (const user of page) {
         summary.users += 1;
         try {
-          const result = await this.comeback.sweepUser(user.id, now);
+          const result = await this.runForUser(user.id, now);
           summary.closed += result.closedCount;
           if (result.trigger) summary.offered += 1;
         } catch (error) {

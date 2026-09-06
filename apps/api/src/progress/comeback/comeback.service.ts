@@ -15,6 +15,7 @@ import { toCommitmentCard } from '../../commitments/commitment-card.mapper';
 import type { CommitmentCard } from '../../commitments/commitment-card.schema';
 import { localDate, localDayBounds, safeTimeZone } from '../../today/local-date';
 import type { Domain } from '../momentum/momentum-engine';
+import { MilestonesService, toMilestoneView } from '../milestones/milestones.service';
 import { MomentumService } from '../momentum/momentum.service';
 import {
   CELEBRATION_BODY,
@@ -75,6 +76,7 @@ export class ComebackService {
     private readonly momentum: MomentumService,
     private readonly actions: CommitmentActionsService,
     private readonly wording: RestartWordingService,
+    private readonly milestones: MilestonesService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -551,10 +553,19 @@ export class ComebackService {
       restartCommitmentId: restart?.id ?? null,
     });
 
+    // AWAITED, not detached, unlike everywhere else this runs: the celebration
+    // screen shows "First comeback" in the same response, and a milestone that
+    // arrived a second later would be a toast on the next page load instead.
+    // A failure still cannot cost the user their recovery — hence the catch.
+    const awarded = await this.milestones
+      .evaluate(userId, now)
+      .catch(() => [] as Awaited<ReturnType<MilestonesService['evaluate']>>);
+
     return {
       celebration: { title: CELEBRATION_TITLE, body: CELEBRATION_BODY },
       evidenceId: evidence.id,
-      milestone: null,
+      milestone:
+        awarded.map(toMilestoneView).find((row) => row.kind === 'FIRST_COMEBACK') ?? null,
       nextCommitment: await this.nextCommitment(userId, now),
       planReviewSuggested: profile.planReviewSuggestedAt !== null,
     };

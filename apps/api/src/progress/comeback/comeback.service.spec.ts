@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UserProfileService } from '../../user-profile/user-profile.service';
 import { CommitmentActionsService } from '../../commitments/actions/commitment-actions.service';
+import { MilestonesService } from '../milestones/milestones.service';
 import { MomentumService } from '../momentum/momentum.service';
 import { ComebackService } from './comeback.service';
 import { RestartWordingService } from './restart-wording.service';
@@ -30,6 +31,7 @@ describe('ComebackService (#112)', () => {
   let momentum: { forUser: jest.Mock };
   let actions: { complete: jest.Mock };
   let wording: { compose: jest.Mock };
+  let milestones: { evaluate: jest.Mock; afterAction: jest.Mock };
 
   const profileRow = (over: Record<string, unknown> = {}) => ({
     userId: 'u1',
@@ -113,6 +115,8 @@ describe('ComebackService (#112)', () => {
       }),
     };
 
+    milestones = { evaluate: jest.fn().mockResolvedValue([]), afterAction: jest.fn() };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ComebackService,
@@ -121,6 +125,7 @@ describe('ComebackService (#112)', () => {
         { provide: MomentumService, useValue: momentum },
         { provide: CommitmentActionsService, useValue: actions },
         { provide: RestartWordingService, useValue: wording },
+        { provide: MilestonesService, useValue: milestones },
       ],
     }).compile();
 
@@ -286,6 +291,39 @@ describe('ComebackService (#112)', () => {
           lastActiveAt: NOW,
         }),
       });
+    });
+
+    it('carries the FIRST_COMEBACK milestone in the same response (#115)', async () => {
+      milestones.evaluate.mockResolvedValue([
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          kind: 'FIRST_COMEBACK',
+          sequence: 1,
+          domain: null,
+          achievedAt: NOW,
+          acknowledgedAt: null,
+          meta: {},
+        },
+      ]);
+
+      const result = await service.complete('u1', undefined, NOW);
+
+      expect(result.milestone).toMatchObject({ kind: 'FIRST_COMEBACK' });
+    });
+
+    it('returns a null milestone on a later comeback', async () => {
+      const result = await service.complete('u1', undefined, NOW);
+
+      expect(result.milestone).toBeNull();
+    });
+
+    it('never lets a milestone failure cost the user their recovery', async () => {
+      milestones.evaluate.mockRejectedValue(new Error('detector exploded'));
+
+      const result = await service.complete('u1', undefined, NOW);
+
+      expect(result.celebration.title).toBe('Back on Path.');
+      expect(result.milestone).toBeNull();
     });
 
     it('does not re-complete a restart the user already finished', async () => {

@@ -24,6 +24,7 @@ import { validProposal } from '../../src/workouts/programs/__fixtures__/proposal
 import { seedExercises } from '../../prisma/exercise-catalog';
 import { closeTestApp, createTestApp, TestContext } from '../helpers/test-app.helper';
 import { ActivityTrackerService } from '../../src/progress/comeback/activity-tracker.service';
+import { MilestonesService } from '../../src/progress/milestones/milestones.service';
 
 // =============================================================================
 // A workout, end to end, against a real database (issue #81, epic E09)
@@ -149,6 +150,9 @@ describeWithDb('Workout sessions (integration, real DB)', () => {
       // The real tracker: `record` is fire-and-forget, so a session finishing
       // through the action layer also stamps `last_active_at` (#112).
       new ActivityTrackerService(service, new UserProfileService(service)),
+      // Real, and detached: finishing a workout evaluates milestones without
+      // being able to fail the session (#115).
+      new MilestonesService(service),
     );
 
     generator = new WorkoutProgramGeneratorService(
