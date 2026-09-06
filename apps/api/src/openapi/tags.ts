@@ -88,6 +88,14 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'assigning system roles. Admin only.',
       },
       {
+        name: 'Account',
+        description:
+          'The "Danger zone": preview and erase the calling user\'s own data, optionally ' +
+          'including their stored OpenAI key. A data reset, never an account deletion — the ' +
+          'sign-in, OAuth identity, roles and audit trail all survive. No route accepts a ' +
+          'user id, so there is no cross-user reset to authorise.',
+      },
+      {
         name: 'User Settings',
         description:
           'The calling user\'s own preferences, stored as a JSON document. Supports full replacement ' +

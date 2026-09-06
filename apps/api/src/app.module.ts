@@ -10,6 +10,7 @@ import { CommonModule } from './common/common.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { SettingsModule } from './settings/settings.module';
+import { AccountModule } from './account/account.module';
 import { HealthModule } from './health/health.module';
 import { AllowlistModule } from './allowlist/allowlist.module';
 import { DeviceAuthModule } from './device-auth/device-auth.module';
@@ -98,6 +99,11 @@ import configuration from './config/configuration';
     // child of the epic is an addition to a graph that already boots rather
     // than a new module and a feature in one review.
     AiModule,
+
+    // After StorageModule and AiModule: AccountModule's reset path depends on
+    // ObjectsService (the blob delete) and UserAiKeyService (the credential
+    // purge), neither of which any cascade from `users` reaches (epic #220).
+    AccountModule,
     // The EvolvePath product domain (epic #33). #39 registers the top of the
     // PRD §9 hierarchy — Best Self, Outcomes, Domain Modes — and #42/#47 add
     // plans, routines and commitments to the same module rather than new ones,
