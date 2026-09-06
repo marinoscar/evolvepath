@@ -22,6 +22,8 @@ interface DomainCardProps {
    */
   headerExtra?: ReactNode;
   onAction: (action: FamilyRowAction, commitment: CommitmentCard) => void;
+  /** Opens the VISION §9 friction question (epic E07). */
+  onAskFriction?: (commitment: CommitmentCard) => void;
 }
 
 /**
@@ -39,6 +41,7 @@ export function DomainCard({
   pendingId,
   headerExtra,
   onAction,
+  onAskFriction,
 }: DomainCardProps) {
   const modeLabel = DOMAIN_MODE_LABELS[mode];
 
@@ -77,6 +80,7 @@ export function DomainCard({
                 commitment={commitment}
                 disabled={pendingId === commitment.id}
                 onAction={onAction}
+                onAskFriction={onAskFriction}
               />
             ))}
           </List>

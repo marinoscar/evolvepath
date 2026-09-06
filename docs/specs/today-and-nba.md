@@ -213,6 +213,38 @@ The level's own rationale — "moved 2 times, untouched for 4 days" — is
 says what to do; the ladder says why the product thinks so, with the counts in
 it.
 
+### The WORK branch of the Start flow (E07-04, #118)
+
+`/start/:commitmentId` branches **inside** `useStartSession`/`StartFlowPage` on
+`commitment.domain`, and is not forked. Family and Health keep every call E05
+made; a `WORK` commitment additionally gets a server-side focus session
+(`POST /focus-sessions`), which is what survives a reload with its distraction
+notes intact.
+
+What changes on that branch, and nothing else:
+
+- **`Begin` calls `POST /focus-sessions`** instead of the start action. The
+  server performs E05's `start` inside that call, so the commitment still moves
+  to `STARTED` through exactly one code path and writes exactly one
+  `APP_FLOW started` row. A 409 for **another** commitment's running session is
+  reported with a "Stop it and start this" take-over rather than silently
+  ending somebody's work.
+- **The distraction note is `POST /focus-sessions/:id/note`**, saved the moment
+  it is typed. E05-05 kept it in React state and a reload lost it — and the
+  user types these while distracted, which is exactly when a tab gets reloaded.
+- **"Continue another 15?" calls `extend`**, which raises `continuedCount` and
+  the commitment's `timerMinutes` together.
+- **`Done for now` calls `stop`**, which closes the commitment through E05's
+  actions AND writes the `TIMER` evidence. Calling `complete` as well would
+  close it twice.
+- **`?minutes=` and `?instruction=`** pre-set the timer and the one-sentence
+  instruction, set by the friction intervention's "Start 10 minutes". The
+  instruction is rendered as text and capped at 240 characters client-side.
+
+The timer derivation is unchanged and still shared: `utils/commitmentTimer.ts`
+over `commitment.timer`, which the focus session's own response carries
+verbatim.
+
 **A brand-new account never gets `RECOVER`.** Never having logged anything is not
 a lapse, and "welcome back" to someone who has not been anywhere is a bug the
 user notices immediately. The rule requires `hasAnyEvidence`.

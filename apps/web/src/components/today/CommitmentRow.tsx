@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Alert,
   Badge,
   Box,
   Button,
@@ -31,6 +32,14 @@ interface CommitmentRowProps {
   commitment: CommitmentCard;
   disabled?: boolean;
   onAction: (action: FamilyRowAction, commitment: CommitmentCard) => void;
+  /**
+   * Open the VISION §9 question for this commitment (epic E07).
+   *
+   * Passed in rather than owned here: the dialog swaps into an intervention
+   * that starts a timer and reschedules commitments, and a row inside a list
+   * inside a card is the wrong place for that.
+   */
+  onAskFriction?: (commitment: CommitmentCard) => void;
 }
 
 function StatusIcon({ status }: { status: CommitmentStatus }) {
@@ -62,7 +71,12 @@ function StatusIcon({ status }: { status: CommitmentStatus }) {
  * A terminal commitment has no actions at all and renders as a record of the
  * day, which is exactly what it is.
  */
-export function CommitmentRow({ commitment, disabled = false, onAction }: CommitmentRowProps) {
+export function CommitmentRow({
+  commitment,
+  disabled = false,
+  onAction,
+  onAskFriction,
+}: CommitmentRowProps) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
   const isFamily = isFamilyOccurrence(commitment);
@@ -96,6 +110,11 @@ export function CommitmentRow({ commitment, disabled = false, onAction }: Commit
   const isTerminal = commitment.availableActions.length === 0;
   const statusLabel = familyStatusLabel(commitment);
 
+  // The ladder's conclusion, never its level (epic E07). `suggestedAction` is
+  // the server's answer to "what should this row offer?"; a row that branched
+  // on the number would be a second copy of the rule that produced it.
+  const suggested = isTerminal ? 'NONE' : (commitment.avoidance?.suggestedAction ?? 'NONE');
+
   return (
     <ListItem
       data-testid={`commitment-row-${commitment.id}`}
@@ -125,6 +144,32 @@ export function CommitmentRow({ commitment, disabled = false, onAction }: Commit
         slotProps={{ secondary: { component: 'div' } }}
         secondary={
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mt: 0.5 }}>
+            {/*
+              VISION §9's question, asked where the user is already looking. It
+              appears at level 3–4 only, and drops to "Break it down" for a week
+              once they have answered — a diagnosis, not a nag.
+            */}
+            {suggested === 'FRICTION_QUESTION' && onAskFriction && (
+              <Alert
+                severity="info"
+                sx={{ width: '100%', py: 0 }}
+                data-testid={`friction-prompt-${commitment.id}`}
+                action={
+                  <Button
+                    size="small"
+                    disabled={disabled}
+                    data-testid={`friction-answer-open-${commitment.id}`}
+                    onClick={() => onAskFriction(commitment)}
+                  >
+                    Answer
+                  </Button>
+                }
+              >
+                You&apos;ve moved this {commitment.rescheduleCount} times. What&apos;s making it
+                hard to start?
+              </Alert>
+            )}
+
             <Typography variant="caption" color="text.secondary">
               {formatTime(commitment.scheduledStart)} · {commitment.durationMinutes} min
             </Typography>
@@ -151,6 +196,47 @@ export function CommitmentRow({ commitment, disabled = false, onAction }: Commit
                 aria-label={`Moved ${commitment.rescheduleCount} times`}
                 sx={{ '& .MuiBadge-badge': { position: 'static', transform: 'none' } }}
               />
+            )}
+
+            {suggested === 'ENVIRONMENT' && (
+              <Typography variant="caption" color="text.secondary" sx={{ width: '100%' }}>
+                Put email and Slack aside for 15 minutes before you start.
+              </Typography>
+            )}
+
+            {suggested === 'MINIMUM' && commitment.versions.minimum && (
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={disabled}
+                data-testid={`do-the-minimum-${commitment.id}`}
+                onClick={() => onAction('fallback' as FamilyRowAction, commitment)}
+              >
+                Do the minimum ({commitment.versions.minimum.minutes} min)
+              </Button>
+            )}
+
+            {suggested === 'DECOMPOSE' && (
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={disabled}
+                data-testid={`break-it-down-${commitment.id}`}
+                onClick={() => onAction('decompose' as FamilyRowAction, commitment)}
+              >
+                Break it down
+              </Button>
+            )}
+
+            {suggested === 'PLAN_REVIEW' && (
+              <Button
+                size="small"
+                variant="text"
+                href="/coach"
+                data-testid={`review-with-coach-${commitment.id}`}
+              >
+                This keeps slipping — review it with the coach
+              </Button>
             )}
 
             {primary && (

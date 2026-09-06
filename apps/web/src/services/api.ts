@@ -1275,7 +1275,17 @@ export async function useCommitmentFallback(
  */
 export async function rescheduleCommitment(
   id: string,
-  body: { scheduledStart: string; scheduledEnd?: string | null },
+  body: {
+    scheduledStart: string;
+    scheduledEnd?: string | null;
+    /**
+     * "Something more urgent came up" (epic E07). Server-verified against the
+     * friction answer: the move happens normally but `rescheduleCount` does not
+     * grow. Sent without that answer it is a 400, so the client never sets it
+     * on its own initiative.
+     */
+    protected?: boolean;
+  },
 ): Promise<CommitmentCard> {
   return api.post<CommitmentCard>(`/commitments/${id}/actions/reschedule`, body);
 }
@@ -2069,4 +2079,139 @@ export async function completeComeback(notes?: string): Promise<ComebackCompleti
 
 export async function dismissComeback(): Promise<void> {
   await api.post<void>('/comeback/dismiss', {});
+}
+
+// =============================================================================
+// The Work domain (epic E07)
+// =============================================================================
+//
+// Same rule as the block above: the ONLY place this app names these endpoints.
+
+import type {
+  ActiveFocusSession,
+  AppliedSessionPlan,
+  AvoidanceAssessment,
+  FocusSession,
+  FocusSessionOutcome,
+  FrictionAnswer,
+  FrictionAnswerResult,
+  OutcomeWorkPlan,
+  StopFocusSessionResult,
+  WorkSessionPlan,
+  WorkSessionPlanProposal,
+  WorkWeeklySummary,
+} from '../types';
+
+export interface PlanSessionsInput {
+  targetDate?: string | null;
+  availableMinutesPerDay?: number | null;
+}
+
+/** Asks the coach. Writes one proposal row and nothing else (PRD §15). */
+export async function planOutcomeSessions(
+  outcomeId: string,
+  body: PlanSessionsInput = {},
+): Promise<WorkSessionPlanProposal> {
+  return api.post<WorkSessionPlanProposal>(`/outcomes/${outcomeId}/plan-sessions`, body);
+}
+
+/** The standard weekday plan. Never reaches the model (PRD §120). */
+export async function planOutcomeSessionsTemplate(
+  outcomeId: string,
+  body: PlanSessionsInput = {},
+): Promise<WorkSessionPlanProposal> {
+  return api.post<WorkSessionPlanProposal>(
+    `/outcomes/${outcomeId}/plan-sessions/template`,
+    body,
+  );
+}
+
+/**
+ * The approval step, and the only call that creates commitments.
+ *
+ * `proposal` carries the user's edits. Sending it unchanged is harmless — the
+ * server re-validates whatever it is given against the same guardrails.
+ */
+export async function applyOutcomeSessionPlan(
+  outcomeId: string,
+  body: { proposalId: string; proposal?: WorkSessionPlan },
+): Promise<AppliedSessionPlan> {
+  return api.post<AppliedSessionPlan>(`/outcomes/${outcomeId}/plan-sessions/apply`, body);
+}
+
+export async function getOutcomeWorkPlan(outcomeId: string): Promise<OutcomeWorkPlan> {
+  return api.get<OutcomeWorkPlan>(`/outcomes/${outcomeId}/work-plan`);
+}
+
+// ---- focus sessions ---------------------------------------------------------
+
+export async function startFocusSession(body: {
+  commitmentId: string;
+  plannedMinutes: number;
+  instruction?: string | null;
+  takeOver?: boolean;
+}): Promise<FocusSession> {
+  return api.post<FocusSession>('/focus-sessions', body);
+}
+
+export async function getActiveFocusSession(): Promise<ActiveFocusSession> {
+  return api.get<ActiveFocusSession>('/focus-sessions/active');
+}
+
+export async function extendFocusSession(
+  id: string,
+  minutes: number,
+): Promise<FocusSession> {
+  return api.post<FocusSession>(`/focus-sessions/${id}/extend`, { minutes });
+}
+
+export async function addFocusSessionNote(id: string, text: string): Promise<FocusSession> {
+  return api.post<FocusSession>(`/focus-sessions/${id}/note`, { text });
+}
+
+export async function stopFocusSession(
+  id: string,
+  outcome: FocusSessionOutcome,
+  notes?: string | null,
+): Promise<StopFocusSessionResult> {
+  return api.post<StopFocusSessionResult>(`/focus-sessions/${id}/stop`, {
+    outcome,
+    ...(notes ? { notes } : {}),
+  });
+}
+
+export async function listFocusSessions(
+  params: { commitmentId?: string; outcomeId?: string; from?: string; to?: string } = {},
+): Promise<{ sessions: FocusSession[] }> {
+  const query = new URLSearchParams();
+  if (params.commitmentId) query.set('commitmentId', params.commitmentId);
+  if (params.outcomeId) query.set('outcomeId', params.outcomeId);
+  if (params.from) query.set('from', params.from);
+  if (params.to) query.set('to', params.to);
+
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return api.get<{ sessions: FocusSession[] }>(`/focus-sessions${suffix}`);
+}
+
+// ---- friction and the ladder ------------------------------------------------
+
+export async function answerFriction(
+  commitmentId: string,
+  body: { answer: FrictionAnswer; text?: string | null },
+): Promise<FrictionAnswerResult> {
+  return api.post<FrictionAnswerResult>(`/commitments/${commitmentId}/friction`, body);
+}
+
+export async function getCommitmentAvoidance(
+  commitmentId: string,
+): Promise<AvoidanceAssessment> {
+  return api.get<AvoidanceAssessment>(`/commitments/${commitmentId}/avoidance`);
+}
+
+// ---- the weekly summary -----------------------------------------------------
+
+/** Ready for E10's review screen; nothing in E07 renders it. */
+export async function getWorkSummary(weekStart?: string): Promise<WorkWeeklySummary> {
+  const suffix = weekStart ? `?weekStart=${weekStart}` : '';
+  return api.get<WorkWeeklySummary>(`/work/summary${suffix}`);
 }

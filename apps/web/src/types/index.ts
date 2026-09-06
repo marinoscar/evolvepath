@@ -1385,6 +1385,15 @@ export interface CommitmentCard {
   steps: CommitmentVersionView[] | null;
   timer: CommitmentTimer | null;
   /**
+   * Where this commitment sits on E07-03's intervention ladder (epic E07).
+   *
+   * NULL FOR EVERY NON-WORK CARD, and required rather than optional so a
+   * fixture cannot forget it. The row reads `suggestedAction` and nothing
+   * else — the level itself is the server's reasoning, not a number to show
+   * somebody.
+   */
+  avoidance: AvoidanceAssessment | null;
+  /**
    * What the server will accept next. THE UI RENDERS THIS LIST — it does not
    * compute one. A bundle running yesterday's rules would otherwise offer a
    * move this API refuses.
@@ -2657,4 +2666,204 @@ export interface ComebackCompletion {
   milestone: Milestone | null;
   nextCommitment: CommitmentCard | null;
   planReviewSuggested: boolean;
+}
+
+// =============================================================================
+// The Work domain (epic E07)
+// =============================================================================
+//
+// Hand-maintained mirrors of the API's shapes, like every other block in this
+// file. Generating them would put the API's build output on this app's critical
+// path for values that change about once an epic.
+
+/**
+ * What the ladder suggests offering. THE ROW BRANCHES ON THIS, never on the
+ * level: the level is the server's reasoning and the action is its conclusion,
+ * and a client deciding "level 3 means ask the question" would be a second copy
+ * of the rule.
+ */
+export type SuggestedAction =
+  | 'NONE'
+  | 'MINIMUM'
+  | 'DECOMPOSE'
+  | 'FRICTION_QUESTION'
+  | 'ENVIRONMENT'
+  | 'PLAN_REVIEW';
+
+export interface AvoidanceAssessment {
+  /** 0–6. PRD §26's seven rungs. */
+  level: number;
+  interventionType: string;
+  signals: string[];
+  /** Deterministic, with the counts in it. Never AI-written. */
+  rationale: string;
+  suggestedAction: SuggestedAction;
+}
+
+/** VISION §9's eight answers, in dialog order. */
+export type FrictionAnswer =
+  | 'DONT_KNOW_WHERE_TO_BEGIN'
+  | 'TOO_BIG'
+  | 'TIRED'
+  | 'DONT_WANT_TO'
+  | 'SOMETHING_URGENT'
+  | 'WORRIED_ABOUT_QUALITY'
+  | 'NEED_MORE_INFO'
+  | 'OTHER';
+
+export interface InterventionAction {
+  title: string;
+  durationMinutes: number;
+}
+
+export interface FrictionIntervention {
+  interventionType: string;
+  userMessage: string;
+  recommendedAction: InterventionAction | null;
+  fallbackAction: InterventionAction | null;
+  suggestedReschedule: { scheduledStart: string; scheduledEnd: string } | null;
+  /** `template` is a complete answer, not a degraded one (PRD §120). */
+  source: 'ai' | 'template';
+}
+
+export interface FrictionAnswerResult {
+  level: number;
+  obstacleId: string | null;
+  reflectionId: string | null;
+  intervention: FrictionIntervention;
+}
+
+// ---- session planning -------------------------------------------------------
+
+export interface WorkMilestone {
+  id: string;
+  title: string;
+  order: number;
+  targetDate: string | null;
+  completedAt: string | null;
+}
+
+export interface WorkSessionPlanSession {
+  title: string;
+  scheduledStart: string;
+  durationMinutes: number;
+  milestoneIndex: number;
+  minimumStart: { title: string; minutes: number };
+}
+
+export interface WorkSessionPlan {
+  milestones: Array<{ title: string; order: number }>;
+  sessions: WorkSessionPlanSession[];
+  implementationIntention: { when: string; then: string };
+  reviewCadence: 'DAILY' | 'TWICE_WEEKLY' | 'WEEKLY';
+  rationale: string;
+}
+
+export interface WorkSessionPlanProposal {
+  proposalId: string;
+  proposal: WorkSessionPlan;
+  source: 'ai' | 'template';
+  expiresAt: string;
+}
+
+export interface AppliedSessionPlan {
+  routineId: string;
+  milestoneIds: string[];
+  commitmentIds: string[];
+}
+
+export interface OutcomeWorkPlanSession {
+  id: string;
+  title: string;
+  status: CommitmentStatus;
+  scheduledStart: string;
+  durationMinutes: number | null;
+  milestoneId: string | null;
+  rescheduleCount: number;
+}
+
+export interface OutcomeWorkPlan {
+  milestones: WorkMilestone[];
+  sessions: OutcomeWorkPlanSession[];
+  implementationIntention: { when: string; then: string } | null;
+  reviewCadence: 'DAILY' | 'TWICE_WEEKLY' | 'WEEKLY' | null;
+  latestProposal: { id: string; status: string; source: 'ai' | 'template' } | null;
+}
+
+// ---- focus sessions ---------------------------------------------------------
+
+export type FocusSessionOutcome = 'done' | 'partial' | 'abandoned';
+
+export interface FocusSession {
+  id: string;
+  commitmentId: string;
+  plannedMinutes: number;
+  instruction: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  outcome: 'DONE' | 'PARTIAL' | 'ABANDONED' | null;
+  actualMinutes: number | null;
+  continuedCount: number;
+  distractionNotes: string[];
+  commitment: {
+    title: string;
+    status: CommitmentStatus;
+    /** E05's own timer block, so the countdown maths stays shared. */
+    timer: CommitmentTimer | null;
+  };
+}
+
+export interface ActiveFocusSession {
+  session: FocusSession | null;
+  /** Lets a phone with a skewed clock re-anchor against the server. */
+  serverNow: string;
+}
+
+export interface StopFocusSessionResult {
+  session: FocusSession;
+  evidenceId: string;
+  commitmentStatus: CommitmentStatus;
+  actualMinutes: number;
+}
+
+// ---- the weekly summary -----------------------------------------------------
+
+export type WorkTimeWindow = 'morning' | 'afternoon' | 'evening';
+
+export interface WorkWeeklySummary {
+  weekStart: string;
+  weekEnd: string;
+  timezone: string;
+  focusSessions: {
+    planned: number;
+    started: number;
+    done: number;
+    partial: number;
+    abandoned: number;
+    plannedMinutes: number;
+    actualMinutes: number;
+  };
+  starts: {
+    commitmentsDue: number;
+    started: number;
+    completed: number;
+    /** Null, not 0, when nothing was planned — different weeks. */
+    startRate: number | null;
+    completionRate: number | null;
+  };
+  outcomesCompleted: Array<{ outcomeId: string; title: string; completedAt: string }>;
+  repeatedlyPostponed: Array<{
+    commitmentId: string;
+    title: string;
+    outcomeId: string | null;
+    rescheduleCount: number;
+    level: number;
+  }>;
+  timeWindows: Record<
+    WorkTimeWindow,
+    { planned: number; started: number; completed: number; successRate: number | null }
+  >;
+  bestWindow: WorkTimeWindow | null;
+  worstWindow: WorkTimeWindow | null;
+  distractionNoteCount: number;
 }

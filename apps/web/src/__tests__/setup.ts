@@ -13,6 +13,7 @@ import { resetComebackState } from './mocks/comebackHandlers';
 import { resetProgressState } from './mocks/progressHandlers';
 import { resetTodayState } from './mocks/todayHandlers';
 import { resetWeeklyState } from './mocks/weeklyHandlers';
+import { resetWorkSpies, resetWorkState } from './mocks/workHandlers';
 
 // Set base URL for fetch
 const BASE_URL = 'http://localhost:3000';
@@ -242,6 +243,8 @@ afterEach(() => {
   resetCoachState();
   resetMemoryState();
   resetTodayState();
+  resetWorkState();
+  resetWorkSpies();
   resetProgressState();
   resetComebackState();
   resetWeeklyState();

@@ -16,7 +16,12 @@ import type { CommitmentCard } from '../../../types';
 
 interface RescheduleDialogProps {
   open: boolean;
-  commitment: CommitmentCard | null;
+  /**
+   * Narrowed to what this dialog actually reads (epic E07): the Work outcome's
+   * planned-session list has a session row, not a full card, and widening that
+   * row into one would be inventing fields to satisfy a type.
+   */
+  commitment: Pick<CommitmentCard, 'title' | 'scheduledStart'> | null;
   onClose: () => void;
   onReschedule: (body: { scheduledStart: string }) => Promise<unknown>;
 }

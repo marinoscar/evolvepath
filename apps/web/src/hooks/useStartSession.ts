@@ -23,6 +23,14 @@ interface UseStartSessionResult {
   running: boolean;
   pending: boolean;
   begin: (minutes: number) => Promise<void>;
+  /**
+   * Re-read the card from the server.
+   *
+   * Exposed for E07's WORK branch: `POST /focus-sessions` performs the start on
+   * the server, so this page has to re-read the commitment rather than apply an
+   * action response it never received.
+   */
+  refresh: () => Promise<void>;
   pause: () => Promise<void>;
   resume: (extraMinutes?: number) => Promise<void>;
   finish: (
@@ -162,6 +170,7 @@ export function useStartSession(commitmentId: string | undefined): UseStartSessi
     remaining: remainingSeconds(commitment?.timer ?? null, now),
     running,
     pending,
+    refresh,
 
     begin: async (minutes) => {
       if (!commitmentId) return;
