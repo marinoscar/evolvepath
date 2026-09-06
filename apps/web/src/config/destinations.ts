@@ -118,6 +118,10 @@ export const UNOWNED_ROUTES: readonly string[] = [
   // renders OUTSIDE `Layout` — there is no rail and no bottom bar on it to
   // highlight, and a user who is on it cannot reach any destination anyway.
   '/setup/ai-key',
+  // The onboarding wizard (#102, epic E04). Outside `Layout` for the same
+  // reason `/setup/ai-key` is: every destination is empty until this flow
+  // finishes, so there is nothing to highlight and nowhere useful to go.
+  '/onboarding',
   // The Start flow (#48, epic E05). PRD §11 lets an execution screen replace
   // the navigation entirely: it renders outside `Layout`, so there is no rail
   // and no bottom bar on it to highlight. Listed as the route App.tsx declares,

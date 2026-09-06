@@ -4,6 +4,7 @@ import { coachHandlers } from './coachHandlers';
 import { comebackHandlers } from './comebackHandlers';
 import { familyHandlers } from './familyHandlers';
 import { memoryHandlers } from './memoryHandlers';
+import { onboardingHandlers } from './onboardingHandlers';
 import { pathHandlers } from './pathHandlers';
 import { progressHandlers } from './progressHandlers';
 import { todayHandlers } from './todayHandlers';
@@ -634,6 +635,9 @@ export const handlers = [
 
   // The EvolvePath product domain (#56, epic #33), in its own file: a stateful
   // store with the transition matrix enforced, rather than canned responses.
+  // The onboarding wizard (#102, epic E04), stateful for the same reason:
+  // every assertion about it is about a sequence.
+  ...onboardingHandlers,
   ...pathHandlers,
   ...todayHandlers,
   // After `todayHandlers`, which owns `/commitments/:id/actions/*`. These add
