@@ -950,6 +950,46 @@ PRD §106 → spec-case table.
 cd tests/e2e && npx playwright test specs/health.spec.ts
 ```
 
+`specs/media-attachments.spec.ts` (epic E03) is the fifth, and it is the one
+that needs the **most infrastructure**: a phone upload becoming coach advice
+crosses MinIO, ffmpeg, sharp, the processing pipeline, the attachment API, the
+gateway, the fake provider and two React components.
+
+Three of its assertions are about things that do **not** happen, and only a
+browser against a real bucket can see them: a `.txt` dropped into the picker
+makes **no network request**, a `MEAL` answer contains **no calorie count**, and
+deleting a video removes its **sampled frames** — objects with no foreign key
+home, which nothing cascades. The rules it asserts are written down in
+[`docs/specs/media-attachments.md`](specs/media-attachments.md).
+
+It needs two extra overlays, both of which `playwright.config.ts` now starts by
+default:
+
+- `minio.compose.yml` — the object store. Uncomment the MinIO block in
+  `infra/compose/.env` first; `S3_PUBLIC_ENDPOINT` must be the address the
+  **browser** reaches MinIO at, because that is the host signed URLs are signed
+  against.
+- `e2e-media.compose.yml` — pins `AI_VIDEO_MAX_FRAMES=4` and disables the
+  storage quota. The frame cap is what makes `frameCount === 4` a number rather
+  than a range; the quota is disabled because a shared 2 GiB ceiling across
+  every run on a developer's machine is a test that starts failing in a month
+  for a reason nobody would connect to media.
+
+```bash
+cd infra/compose && docker compose \
+  -f base.compose.yml -f dev.compose.yml \
+  -f minio.compose.yml -f fake-openai.compose.yml -f e2e-media.compose.yml up
+
+cd tests/e2e && npx playwright test specs/media-attachments.spec.ts
+```
+
+Its fixtures live in `tests/e2e/fixtures/media/` and are **synthetic and
+committed**, with the exact generation commands in that folder's `README.md`. A
+fixture is in Git history forever, and a person's actual squat video or lunch is
+not something to put there. `photo.jpg` carries a **real EXIF GPS tag** on
+purpose: without one on the source, "the variant has no EXIF" would pass against
+a source that never had any.
+
 It runs against the compose stack **with the fake OpenAI overlay**, which
 `playwright.config.ts` already starts by default:
 

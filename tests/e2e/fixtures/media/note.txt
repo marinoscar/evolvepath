@@ -1,0 +1,2 @@
+This is not a photograph and not a video.
+It is here so a spec can drop it and be refused.

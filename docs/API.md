@@ -3400,6 +3400,10 @@ phone video — could not complete.
 
 ### Media Attachments
 
+> The full contract — the processing pipeline, the derived-object convention,
+> the purposes and their rules, attachment modes and the rejected alternatives —
+> is [`docs/specs/media-attachments.md`](specs/media-attachments.md).
+
 **Requires Authentication.** The product-level view of an upload: what it is
 *for*, what it belongs to, how far along the processing pipeline it is, and what
 the coach said about it (epic #67, issue #83).

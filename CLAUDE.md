@@ -462,6 +462,53 @@ Three rules that are easy to break and expensive to rediscover:
   PRD §105. `apps/api/src/family/no-score.guard.spec.ts` fails the build if one
   reaches a family schema, DTO or `/api/family` OpenAPI path.
 
+## Media attachments
+
+Uploading a photo or a video and handing it to the coach — the storage limits,
+the processing pipeline, the attachment model, the advice contract and the
+client upload flow — has its own written contract in
+[`docs/specs/media-attachments.md`](docs/specs/media-attachments.md): every
+limit and its env var, both processors and their exact `_processing` shapes,
+the derived-object convention and the deletion sweep, the 404-not-403 rule and
+why it differs from storage, the four purposes and the rules each is held to,
+attachment modes and variant preference, and the rejected alternatives.
+
+Read it before changing anything under `apps/api/src/media/`,
+`apps/api/src/storage/processing/`, `apps/web/src/components/media/` or
+`apps/web/src/hooks/useMediaUpload.ts`.
+
+Three rules that are easy to break and expensive to rediscover:
+
+- **A processor's `name` IS the metadata key that reads its output.** There is
+  no shared constant: `AiAttachmentResolverService` reads
+  `_processing['video-frames']` and `_processing['image-normalize']` by literal
+  string. Renaming a processor silently breaks every video the coach has been
+  shown, and silently sends full-size originals with their EXIF intact.
+- **The EXIF strip is an absence, not a call.** `sharp` drops metadata unless
+  asked to keep it, so stripping is achieved by *not* calling
+  `.withMetadata()` — the way to break it is to add a line. `.rotate()` runs
+  first, because stripping metadata without applying the orientation tag turns
+  every portrait phone photo sideways.
+- **Media answers 404 for a foreign id; storage answers 403.** That asymmetry
+  is deliberate. Storage is generic and permission-based, so "you may not" is
+  honest there and admins reach other people's objects through `storage:*_any`;
+  an attachment is a private product resource, and an answer distinguishing
+  "not yours" from "does not exist" is an enumeration primitive. Do not make
+  one match the other.
+
+### Adding a media-aware flow
+
+Three lines, and the spec above has the details:
+
+1. Upload through `POST /storage/objects` (or the resumable path over
+   100 MiB), then `POST /media/attachments` with a `purpose` and optionally a
+   target. Attaching before processing finishes is normal.
+2. Wait for `processingStatus: 'ready'` — the picker polls; a server-side
+   caller checks `StorageObject.status`.
+3. Either `POST /media/attachments/:id/ask` for the generic coaching answer, or
+   pass `{ storageObjectId }` to `AiGatewayService.invoke` as an attachment for
+   a typed contract of your own (E09's three checks are the worked example).
+
 ## The Health domain
 
 Workout programs, the session runner, progression, adaptation, media coaching,
@@ -1000,7 +1047,7 @@ The application uses an **email allowlist** to restrict access to pre-authorized
 - JWT access tokens are short-lived (15 min default)
 - Refresh tokens in HttpOnly cookies with rotation
 - Input validation on all endpoints
-- File uploads: images and videos only (`ALLOWED_MIME_TYPES`), size limit (`MAX_FILE_SIZE`, 500 MiB default), randomized object keys. Both limits are enforced on both upload paths, and the simple path counts the bytes it stores rather than recording `0`
+- File uploads: images and videos only (`ALLOWED_MIME_TYPES`), size limit (`MAX_FILE_SIZE`, 500 MiB default), per-user quota (`STORAGE_USER_QUOTA_BYTES`), randomized object keys, **EXIF stripped before AI use**. Both limits are enforced on both upload paths, and the simple path counts the bytes it stores rather than recording `0`
 - Email allowlist restricts application access to pre-authorized users
 - OpenAI keys (platform and per-user) are encrypted in `credentials` under two
   distinct purposes, write-only through the API, and redacted from every error,

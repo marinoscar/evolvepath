@@ -1,0 +1,50 @@
+# =============================================================================
+# Docker Compose - E03 media e2e overlay (issue #103, epic #67)
+# =============================================================================
+# Usage (run from infra/compose, ON TOP OF base + dev + minio + fake-openai):
+#
+#   docker compose -f base.compose.yml -f dev.compose.yml \
+#                  -f minio.compose.yml -f fake-openai.compose.yml \
+#                  -f e2e-media.compose.yml up --build
+#
+# It exists to make ONE NUMBER DETERMINISTIC. The sampler takes
+# `min(AI_VIDEO_MAX_FRAMES, floor(durationMs / 500))` frames, so the e2e
+# fixture's two-second clip yields four frames at the default cap of eight and
+# four at a cap of four — today. Pinning the cap here means the spec asserts
+# `frameCount === 4` rather than a range, and a change to either the rule or
+# the default fails loudly in a spec instead of quietly widening an assertion.
+#
+# TEST INFRASTRUCTURE ONLY, like the fake-openai overlay it sits beside.
+# =============================================================================
+
+services:
+  # The fake provider's `/__debug/last` has to be reachable from the TEST
+  # RUNNER, which runs on the host rather than inside the Compose network.
+  #
+  # "Every sampled frame reached the provider" is a claim about the request
+  # body, and only this server knows whether four images were sent — the
+  # attachment can only say four frames exist. `fake-openai.compose.yml`
+  # publishes no ports on purpose (it trusts any `sk-test-` token); this
+  # overlay, which is test infrastructure by definition, opens the one port
+  # that makes the assertion possible.
+  fake-openai:
+    ports:
+      - "8089:8089"
+
+  api:
+    environment:
+      - AI_VIDEO_MAX_FRAMES=4
+      # MinIO's in-network address is not one a browser can reach; signed URLs
+      # must be signed against the address the test browser uses.
+      - S3_ENDPOINT=${S3_ENDPOINT:-http://minio:9000}
+      - S3_PUBLIC_ENDPOINT=${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
+      - S3_BUCKET=${S3_BUCKET:-evolvepath-dev}
+      - S3_FORCE_PATH_STYLE=true
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-minioadmin}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-minioadmin}
+      # Quotas OFF for the suite. A shared 2 GiB ceiling across every spec run
+      # on a developer's machine is a test that starts failing in a month for a
+      # reason nobody would connect to media. The quota's own behaviour is
+      # covered by unit and integration tests, which can set any number they
+      # like.
+      - STORAGE_USER_QUOTA_BYTES=0
