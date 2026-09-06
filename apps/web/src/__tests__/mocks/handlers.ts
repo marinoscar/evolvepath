@@ -11,6 +11,7 @@ import { weeklyHandlers } from './weeklyHandlers';
 import { healthHandlers } from './healthHandlers';
 import { workoutHandlers } from './workoutHandlers';
 import { mediaHandlers } from './mediaHandlers';
+import { workHandlers } from './workHandlers';
 
 // Use wildcard pattern to match relative URLs
 const API_BASE = '*/api';
@@ -635,6 +636,10 @@ export const handlers = [
   // store with the transition matrix enforced, rather than canned responses.
   ...pathHandlers,
   ...todayHandlers,
+  // After `todayHandlers`, which owns `/commitments/:id/actions/*`. These add
+  // only the Work-specific routes; a spec that needs to inspect a reschedule
+  // body overrides that route itself with `server.use`.
+  ...workHandlers,
   ...progressHandlers,
   ...comebackHandlers,
   ...familyHandlers,

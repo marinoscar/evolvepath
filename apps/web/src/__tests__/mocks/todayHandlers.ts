@@ -122,6 +122,9 @@ export function makeCard(overrides: Partial<CommitmentCard> = {}): CommitmentCar
     decomposedFromId: null,
     steps: null,
     timer: null,
+    // Required rather than optional on the type, so a fixture cannot forget it
+    // and quietly test a card the API would never send (epic E07).
+    avoidance: null,
     availableActions: [],
     ...overrides,
   };
@@ -158,6 +161,61 @@ function actionsFor(card: CommitmentCard): CommitmentActionName[] {
 
 function refreshActions(card: CommitmentCard): CommitmentCard {
   return { ...card, availableActions: actionsFor(card) };
+}
+
+/**
+ * Apply E05's `start` to a commitment, from outside these handlers.
+ *
+ * Exported for `workHandlers`: the real `POST /focus-sessions` performs the
+ * commitment start on the server, so the mock has to as well — otherwise a
+ * WORK commitment would come back PLANNED from a call that started it, and a
+ * page test would pass against behaviour the API does not have.
+ */
+export function applyStart(
+  commitmentId: string,
+  minutes: number,
+): CommitmentCard | null {
+  const card = find(commitmentId);
+  if (!card) return null;
+
+  const activeSince = new Date().toISOString();
+
+  return replace({
+    ...card,
+    status: 'STARTED',
+    startedAt: card.startedAt ?? activeSince,
+    timer: {
+      activeSince,
+      activeSeconds: card.timer?.activeSeconds ?? 0,
+      elapsedSeconds: card.timer?.activeSeconds ?? 0,
+      timerMinutes: minutes,
+      remainingSeconds: minutes * 60,
+    },
+  });
+}
+
+/** Apply E05's `complete`/`partial`/`pause`, for the same reason. */
+export function applyStop(
+  commitmentId: string,
+  outcome: 'done' | 'partial' | 'abandoned',
+): CommitmentCard | null {
+  const card = find(commitmentId);
+  if (!card) return null;
+
+  if (outcome === 'abandoned') {
+    return replace({
+      ...card,
+      timer: card.timer ? { ...card.timer, activeSince: null } : null,
+    });
+  }
+
+  return replace({
+    ...card,
+    status: outcome === 'done' ? 'COMPLETED' : 'PARTIALLY_COMPLETED',
+    completedAt: new Date().toISOString(),
+    minutesSpent: 12,
+    timer: card.timer ? { ...card.timer, activeSince: null } : null,
+  });
 }
 
 export function seedCommitments(...cards: CommitmentCard[]): void {

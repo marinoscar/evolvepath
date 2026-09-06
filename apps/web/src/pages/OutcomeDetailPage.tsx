@@ -33,6 +33,7 @@ import { PlanVersionHistory } from '../components/path/PlanVersionHistory';
 import { RoutineFormDialog } from '../components/path/RoutineFormDialog';
 import { RoutineList } from '../components/path/RoutineList';
 import { TransitionDialog } from '../components/path/TransitionDialog';
+import { WorkOutcomeDetail } from '../components/work/WorkOutcomeDetail';
 
 /** Transitions that need no extra input go straight through, with no dialog. */
 const DIRECT_TRANSITIONS: ReadonlySet<CommitmentStatus> = new Set<CommitmentStatus>([
@@ -142,6 +143,14 @@ export default function OutcomeDetailPage() {
         onCreatePlan={() => setPlanOpen(true)}
         onNewVersion={() => setVersionOpen(true)}
       />
+      {/*
+        The Work domain's own section (epic E07): milestones, the dated sessions
+        the plan produced, and the focus history. Below the plan summary in the
+        SAME column — no new breakpoint, no new route.
+      */}
+      {outcome.domain === 'WORK' && (
+        <WorkOutcomeDetail outcome={outcome} disabled={isArchived} />
+      )}
       {detail.plan && (
         <RoutineList
           routines={detail.routines}

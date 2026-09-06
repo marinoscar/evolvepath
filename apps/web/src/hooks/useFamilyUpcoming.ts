@@ -33,6 +33,9 @@ export function commitmentToCard(row: Commitment): CommitmentCard {
     scheduledEnd: row.scheduledEnd,
     durationMinutes: fullMinutes,
     workoutTemplateId: row.workoutTemplateId ?? null,
+    // Null by construction: the ladder is a WORK judgement (epic E07) and this
+    // adapter only ever runs over family occurrences.
+    avoidance: null,
     versions: {
       full: { title: row.fullVersion ?? row.title, minutes: fullMinutes },
       short:

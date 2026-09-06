@@ -31,7 +31,12 @@ export interface CommitmentActionsResult {
   fallback: (id: string, version: 'short' | 'minimum') => Promise<CommitmentCard>;
   reschedule: (
     id: string,
-    body: { scheduledStart: string; scheduledEnd?: string | null },
+    body: {
+      scheduledStart: string;
+      scheduledEnd?: string | null;
+      /** A move the user explained with SOMETHING_URGENT (epic E07). */
+      protected?: boolean;
+    },
   ) => Promise<CommitmentCard>;
   skip: (
     id: string,

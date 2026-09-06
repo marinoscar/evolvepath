@@ -7,6 +7,7 @@ import { Route, Routes } from 'react-router-dom';
 
 import { render, mockAdminUser } from '../utils/test-utils';
 import { getPathState, makeOutcome, seedPathState } from '../mocks/pathHandlers';
+import { makeFocusSession, seedFocusSessions, seedWorkPlan } from '../mocks/workHandlers';
 import OutcomeDetailPage from '../../pages/OutcomeDetailPage';
 
 // =============================================================================
@@ -300,5 +301,111 @@ describe('OutcomeDetailPage', () => {
     await waitFor(() => expect(screen.getByTestId('plan-summary')).toBeInTheDocument());
 
     expect(await axe(container)).toHaveNoViolations();
+  });
+});
+
+// =============================================================================
+// The Work variant (issue #118, epic E07)
+// =============================================================================
+//
+// The section is added by DOMAIN, so the assertion that earns its place is the
+// second one: a FAMILY outcome must render exactly what it rendered before.
+// =============================================================================
+
+describe('OutcomeDetailPage — the Work section (#118)', () => {
+  it('shows milestones with progress, the sessions and the plan CTA', async () => {
+    const outcome = makeOutcome({ domain: 'WORK', title: 'Finish the strategy presentation' });
+    seedPathState({ outcomes: [outcome] });
+
+    seedWorkPlan({
+      milestones: [
+        { id: 'm1', title: 'Storyline exists', order: 0, targetDate: null, completedAt: null },
+        { id: 'm2', title: 'Draft deck exists', order: 1, targetDate: null, completedAt: null },
+      ],
+      sessions: [
+        {
+          id: 's1',
+          title: '25 min — storyline',
+          status: 'COMPLETED',
+          scheduledStart: '2026-09-08T09:00:00.000Z',
+          durationMinutes: 25,
+          milestoneId: 'm1',
+          rescheduleCount: 0,
+        },
+        {
+          id: 's2',
+          title: '25 min — arguments',
+          status: 'PLANNED',
+          scheduledStart: '2026-09-09T09:00:00.000Z',
+          durationMinutes: 25,
+          milestoneId: 'm1',
+          rescheduleCount: 2,
+        },
+      ],
+      implementationIntention: {
+        when: 'After I sit down with coffee',
+        then: 'I open the deck',
+      },
+      reviewCadence: 'WEEKLY',
+    });
+
+    renderDetail(outcome.id);
+
+    expect(await screen.findByTestId('milestone-m1')).toHaveTextContent(
+      '1 of 2 sessions done',
+    );
+    expect(screen.getByTestId('milestone-m2')).toHaveTextContent('No sessions yet');
+
+    expect(screen.getByTestId('planned-session-s2')).toHaveTextContent('Moved ×2');
+    expect(screen.getByTestId('implementation-intention')).toHaveTextContent(
+      'After I sit down with coffee → I open the deck',
+    );
+
+    // Sessions already exist, so the CTA offers more rather than a first plan.
+    expect(screen.getByTestId('plan-sessions-cta')).toHaveTextContent('Plan more sessions');
+  });
+
+  it('offers a first plan when there are no sessions yet', async () => {
+    const outcome = makeOutcome({ domain: 'WORK', title: 'Finish the strategy presentation' });
+    seedPathState({ outcomes: [outcome] });
+
+    renderDetail(outcome.id);
+
+    expect(await screen.findByTestId('plan-sessions-cta')).toHaveTextContent(
+      'Plan sessions with the coach',
+    );
+  });
+
+  it('renders no work section for a FAMILY outcome', async () => {
+    const outcome = makeOutcome({ domain: 'FAMILY', title: 'Phone-free dinners' });
+    seedPathState({ outcomes: [outcome] });
+
+    renderDetail(outcome.id);
+
+    expect(await screen.findByText('Phone-free dinners')).toBeInTheDocument();
+    expect(screen.queryByTestId('plan-sessions-cta')).not.toBeInTheDocument();
+    expect(screen.queryByText('Milestones')).not.toBeInTheDocument();
+  });
+
+  it('lists recent focus sessions with planned versus actual minutes', async () => {
+    const outcome = makeOutcome({ domain: 'WORK', title: 'Finish the strategy presentation' });
+    seedPathState({ outcomes: [outcome] });
+    seedFocusSessions(
+      makeFocusSession({
+        id: 'focus-1',
+        endedAt: '2026-09-08T09:12:00.000Z',
+        outcome: 'PARTIAL',
+        actualMinutes: 12,
+        continuedCount: 1,
+        distractionNotes: ['Checked Slack'],
+      }),
+    );
+
+    renderDetail(outcome.id);
+
+    const history = await screen.findByTestId('focus-session-focus-1');
+    expect(history).toHaveTextContent('12 of 25 min');
+    expect(history).toHaveTextContent('Partly done');
+    expect(history).toHaveTextContent('Continued ×1');
   });
 });

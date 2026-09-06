@@ -19,6 +19,8 @@ import {
 } from '../utils/notificationLinks';
 
 import { useStartSession } from '../hooks/useStartSession';
+import { useFocusSession } from '../hooks/useFocusSession';
+import { DistractionNoteInput } from '../components/work/DistractionNoteInput';
 import { Countdown } from '../components/start/Countdown';
 import { StepsList } from '../components/start/StepsList';
 import { TIMER_PRESETS, TimerPicker } from '../components/start/TimerPicker';
@@ -72,17 +74,46 @@ export default function StartFlowPage() {
 
   const commitment = session.commitment;
 
+  // ---------------------------------------------------------------------------
+  // The WORK branch (epic E07)
+  // ---------------------------------------------------------------------------
+  //
+  // Branching HERE rather than forking this page: Family and Health keep E05's
+  // calls untouched, and the timer derivation stays the one shared copy in
+  // `utils/commitmentTimer.ts`. A work commitment additionally gets a server
+  // focus session, which is what survives a reload with its notes intact.
+  const focus = useFocusSession(commitmentId);
+  const isWork = commitment?.domain === 'WORK';
+
+  /**
+   * `?minutes=` and `?instruction=`, set by the friction intervention's
+   * "Start 10 minutes" (epic E07).
+   *
+   * The instruction is rendered as TEXT and capped client-side; it arrives in a
+   * URL the user could have edited, and this screen is not the place to find
+   * out what happens if it did not.
+   */
+  const presetMinutes = Number(searchParams.get('minutes'));
+  const instruction = (searchParams.get('instruction') ?? '').slice(0, 240) || null;
+
   // Seed the picker from the commitment's own size when that is one of the
   // presets — most starts are "the thing as planned", and making the user
   // re-pick it is a decision the screen already has the answer to.
   useEffect(() => {
     if (!commitment || chosen) return;
 
+    // An explicit `?minutes=` wins: it came from an intervention the user just
+    // agreed to, which is a stronger statement than the commitment's own size.
+    if (Number.isFinite(presetMinutes) && presetMinutes > 0) {
+      setMinutes(presetMinutes);
+      return;
+    }
+
     const own = commitment.durationMinutes;
     setMinutes(
       (TIMER_PRESETS as readonly number[]).includes(own) ? own : DEFAULT_MINUTES,
     );
-  }, [commitment, chosen]);
+  }, [commitment, chosen, presetMinutes]);
 
   useEffect(() => {
     if (session.error) setToast(session.error);
@@ -119,8 +150,23 @@ export default function StartFlowPage() {
    * which is the behaviour the reminder was asking for.
    */
   const begin = useCallback(
-    async (chosenMinutes: number) => {
-      await session.begin(chosenMinutes);
+    async (chosenMinutes: number, takeOver = false) => {
+      if (isWork && commitmentId) {
+        // The server performs E05's `start` inside this call, so the commitment
+        // still moves to STARTED through exactly one code path.
+        const started = await focus.begin({
+          commitmentId,
+          plannedMinutes: chosenMinutes,
+          instruction,
+          ...(takeOver ? { takeOver: true } : {}),
+        });
+
+        if (!started) return;
+
+        await session.refresh();
+      } else {
+        await session.begin(chosenMinutes);
+      }
 
       const id = sentInteractionId.current;
       if (!id) return;
@@ -133,7 +179,7 @@ export default function StartFlowPage() {
         console.warn('Could not record a notification interaction');
       });
     },
-    [session],
+    [commitmentId, focus, instruction, isWork, session],
   );
 
   const elapsed = useMemo(
@@ -172,7 +218,36 @@ export default function StartFlowPage() {
   const isStarted = commitment.status === 'STARTED';
   const outOfTime = session.remaining === 0;
 
+  /** "Continue another 15?" — the focus session's own extend, when there is one. */
+  const continueSession = async () => {
+    if (isWork && focus.session) {
+      await focus.extend(CONTINUE_MINUTES);
+      await session.refresh();
+      return;
+    }
+
+    await session.resume(CONTINUE_MINUTES);
+  };
+
   const finish = async (which: 'complete' | 'partial', body: { notes?: string | null; minutesSpent?: number | null }) => {
+    // A work session ends through `stop`, which closes the commitment through
+    // E05's actions AND writes the TIMER evidence. Calling `complete` here as
+    // well would close it twice.
+    if (isWork && focus.session) {
+      const stopped = await focus.stop(which === 'complete' ? 'done' : 'partial', body.notes);
+      if (!stopped) return;
+
+      navigate(returnTo, {
+        replace: true,
+        state: {
+          toast:
+            `Recorded: ${stopped.actualMinutes} minutes on ${commitment.title}` +
+            (stopped.continuedCount > 0 ? ` · continued ×${stopped.continuedCount}` : ''),
+        },
+      });
+      return;
+    }
+
     const card = await session.finish(which, {
       ...body,
       // The distraction note rides along on the completion rather than becoming
@@ -218,6 +293,40 @@ export default function StartFlowPage() {
           <Typography color="text.secondary" sx={{ mb: 2 }} data-testid="why-it-matters">
             Why it matters: {commitment.whyItMatters}
           </Typography>
+        )}
+
+        {/*
+          The one sentence PRD §27 puts above the timer, when an intervention
+          named one. TEXT, never markup — it arrived in a URL.
+        */}
+        {instruction && (
+          <Alert severity="info" icon={false} sx={{ mb: 2 }} data-testid="focus-instruction">
+            {instruction}
+          </Alert>
+        )}
+
+        {/*
+          Somebody else's session is running. Reported rather than silently taken
+          over: a stale tab waking up must not end the work the user is doing on
+          their laptop.
+        */}
+        {focus.conflict && focus.conflict.commitmentId !== commitmentId && (
+          <Alert
+            severity="warning"
+            sx={{ mb: 2 }}
+            data-testid="focus-session-conflict"
+            action={
+              <Button
+                size="small"
+                disabled={focus.pending}
+                onClick={() => void begin(minutes, true)}
+              >
+                Stop it and start this
+              </Button>
+            }
+          >
+            You have a focus session running on something else.
+          </Alert>
         )}
 
         <StepsList steps={commitment.steps} instruction={commitment.versions.full.title} />
@@ -280,8 +389,9 @@ export default function StartFlowPage() {
               {outOfTime && (
                 <Button
                   variant="contained"
-                  disabled={session.pending}
-                  onClick={() => void session.resume(CONTINUE_MINUTES)}
+                  disabled={session.pending || focus.pending}
+                  data-testid="focus-continue"
+                  onClick={() => void continueSession()}
                   sx={{ minHeight: 44 }}
                 >
                   Continue another {CONTINUE_MINUTES}
@@ -298,15 +408,23 @@ export default function StartFlowPage() {
               </Button>
             </Box>
 
-            <TextField
-              label="Anything pulling you away? (optional)"
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              multiline
-              minRows={2}
-              fullWidth
-              slotProps={{ htmlInput: { maxLength: 500 } }}
-            />
+            {isWork && focus.session ? (
+              <DistractionNoteInput
+                notes={focus.session.distractionNotes}
+                disabled={focus.pending}
+                onAdd={(text) => void focus.addNote(text)}
+              />
+            ) : (
+              <TextField
+                label="Anything pulling you away? (optional)"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                multiline
+                minRows={2}
+                fullWidth
+                slotProps={{ htmlInput: { maxLength: 500 } }}
+              />
+            )}
           </>
         )}
       </Container>

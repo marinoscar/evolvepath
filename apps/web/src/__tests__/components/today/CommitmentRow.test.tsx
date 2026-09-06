@@ -29,8 +29,18 @@ const card = (over: Partial<CommitmentCard> = {}): CommitmentCard => ({
   decomposedFromId: null,
   steps: null,
   timer: null,
+  avoidance: null,
   availableActions: ['start', 'complete', 'skip'],
   ...over,
+});
+
+/** An assessment shaped like the API's, with the action under test on it. */
+const ladder = (suggestedAction: CommitmentCard['avoidance'] extends null ? never : string) => ({
+  level: 3,
+  interventionType: 'FRICTION_DIAGNOSIS',
+  signals: ['RESCHEDULED_TWICE'],
+  rationale: 'This has been moved 2 times.',
+  suggestedAction: suggestedAction as never,
 });
 
 describe('CommitmentRow', () => {
@@ -187,5 +197,111 @@ describe('CommitmentRow', () => {
 
       expect(onAction).toHaveBeenCalledWith('start_workout', commitment);
     });
+  });
+});
+
+// =============================================================================
+// The intervention ladder's affordances (issue #118, epic E07)
+// =============================================================================
+//
+// The row branches on `suggestedAction` and NEVER on the level. The level is
+// the server's reasoning; a row that read it would be a second copy of the rule
+// that produced it.
+// =============================================================================
+
+describe('CommitmentRow — the intervention ladder (#118)', () => {
+  it('asks the VISION §9 question at FRICTION_QUESTION', async () => {
+    const onAskFriction = vi.fn();
+    const commitment = card({ rescheduleCount: 2, avoidance: ladder('FRICTION_QUESTION') });
+
+    render(
+      <CommitmentRow
+        commitment={commitment}
+        onAction={vi.fn()}
+        onAskFriction={onAskFriction}
+      />,
+    );
+
+    expect(screen.getByTestId('friction-prompt-c1')).toHaveTextContent(
+      /what's making it hard to start/i,
+    );
+
+    await userEvent.click(screen.getByTestId('friction-answer-open-c1'));
+
+    expect(onAskFriction).toHaveBeenCalledWith(commitment);
+  });
+
+  it('offers the minimum version at MINIMUM', async () => {
+    const onAction = vi.fn();
+
+    render(
+      <CommitmentRow
+        commitment={card({
+          avoidance: ladder('MINIMUM'),
+          versions: {
+            full: { title: 'Draft the storyline', minutes: 25 },
+            short: null,
+            minimum: { title: 'Open the doc', minutes: 5 },
+          },
+        })}
+        onAction={onAction}
+      />,
+    );
+
+    await userEvent.click(screen.getByTestId('do-the-minimum-c1'));
+
+    expect(onAction).toHaveBeenCalledWith('fallback', expect.objectContaining({ id: 'c1' }));
+  });
+
+  it('offers to break it down at DECOMPOSE', async () => {
+    const onAction = vi.fn();
+
+    render(
+      <CommitmentRow commitment={card({ avoidance: ladder('DECOMPOSE') })} onAction={onAction} />,
+    );
+
+    await userEvent.click(screen.getByTestId('break-it-down-c1'));
+
+    expect(onAction).toHaveBeenCalledWith('decompose', expect.objectContaining({ id: 'c1' }));
+  });
+
+  it('names the environment at ENVIRONMENT', () => {
+    render(
+      <CommitmentRow commitment={card({ avoidance: ladder('ENVIRONMENT') })} onAction={vi.fn()} />,
+    );
+
+    expect(screen.getByText(/put email and slack aside/i)).toBeInTheDocument();
+  });
+
+  it('points at the coach at PLAN_REVIEW', () => {
+    render(
+      <CommitmentRow commitment={card({ avoidance: ladder('PLAN_REVIEW') })} onAction={vi.fn()} />,
+    );
+
+    expect(screen.getByTestId('review-with-coach-c1')).toHaveAttribute('href', '/coach');
+  });
+
+  it('renders nothing extra with no assessment — every non-WORK card', () => {
+    render(<CommitmentRow commitment={card({ avoidance: null })} onAction={vi.fn()} />);
+
+    expect(screen.queryByTestId('friction-prompt-c1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('break-it-down-c1')).not.toBeInTheDocument();
+    expect(screen.queryByText(/put email and slack aside/i)).not.toBeInTheDocument();
+  });
+
+  it('offers nothing on a terminal row, whatever the ladder says', () => {
+    render(
+      <CommitmentRow
+        commitment={card({
+          status: 'COMPLETED',
+          availableActions: [],
+          avoidance: ladder('FRICTION_QUESTION'),
+        })}
+        onAction={vi.fn()}
+        onAskFriction={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId('friction-prompt-c1')).not.toBeInTheDocument();
   });
 });

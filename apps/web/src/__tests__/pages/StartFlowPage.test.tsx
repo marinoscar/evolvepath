@@ -405,3 +405,138 @@ describe('StartFlowPage attribution', () => {
     expect(screen.queryByText(N)).not.toBeInTheDocument();
   });
 });
+
+// =============================================================================
+// The WORK branch: server-side focus sessions (issue #118, epic E07)
+// =============================================================================
+//
+// Branching happens inside the page rather than by forking it, so the first
+// thing this block asserts is the negative: a FAMILY commitment still takes
+// E05's path and never creates a focus session.
+// =============================================================================
+
+describe('StartFlowPage — focus sessions (#118)', () => {
+  const workCard = () =>
+    makeCard({ id: 'c1', domain: 'WORK', title: 'Draft the proposal storyline' });
+
+  it('creates a server focus session on Begin, and the commitment starts', async () => {
+    seedCommitments(workCard());
+    renderStart('c1');
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Begin/ }));
+
+    const { sessions } = await import('../mocks/workHandlers').then(async (mod) => {
+      const active = await fetch('/api/focus-sessions/active').then((r) => r.json());
+      return { sessions: active.data.session ? [active.data.session] : [], mod };
+    });
+
+    expect(sessions).toHaveLength(1);
+    // The server performed E05's start inside that one call.
+    expect(getTodayState().commitments[0].status).toBe('STARTED');
+  });
+
+  it('honours ?minutes= and renders ?instruction= as text', async () => {
+    seedCommitments(workCard());
+    renderStart('c1', '?minutes=10&instruction=Write%20the%20decision%20sentence');
+
+    expect(await screen.findByTestId('focus-instruction')).toHaveTextContent(
+      'Write the decision sentence',
+    );
+    expect(screen.getByRole('button', { name: /^Begin 10:00/ })).toBeInTheDocument();
+  });
+
+  it('persists a distraction note the moment it is added', async () => {
+    seedCommitments(workCard());
+    renderStart('c1');
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Begin/ }));
+
+    const input = await screen.findByTestId('focus-note-input');
+    await userEvent.type(input, 'Checked Slack{Enter}');
+
+    expect(await screen.findByText('Checked Slack')).toBeInTheDocument();
+
+    // Persisted, not held in the page: the server has it too.
+    const active = await fetch('/api/focus-sessions/active').then((r) => r.json());
+    expect(active.data.session.distractionNotes).toEqual(['Checked Slack']);
+  });
+
+  it('extends the focus session from the "Continue another 15" prompt', async () => {
+    seedCommitments(workCard());
+
+    // Create the session first: `POST /focus-sessions` performs the start, so
+    // seeding the out-of-time card afterwards is what puts the page at 00:00.
+    await fetch('/api/focus-sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ commitmentId: 'c1', plannedMinutes: 25 }),
+    });
+    seedCommitments(startedCard(25 * 60, 25));
+
+    renderStart('c1');
+
+    await userEvent.click(await screen.findByTestId('focus-continue'));
+
+    const active = await fetch('/api/focus-sessions/active').then((r) => r.json());
+    expect(active.data.session.plannedMinutes).toBe(40);
+    expect(active.data.session.continuedCount).toBe(1);
+  });
+
+  it('stops the session as partial and reports the minutes actually focused', async () => {
+    seedCommitments(workCard());
+
+    await fetch('/api/focus-sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ commitmentId: 'c1', plannedMinutes: 25 }),
+    });
+    seedCommitments(startedCard(12 * 60, 25));
+
+    renderStart('c1');
+
+    await userEvent.click(await screen.findByRole('button', { name: /done for now/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Partly done$/ }));
+
+    expect(await screen.findByTestId('today-screen')).toBeInTheDocument();
+
+    const active = await fetch('/api/focus-sessions/active').then((r) => r.json());
+    expect(active.data.session).toBeNull();
+  });
+
+  it('offers to take over when another commitment has a session running', async () => {
+    seedCommitments(workCard());
+
+    await fetch('/api/focus-sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ commitmentId: 'somebody-else', plannedMinutes: 25 }),
+    });
+
+    renderStart('c1');
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Begin/ }));
+
+    expect(await screen.findByTestId('focus-session-conflict')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /stop it and start this/i }));
+
+    const active = await fetch('/api/focus-sessions/active').then((r) => r.json());
+    expect(active.data.session.commitmentId).toBe('c1');
+  });
+
+  it('leaves a FAMILY commitment on E05\'s path — no focus session at all', async () => {
+    seedCommitments(makeCard({ id: 'c1', domain: 'FAMILY', title: 'Phone-free dinner' }));
+    renderStart('c1');
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Begin/ }));
+
+    expect(getTodayState().commitments[0].status).toBe('STARTED');
+
+    const active = await fetch('/api/focus-sessions/active').then((r) => r.json());
+    expect(active.data.session).toBeNull();
+
+    // The old in-page textarea, not the server-backed note input.
+    expect(await screen.findByLabelText(/anything pulling you away/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('focus-note-input')).not.toBeInTheDocument();
+  });
+});

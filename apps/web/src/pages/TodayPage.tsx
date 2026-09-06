@@ -57,6 +57,7 @@ import {
 } from '../components/today/ReflectionPrompt';
 import { CompleteDialog } from '../components/today/dialogs/CompleteDialog';
 import { MakeItSmallerDialog } from '../components/today/dialogs/MakeItSmallerDialog';
+import { FrictionDialog } from '../components/work/FrictionDialog';
 import { RescheduleDialog } from '../components/today/dialogs/RescheduleDialog';
 import { SkipDialog } from '../components/today/dialogs/SkipDialog';
 
@@ -88,6 +89,7 @@ export default function TodayPage() {
   const [rescheduleFor, setRescheduleFor] = useState<CommitmentCard | null>(null);
   const [skipFor, setSkipFor] = useState<CommitmentCard | null>(null);
   const [smallerFor, setSmallerFor] = useState<{ id: string; title: string } | null>(null);
+  const [frictionFor, setFrictionFor] = useState<CommitmentCard | null>(null);
   const [proposal, setProposal] = useState<DecompositionProposal | null>(null);
   const [proposalLoading, setProposalLoading] = useState(false);
   const [proposalError, setProposalError] = useState<string | null>(null);
@@ -528,6 +530,7 @@ export default function TodayPage() {
                   section.domain === 'FAMILY' ? <BirthdayCue members={familyMembers} /> : null
                 }
                 onAction={(action, commitment) => void handleAction(action, commitment)}
+                onAskFriction={(commitment) => setFrictionFor(commitment)}
               />
             ))}
           </Grid>
@@ -592,6 +595,48 @@ export default function TodayPage() {
         onClose={() => setSkipFor(null)}
         onSkip={(body) => actions.skip(skipFor!.id, body)}
       />
+
+      {/*
+        VISION §9's question, and the intervention it produces (epic E07).
+        Rendered from the page rather than the row because the intervention's
+        buttons navigate, reschedule and start timers.
+      */}
+      {frictionFor && (
+        <FrictionDialog
+          open
+          commitment={frictionFor}
+          onClose={() => setFrictionFor(null)}
+          // The row's `suggestedAction` drops to DECOMPOSE once the question has
+          // been answered, so the prompt has to be re-read rather than assumed.
+          onResolved={() => void refresh()}
+          onStart={(minutes, instruction) => {
+            const target = frictionFor;
+            setFrictionFor(null);
+            navigate(
+              `/start/${target.id}?minutes=${minutes}&instruction=${encodeURIComponent(instruction)}`,
+            );
+          }}
+          onUseMinimum={async () => {
+            const target = frictionFor;
+            setFrictionFor(null);
+            const version = target.versions.minimum ? 'minimum' : 'short';
+            await actions.fallback(target.id, version).catch(() => undefined);
+            navigate(`/start/${target.id}`);
+          }}
+          onProtectedReschedule={async (slot) => {
+            const target = frictionFor;
+            setFrictionFor(null);
+            try {
+              // `protected` is server-verified against the answer the user just
+              // gave; this is the one call in the app that sets it.
+              await actions.reschedule(target.id, { ...slot, protected: true });
+              setToast('Moved. This one does not count against you.');
+            } catch (err) {
+              setToast(err instanceof Error ? err.message : 'Could not move that');
+            }
+          }}
+        />
+      )}
 
       <MakeItSmallerDialog
         open={smallerFor !== null}
