@@ -32,6 +32,29 @@ export type CommitmentVersionView = z.infer<typeof commitmentVersionSchema>;
 export const commitmentActionSchema = z.enum(COMMITMENT_ACTIONS);
 
 /**
+ * E07-03's ladder assessment, as it appears on a card.
+ *
+ * Declared here rather than imported from `work/avoidance/` so that the card
+ * contract — which every action route returns — does not depend on the Work
+ * module. The detector's own types are the source of the VALUES; this is the
+ * wire shape, and a spec in E07-03 asserts the two agree.
+ */
+export const avoidanceAssessmentSchema = z.object({
+  level: z.number().int().min(0).max(6),
+  interventionType: z.string(),
+  signals: z.array(z.string()),
+  rationale: z.string(),
+  suggestedAction: z.enum([
+    'NONE',
+    'MINIMUM',
+    'DECOMPOSE',
+    'FRICTION_QUESTION',
+    'ENVIRONMENT',
+    'PLAN_REVIEW',
+  ]),
+});
+
+/**
  * Server-derived timer state. Null for a commitment that was never started.
  *
  * `activeSeconds` is what was banked at the last pause, NOT the total: the
@@ -92,6 +115,19 @@ export const commitmentCardSchema = z.object({
   decomposedFromId: z.string().uuid().nullable(),
   steps: z.array(commitmentVersionSchema).nullable(),
   timer: commitmentTimerSchema.nullable(),
+  /**
+   * Where this commitment sits on E07-03's intervention ladder, and what to
+   * offer because of it.
+   *
+   * NULL FOR EVERY NON-WORK CARD, and that is a statement rather than a gap.
+   * The ladder reasons about avoiding work; a family dinner that moved twice is
+   * a week, not a pattern to escalate on (PRD §26 is a Work requirement).
+   *
+   * Derived on every read — there is deliberately no stored column, because the
+   * signals move overnight and a persisted level would contradict this response
+   * within hours. See `work/avoidance/avoidance-detector.ts`.
+   */
+  avoidance: avoidanceAssessmentSchema.nullable(),
   /**
    * What the server will accept next. THE CLIENT RENDERS THIS LIST — it does
    * not compute one. A client running yesterday's bundle would otherwise offer

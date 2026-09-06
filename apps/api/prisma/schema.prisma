@@ -1914,6 +1914,12 @@ enum ObstacleType {
   OVERCOMMITMENT
   PERFECTIONISM
   LOW_ENERGY_WINDOW
+  // Added by E07-03 (#116): the three frictions VISION §9's answers name that
+  // E06's list had no member for. Members are only ever APPENDED — the value is
+  // stored on every obstacle row.
+  TASK_TOO_LARGE
+  LOW_MOTIVATION
+  URGENCY_DISPLACEMENT
   OTHER
 }
 

@@ -4,6 +4,7 @@ import type { Commitment } from '@prisma/client';
 import { CandidateLoaderService, type TodayCandidates } from './nba/candidate-loader.service';
 import { MomentumService } from '../progress/momentum/momentum.service';
 import { UserProfileService } from '../user-profile/user-profile.service';
+import { AvoidanceService } from '../work/avoidance/avoidance.service';
 import { versionsOf } from '../commitments/commitment-card.mapper';
 import { TodayService } from './today.service';
 import { todayResponseSchema } from './today.schema';
@@ -48,6 +49,7 @@ function row(over: Partial<Commitment> = {}): Commitment {
     workoutTemplateId: null,
     ritualId: null,
     familyMemberId: null,
+    workMilestoneId: null,
     createdAt: new Date('2026-03-01T00:00:00.000Z'),
     updatedAt: new Date('2026-03-01T00:00:00.000Z'),
     ...over,
@@ -110,6 +112,7 @@ describe('TodayService (#38)', () => {
   let loader: { load: jest.Mock };
   let momentum: { summary: jest.Mock };
   let profiles: { find: jest.Mock };
+  let avoidance: { assessMany: jest.Mock };
 
   beforeEach(async () => {
     loader = { load: jest.fn() };
@@ -122,6 +125,9 @@ describe('TodayService (#38)', () => {
     };
 
     profiles = { find: jest.fn().mockResolvedValue(null) };
+    // No ladder reading by default: every existing case in this file predates
+    // E07-03 and asserts the behaviour of a commitment nobody is avoiding.
+    avoidance = { assessMany: jest.fn().mockResolvedValue(new Map()) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -129,6 +135,7 @@ describe('TodayService (#38)', () => {
         { provide: CandidateLoaderService, useValue: loader },
         { provide: MomentumService, useValue: momentum },
         { provide: UserProfileService, useValue: profiles },
+        { provide: AvoidanceService, useValue: avoidance },
       ],
     }).compile();
 
@@ -348,6 +355,54 @@ describe('TodayService (#38)', () => {
         offeredAt: '2026-03-02T04:00:00.000Z',
       });
       expect(Object.keys(result.comeback!)).toHaveLength(3);
+    });
+  });
+
+  describe('the intervention ladder (#116)', () => {
+    const assessment = {
+      level: 3,
+      interventionType: 'FRICTION_DIAGNOSIS',
+      signals: ['RESCHEDULED_TWICE'],
+      rationale: 'This has been moved 2 times. Worth asking what is making it hard to start.',
+      suggestedAction: 'FRICTION_QUESTION',
+    };
+
+    it('carries the assessment on a WORK card and null on the others', async () => {
+      const work = row({ id: '33333333-3333-4333-8333-333333333333', rescheduleCount: 2 });
+      const family = row({ id: '44444444-4444-4444-8444-444444444444', domain: 'FAMILY' });
+
+      loader.load.mockResolvedValue(loaded({ rows: [work, family] }));
+      avoidance.assessMany.mockResolvedValue(new Map([[work.id, assessment]]));
+
+      const result = await service.getToday('u1', NOW);
+
+      const workCard = result.domains.find((d) => d.domain === 'WORK')?.commitments[0];
+      const familyCard = result.domains.find((d) => d.domain === 'FAMILY')?.commitments[0];
+
+      expect(workCard?.avoidance).toEqual(assessment);
+      expect(familyCard?.avoidance).toBeNull();
+    });
+
+    it('drives the next best action into DIAGNOSE and quotes the rationale', async () => {
+      const work = row({ rescheduleCount: 2 });
+
+      loader.load.mockResolvedValue(loaded({ rows: [work] }));
+      avoidance.assessMany.mockResolvedValue(new Map([[work.id, assessment]]));
+
+      const result = await service.getToday('u1', NOW);
+
+      expect(result.nextBestAction?.interventionMode).toBe('DIAGNOSE');
+      expect(result.nextBestAction?.rationale).toContain('moved 2 times');
+    });
+
+    it('still returns the day when the assessment throws', async () => {
+      loader.load.mockResolvedValue(loaded());
+      avoidance.assessMany.mockRejectedValue(new Error('database on fire'));
+
+      const result = await service.getToday('u1', NOW);
+
+      expect(result.domains[0].commitments[0].avoidance).toBeNull();
+      expect(todayResponseSchema.safeParse(result).success).toBe(true);
     });
   });
 

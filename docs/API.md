@@ -3270,6 +3270,88 @@ unique index — a crashed client must always be able to recover through
 `GET /focus-sessions/active` and take the old one over, and a database
 constraint would turn that recovery into a 500.
 
+#### Avoidance and the friction question
+
+PRD §25–§26, VISION §9. `GET /today` carries an `avoidance` object on every
+**`WORK`** commitment card and `null` on every other domain — the ladder reasons
+about avoiding work, and a family dinner that moved twice is a week, not a
+pattern to escalate on.
+
+**There is no stored `avoidanceLevel` column.** The signals move overnight —
+"untouched for three days" becomes four without anybody touching a row — so a
+persisted level would contradict `GET /today` within hours, invisibly. It is
+derived on every read from a batched query whose cost does not grow with the
+number of cards.
+
+| Method | Path | Body | Returns |
+|--------|------|------|---------|
+| GET | `/api/commitments/{id}/avoidance` | — | 200 `AvoidanceAssessment` |
+| POST | `/api/commitments/{id}/friction` | `{ answer: FrictionAnswer, text? }` | 200 `{ level, obstacleId, reflectionId, intervention }` |
+
+```ts
+AvoidanceAssessment = {
+  level: 0..6,                    // PRD §26's seven rungs
+  interventionType: string,       // the INTERVENTION_TYPES name for the level
+  signals: string[],              // exactly the active signal keys
+  rationale: string,              // deterministic, with the counts substituted
+  suggestedAction: 'NONE' | 'MINIMUM' | 'DECOMPOSE'
+                 | 'FRICTION_QUESTION' | 'ENVIRONMENT' | 'PLAN_REVIEW',
+}
+```
+
+**A single reschedule, a single skip and a single "later" each leave the user at
+level 0** (PRD §25). The full rule — six signals, their thresholds, the rungs
+they carry, and the caps on levels 5 and 6 — is copied verbatim into
+[`docs/specs/work-domain.md`](specs/work-domain.md) from the detector's own file
+header.
+
+The level feeds `GET /today`'s `nextBestAction.interventionMode`: `DIAGNOSE` at
+3–4, `CHALLENGE_PLAN` at 5–6, `REDUCE` at 1–2. See
+[`today-and-nba.md`](specs/today-and-nba.md) §6.
+
+**The eight answers, and where each goes.** The intervention type is decided
+server-side from the answer — never from the body, and never from what the model
+claims:
+
+| `FrictionAnswer` | Label | `interventionType` | `Obstacle.type` |
+|---|---|---|---|
+| `DONT_KNOW_WHERE_TO_BEGIN` | I don't know where to begin | `ACTIVATION_REDUCTION` | `AMBIGUOUS_WORK_TASK` |
+| `TOO_BIG` | It feels too big | `DECOMPOSITION` | `TASK_TOO_LARGE` |
+| `TIRED` | I'm tired | `REDUCE_SCOPE` | `LOW_ENERGY_WINDOW` |
+| `DONT_WANT_TO` | I don't want to do it | `RECONNECT_REASON` | `LOW_MOTIVATION` |
+| `SOMETHING_URGENT` | Something more urgent came up | `PROTECTED_RESCHEDULE` | `URGENCY_DISPLACEMENT` |
+| `WORRIED_ABOUT_QUALITY` | I'm worried I won't do it well | `PERFECTIONISM_REFRAME` | `PERFECTIONISM` |
+| `NEED_MORE_INFO` | I need more information | `CLARIFY` | `AMBIGUOUS_WORK_TASK` |
+| `OTHER` | Other (`text` required) | `FRICTION_DIAGNOSIS` | `OTHER` |
+
+The coach is asked for **wording**, and its reply is discarded in favour of the
+deterministic template when it claims a different intervention type, recommends
+more than 15 minutes, names another commitment's id, or returns a proposal or a
+friction question of its own. `intervention.source` says which was used, and a
+`template` answer is a complete one — every answer works with the provider down.
+
+Free `text` goes through the safety layer **before** the model. A `redirect`
+returns the professional-care copy and **writes nothing** — no reflection, no
+obstacle, no gateway call.
+
+Having answered, the card's `suggestedAction` drops from `FRICTION_QUESTION` to
+`DECOMPOSE` for seven days. The question is a diagnosis, not a nag.
+
+**The protected reschedule.** `POST /api/commitments/{id}/actions/reschedule`
+takes an extra `protected?: boolean`. When the user has answered
+`SOMETHING_URGENT` on that commitment within 24 hours, the move happens
+normally — new row, evidence, status `RESCHEDULED` — but **`rescheduleCount`
+does not grow**, because having a job is not avoidance. Sent without that
+reflection it is a 400 `PROTECTED_RESCHEDULE_NOT_ALLOWED`: a flag a client could
+set freely would be a way to make every move invisible to the detector.
+
+| Status | Code | When |
+|--------|------|------|
+| 400 | `BAD_REQUEST` with `details.reason = "COMMITMENT_NOT_WORK"` | Not a Work commitment. |
+| 400 | `BAD_REQUEST` | `OTHER` with no `text`. |
+| 400 | `BAD_REQUEST` with `details.reason = "PROTECTED_RESCHEDULE_NOT_ALLOWED"` | `protected: true` with no recent urgency answer. |
+| 404 | `NOT_FOUND` | Unknown commitment, or one that is not the caller's. |
+
 ---
 
 ### Family

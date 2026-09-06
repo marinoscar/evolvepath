@@ -7,6 +7,8 @@ import { elapsedSeconds } from '../commitments/actions/commitment-timer';
 import { DOMAINS as ALL_DOMAINS } from '../path/domain.schema';
 import { MomentumService } from '../progress/momentum/momentum.service';
 import { UserProfileService } from '../user-profile/user-profile.service';
+import { AvoidanceService } from '../work/avoidance/avoidance.service';
+import type { AvoidanceAssessment } from '../work/avoidance/avoidance-detector';
 import type { MomentumSummaryPayload } from './today.schema';
 import { greetingFor } from './local-date';
 import { CandidateLoaderService, type TodayCandidates } from './nba/candidate-loader.service';
@@ -43,6 +45,7 @@ export class TodayService {
     private readonly loader: CandidateLoaderService,
     private readonly momentum: MomentumService,
     private readonly profiles: UserProfileService,
+    private readonly avoidance: AvoidanceService,
   ) {}
 
   async getToday(userId: string, now: Date = new Date()): Promise<TodayResponse> {
@@ -52,8 +55,10 @@ export class TodayService {
       this.profiles.find(userId),
     ]);
 
+    const avoidance = await this.avoidanceOrEmpty(userId, loaded.rows, now, loaded.timeZone);
+
     const scored = this.rank(loaded);
-    const nextBestAction = this.buildNextBestAction(loaded, scored);
+    const nextBestAction = this.buildNextBestAction(loaded, scored, avoidance);
 
     return {
       greeting: greetingFor(now, loaded.timeZone),
@@ -77,7 +82,9 @@ export class TodayService {
         mode: loaded.domainModes[domain as Domain],
         commitments: loaded.rows
           .filter((row) => row.domain === domain)
-          .map((row) => toCommitmentCard(row, now)),
+          // `avoidance` is null for every non-WORK card by construction: the
+          // map only ever contains WORK ids.
+          .map((row) => toCommitmentCard(row, now, avoidance.get(row.id) ?? null)),
       })),
       momentum,
       // A pointer, never a backlog. The restart row is an ordinary commitment
@@ -92,6 +99,31 @@ export class TodayService {
           : null,
       coachInsight: null,
     };
+  }
+
+  /**
+   * The ladder, or nothing at all.
+   *
+   * `GET /today` MUST NOT FAIL BECAUSE THE ASSESSMENT FAILED. The screen is
+   * about the next hour; a ladder reading is a secondary annotation on it, and
+   * degrading to `avoidance: null` says "no reading" while the day still
+   * renders — the same bargain `momentumOrDegraded` makes below.
+   */
+  private async avoidanceOrEmpty(
+    userId: string,
+    rows: Commitment[],
+    now: Date,
+    timeZone: string,
+  ): Promise<Map<string, AvoidanceAssessment>> {
+    try {
+      return await this.avoidance.assessMany(userId, rows, now, timeZone);
+    } catch (error) {
+      this.logger.warn(
+        `avoidance unavailable for today: ${error instanceof Error ? error.message : 'unknown'}`,
+      );
+
+      return new Map();
+    }
   }
 
   /**
@@ -142,6 +174,7 @@ export class TodayService {
   private buildNextBestAction(
     loaded: TodayCandidates,
     ranked: CandidateInput[],
+    avoidance: Map<string, AvoidanceAssessment>,
   ): NextBestAction | null {
     if (ranked.length === 0) return null;
 
@@ -191,11 +224,13 @@ export class TodayService {
         )
       : undefined;
 
+    const topAvoidance = avoidance.get(top.commitment.id) ?? null;
+
     const mode = resolveInterventionMode({
       daysSinceLastEvidence: loaded.daysSinceLastEvidence,
       hasAnyEvidence: loaded.hasAnyEvidence,
       routineFailuresLast14Days: this.routineFailuresFor(loaded, top.commitment.id),
-      topRescheduleCount: top.commitment.rescheduleCount,
+      avoidanceLevel: topAvoidance?.level ?? null,
       checkIn: loaded.context.checkIn,
       chosenMinutes: chosen.durationMinutes,
       availableMinutesRemaining: loaded.context.availableMinutesRemaining,
@@ -210,14 +245,19 @@ export class TodayService {
       domain: top.commitment.domain,
       durationMinutes: chosen.durationMinutes,
       version: chosen.version,
-      rationale: rationaleFor(mode, {
-        title: chosen.title,
-        minutes: chosen.durationMinutes,
-        domain: top.commitment.domain,
-        rescheduleCount: top.commitment.rescheduleCount,
-        whyItMatters: outcome?.motivation ?? null,
-        availableMinutesRemaining: loaded.context.availableMinutesRemaining,
-      }),
+      // The ladder's own sentence carries the counts ("moved 2 times,
+      // untouched for 4 days"), which is exactly the evidence the posture's
+      // template does not have. Appended rather than replacing it: the template
+      // says what to DO and the rationale says why the product thinks so.
+      rationale:
+        rationaleFor(mode, {
+          title: chosen.title,
+          minutes: chosen.durationMinutes,
+          domain: top.commitment.domain,
+          rescheduleCount: top.commitment.rescheduleCount,
+          whyItMatters: outcome?.motivation ?? null,
+          availableMinutesRemaining: loaded.context.availableMinutesRemaining,
+        }) + (topAvoidance && topAvoidance.level >= 1 ? ` ${topAvoidance.rationale}` : ''),
       fallback: fallbackFor({ versions: top.commitment.versions }, chosen),
       interventionMode: mode,
       confidence,

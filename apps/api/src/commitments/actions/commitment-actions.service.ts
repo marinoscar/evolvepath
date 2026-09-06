@@ -50,6 +50,14 @@ import { elapsedSeconds } from './commitment-timer';
 // the id is real, which is a disclosure the product has no reason to make.
 // =============================================================================
 
+/**
+ * How long a "something more urgent came up" answer protects a move (#116).
+ *
+ * A day, because the answer is about TODAY's collision. A reason from last week
+ * would quietly make every move that followed it free.
+ */
+export const PROTECTED_RESCHEDULE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 /** `evidence.qualitativeValue` is a text column; structure goes in as JSON. */
 function asQualitative(value: Record<string, unknown>): string {
   return JSON.stringify(value);
@@ -344,6 +352,21 @@ export class CommitmentActionsService {
   ): Promise<CommitmentCard> {
     const existing = await this.findOwned(userId, id);
 
+    // A PROTECTED move (E07-03, #116) is a move the user has explained. It
+    // still creates the new row and still writes evidence — the ONE thing it
+    // changes is that the count does not grow, because "something more urgent
+    // came up" is not avoidance and counting it as such would push an honest
+    // user up the intervention ladder for having a job.
+    const isProtected = dto.protected === true;
+
+    if (isProtected && !(await this.hasRecentUrgencyReflection(userId, id))) {
+      throw new BadRequestException({
+        message:
+          'A protected move needs a recent "something more urgent came up" answer on this commitment.',
+        details: { reason: 'PROTECTED_RESCHEDULE_NOT_ALLOWED' },
+      });
+    }
+
     // Checked before the matrix so the message names the real reason: STARTED →
     // RESCHEDULED is matrix-legal, but moving a commitment whose timer has been
     // running would carry today's evidence into tomorrow.
@@ -374,12 +397,20 @@ export class CommitmentActionsService {
     // `scheduledEnd` from the body wins over the duration the transition derived
     // from the original window — the user is moving it AND resizing it.
     const row = await this.prisma.$transaction(async (tx) => {
+      // `scheduledEnd` from the body and the protected count are the same
+      // write: the transition already created the row with `count + 1`, and a
+      // protected move puts it back where it was.
+      const patch: Prisma.CommitmentUpdateInput = {};
+
+      if (dto.scheduledEnd !== undefined && dto.scheduledEnd !== null) {
+        patch.scheduledEnd = new Date(dto.scheduledEnd);
+      }
+
+      if (isProtected) patch.rescheduleCount = existing.rescheduleCount;
+
       const updated =
-        dto.scheduledEnd !== undefined && dto.scheduledEnd !== null
-          ? await tx.commitment.update({
-              where: { id: replacementId },
-              data: { scheduledEnd: new Date(dto.scheduledEnd) },
-            })
+        Object.keys(patch).length > 0
+          ? await tx.commitment.update({ where: { id: replacementId }, data: patch })
           : await tx.commitment.findUniqueOrThrow({ where: { id: replacementId } });
 
       await tx.evidence.create({
@@ -393,6 +424,7 @@ export class CommitmentActionsService {
             from: existing.scheduledStart.toISOString(),
             to: updated.scheduledStart.toISOString(),
             count: updated.rescheduleCount,
+            protected: isProtected,
           }),
           confidence: 1,
         },
@@ -406,6 +438,7 @@ export class CommitmentActionsService {
       to: row.scheduledStart.toISOString(),
       rescheduleCount: row.rescheduleCount,
       rescheduledToId: row.id,
+      protected: isProtected,
     });
 
     return toCommitmentCard(row, now);
@@ -527,6 +560,29 @@ export class CommitmentActionsService {
   // ---------------------------------------------------------------------------
   // Internals
   // ---------------------------------------------------------------------------
+
+  /**
+   * Whether the user has answered "something more urgent came up" here, lately.
+   *
+   * The reflection E07-03 writes is the whole authorisation for a protected
+   * move. Twenty-four hours because the answer is about TODAY's collision; a
+   * reason from last week does not protect this week's move.
+   */
+  private async hasRecentUrgencyReflection(userId: string, id: string): Promise<boolean> {
+    const since = new Date(Date.now() - PROTECTED_RESCHEDULE_WINDOW_MS);
+
+    const reflection = await this.prisma.reflection.findFirst({
+      where: {
+        userId,
+        commitmentId: id,
+        createdAt: { gte: since },
+        frictionTags: { has: 'SOMETHING_URGENT' },
+      },
+      select: { id: true },
+    });
+
+    return reflection !== null;
+  }
 
   private async findOwned(userId: string, id: string): Promise<Commitment> {
     return findOwnedOrThrow(

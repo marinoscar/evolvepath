@@ -1,7 +1,9 @@
 import {
   CHALLENGE_PLAN_FAILURES,
-  DIAGNOSE_RESCHEDULES,
+  CHALLENGE_PLAN_LEVEL,
+  DIAGNOSE_LEVEL,
   INTERVENTION_MODES,
+  REDUCE_LEVEL,
   RECOVER_DAYS,
   REINFORCE_COMPLETIONS,
   resolveInterventionMode,
@@ -12,7 +14,7 @@ const base = (over: Partial<InterventionContext> = {}): InterventionContext => (
   daysSinceLastEvidence: 0,
   hasAnyEvidence: true,
   routineFailuresLast14Days: 0,
-  topRescheduleCount: 0,
+  avoidanceLevel: null,
   checkIn: null,
   chosenMinutes: 25,
   availableMinutesRemaining: 600,
@@ -40,10 +42,26 @@ describe('resolveInterventionMode (#38)', () => {
       ).toBe('CHALLENGE_PLAN');
     });
 
-    it('DIAGNOSE when this one keeps moving', () => {
-      expect(resolveInterventionMode(base({ topRescheduleCount: DIAGNOSE_RESCHEDULES }))).toBe(
-        'DIAGNOSE',
+    it('DIAGNOSE at the ladder level that asks the friction question (#116)', () => {
+      expect(resolveInterventionMode(base({ avoidanceLevel: DIAGNOSE_LEVEL }))).toBe('DIAGNOSE');
+      expect(resolveInterventionMode(base({ avoidanceLevel: 4 }))).toBe('DIAGNOSE');
+    });
+
+    it('CHALLENGE_PLAN at the levels that challenge the plan and the goal (#116)', () => {
+      expect(resolveInterventionMode(base({ avoidanceLevel: CHALLENGE_PLAN_LEVEL }))).toBe(
+        'CHALLENGE_PLAN',
       );
+      expect(resolveInterventionMode(base({ avoidanceLevel: 6 }))).toBe('CHALLENGE_PLAN');
+    });
+
+    it('REDUCE at the activation and decomposition levels (#116)', () => {
+      expect(resolveInterventionMode(base({ avoidanceLevel: REDUCE_LEVEL }))).toBe('REDUCE');
+      expect(resolveInterventionMode(base({ avoidanceLevel: 2 }))).toBe('REDUCE');
+    });
+
+    it('a non-WORK candidate carries no level and keeps the original rules (#116)', () => {
+      expect(resolveInterventionMode(base({ avoidanceLevel: null }))).toBe('ACT');
+      expect(resolveInterventionMode(base({ avoidanceLevel: 0 }))).toBe('ACT');
     });
 
     it.each(['PACKED', 'UNEXPECTED_PROBLEM'] as const)('REDUCE on a %s day', (checkIn) => {
@@ -87,7 +105,7 @@ describe('resolveInterventionMode (#38)', () => {
     it('RECOVER beats DIAGNOSE', () => {
       expect(
         resolveInterventionMode(
-          base({ daysSinceLastEvidence: 5, topRescheduleCount: 3 }),
+          base({ daysSinceLastEvidence: 5, avoidanceLevel: 3 }),
         ),
       ).toBe('RECOVER');
     });
@@ -95,14 +113,14 @@ describe('resolveInterventionMode (#38)', () => {
     it('CHALLENGE_PLAN beats DIAGNOSE', () => {
       expect(
         resolveInterventionMode(
-          base({ routineFailuresLast14Days: 5, topRescheduleCount: 3 }),
+          base({ routineFailuresLast14Days: 5, avoidanceLevel: 3 }),
         ),
       ).toBe('CHALLENGE_PLAN');
     });
 
     it('DIAGNOSE beats REDUCE', () => {
       expect(
-        resolveInterventionMode(base({ topRescheduleCount: 2, checkIn: 'PACKED' })),
+        resolveInterventionMode(base({ avoidanceLevel: DIAGNOSE_LEVEL, checkIn: 'PACKED' })),
       ).toBe('DIAGNOSE');
     });
 

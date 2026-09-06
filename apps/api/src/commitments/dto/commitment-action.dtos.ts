@@ -49,6 +49,16 @@ export const rescheduleActionSchema = z
   .object({
     scheduledStart: isoDateTime,
     scheduledEnd: isoDateTime.nullish(),
+    /**
+     * "Something more urgent came up" (E07-03, #116).
+     *
+     * SERVER-VERIFIED, never taken on trust: the move keeps `rescheduleCount`
+     * unchanged only when the user actually answered the friction question with
+     * `SOMETHING_URGENT` in the last 24 hours. Without that reflection this is a
+     * 400 — a flag a client could set freely would be a way to make every move
+     * invisible to the avoidance detector.
+     */
+    protected: z.boolean().nullish(),
   })
   .superRefine(refineSchedule);
 

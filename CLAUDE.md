@@ -986,6 +986,14 @@ re-implement it:
 - `POST /api/focus-sessions/{id}/stop` - `done` / `partial` / `abandoned`. Writes one `TIMER` `focus_session` evidence row **for every outcome** — `abandoned` PAUSES the commitment rather than closing it, because starting is the behaviour the product reinforces (VISION §10)
 - `GET /api/focus-sessions?commitmentId=&outcomeId=&from=&to=` - Own rows, newest first, max 100
 
+The intervention ladder (PRD §25–§26, VISION §9). `GET /today` carries
+`avoidance` on every **WORK** card and `null` on every other domain, and the
+level drives `nextBestAction.interventionMode` — `DIAGNOSE` at 3–4,
+`CHALLENGE_PLAN` at 5–6, `REDUCE` at 1–2:
+- `GET /api/commitments/{id}/avoidance` - `{ level 0-6, interventionType, signals[], rationale, suggestedAction }`. **Derived on every read; there is no stored column** — the signals move overnight and a persisted level would contradict `GET /today` within hours
+- `POST /api/commitments/{id}/friction` - Answer "what's making it hard to start?". Writes one reflection tagged with the answer and one obstacle (whose `observedCount` grows on repeats), then returns the intervention that answer routes to. **The intervention type is computed server-side**, and a coach reply claiming a different one — or recommending over 15 minutes, or naming another commitment — is discarded for the template. Free text goes through the safety layer first; a redirect writes nothing
+- `POST /api/commitments/{id}/actions/reschedule` gains `protected?: boolean` - A move the user explained with `SOMETHING_URGENT` in the last 24 h. Everything happens normally except **`rescheduleCount` does not grow**; without that reflection it is 400 `PROTECTED_RESCHEDULE_NOT_ALLOWED`, because a flag a client could set freely would make every move invisible to the detector
+
 ### Family (epic E08)
 Own data only; a foreign or unknown id answers 404, never 403.
 - `GET /api/family/members` - List; items carry exactly `id`, `nickname`, `relationship`, `birthday`, `createdAt` — PRD §33 fixes the record and there is nothing else to return
