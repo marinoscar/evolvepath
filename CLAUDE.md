@@ -968,6 +968,15 @@ routines.
 - `POST /api/weekly/plans/{id}/propose` - What next week would look like, plus the PRD §48 load check. An occurrence dropped for a travel day, a colliding fixed event or a paused domain comes back with `include: false` and an `excludedBy` reason, never omitted
 - `POST /api/weekly/plans/{id}/approve` - One transaction: the commitments, the changed domain modes and the previous week's review. Idempotent under retry (`skippedExisting`); 422 `LOAD_WARNINGS_UNACKNOWLEDGED` until the user has read the warnings
 
+### Work (epic E07)
+Turning a work outcome into sessions somebody actually starts. Own data only; a
+foreign or unknown id answers 404, never 403, and a non-`WORK` outcome answers
+400 `OUTCOME_NOT_WORK`.
+- `POST /api/outcomes/{id}/plan-sessions` - Ask the planner. Writes **one** `work_session_plan_proposals` row and nothing else — no commitment, milestone, routine or plan version until `apply` (PRD §15). 412 `AI_KEY_REQUIRED`, 503 `AI_UNAVAILABLE` with `retryable`
+- `POST /api/outcomes/{id}/plan-sessions/template` - The deterministic plan: evenly spaced weekday sessions at 09:00 local. **Never calls the gateway**
+- `POST /api/outcomes/{id}/plan-sessions/apply` - The approval step, and the only path that creates rows. One transaction: plan + v1 when the outcome had none, milestones, one `EVENT` routine on the **current ACTIVE** version, one `PLANNED` `FOCUS_SESSION` commitment per session. **No new `PlanVersion`**. An edited copy is re-validated against the same guardrails the model was held to (400 `PROPOSAL_INVALID` with readable `details.rules[]`); a second apply is 409
+- `GET /api/outcomes/{id}/work-plan` - Milestones in order with their sessions, plus the implementation intention and cadence read from the plan the user **applied**
+
 ### Family (epic E08)
 Own data only; a foreign or unknown id answers 404, never 403.
 - `GET /api/family/members` - List; items carry exactly `id`, `nickname`, `relationship`, `birthday`, `createdAt` — PRD §33 fixes the record and there is nothing else to return
@@ -1061,6 +1070,8 @@ Behaviours, not calories: no macro, no food database, no BMI, no goal weight.
 - `domain_modes` - Per-domain posture (GROW, MAINTAIN, RECOVER, PAUSE); a missing row means GROW
 - `daily_check_ins` - "How does today feel?" — one row per user per local day, upserted; `date_local` is text in the user's own timezone, never a date column
 - `user_profiles` - Typed per-user preferences the product reasons about: `timezone` (what "today" means), `coachingStyle`, `weekdayMinutes`, quiet hours, the comeback loop's open offer (E11-02: `comebackState`/`comebackTrigger`/`comebackCommitmentId`, `lastActiveAt`, `planReviewSuggestedAt` — on the profile because there is at most ONE open offer per user by design), the weekly review rhythm (`weeklyReviewWeekday` 0-6 with a database check constraint, `weeklyReviewTime` `'HH:mm'`) and onboarding progress; one row per user, created lazily (a missing row means onboarding has not finished)
+- `work_milestones` - A deliverable inside a work outcome (PRD §24). **Not** E11's `milestones`, which is achievements: that name was taken and the two share nothing but a noun. `(outcome_id, order)` is unique, so "milestone 2" means one thing, and a second applied plan appends rather than colliding
+- `work_session_plan_proposals` - One planner proposal for one outcome, waiting on the user's Apply. `plan` is what the coach proposed and `applied_plan` is the copy that actually became commitments — an edit must not erase what was suggested
 - `family_members` - Someone the user shares a ritual with. Exactly `nickname`, `relationship`, optional date-only `birthday` — and nothing else, by design (PRD §33, VISION §50: the people in it never consented to being modeled)
 - `rituals` - A recurring family behaviour the user is protecting: the recurrence rule (`weekdays`, `HH:mm`, `everyNWeeks`), ideal and minimum minutes, fallback text and the materialization horizon. A rule, not a schedule — the materializer turns it into ordinary `commitments`
 - `notification_interactions` - The coaching decision log: one `SENT`, `OPENED`, `ACTIONED`, `DISMISSED` or `SUPPRESSED` row per decision or response. The only place that records **why a message was not sent** (`suppress_reason`), what the user did with one, and which commitment it concerned. The unique `(user_id, event_key, dedupe_key)` index is the scheduler's idempotency; responses carry a null dedupe key and are unconstrained by it

@@ -3135,6 +3135,86 @@ worth protecting them from a kind sentence over.
 
 ---
 
+### Work
+
+The Work domain (epic E07): turning an outcome into sessions somebody actually
+starts. Full rationale, the ladder rule and the rejected alternatives are in
+[`docs/specs/work-domain.md`](specs/work-domain.md).
+
+Every route is a per-user resource — plain bearer auth, ownership resolved by
+the caller's id, and **404, never 403**, for an id that belongs to somebody
+else. A non-`WORK` outcome or commitment answers **400** with
+`details.reason = "OUTCOME_NOT_WORK"` / `"COMMITMENT_NOT_WORK"`: it exists and
+is yours, it is simply not what this endpoint is for.
+
+#### Session planning
+
+**Nothing is written to the plan until `apply`.** `POST .../plan-sessions`
+creates exactly one `work_session_plan_proposals` row and no commitment,
+milestone, routine or plan version — PRD §15's rule that AI output waits on a
+human. `apply` is the approval step, and it is the only path that turns a
+proposal into rows.
+
+| Method | Path | Body | Returns |
+|--------|------|------|---------|
+| POST | `/api/outcomes/{id}/plan-sessions` | `{ targetDate?, availableMinutesPerDay? }` | 200 `{ proposalId, proposal, source: "ai", expiresAt }` |
+| POST | `/api/outcomes/{id}/plan-sessions/template` | same | 200 `{ …, source: "template" }` — **never calls the model** |
+| POST | `/api/outcomes/{id}/plan-sessions/apply` | `{ proposalId, proposal? }` | 201 `{ routineId, milestoneIds[], commitmentIds[] }` |
+| GET | `/api/outcomes/{id}/work-plan` | — | 200 milestones, sessions, the applied intention and cadence |
+
+`availableMinutesPerDay` resolves **request → `user_profiles.weekday_minutes` →
+60**, in that order.
+
+The plan contract (`work-session-plan.schema.ts`, also the `planner` persona's
+structured-output schema, `schemaName: work_session_plan`,
+`promptVersion: work-session-plan.v1`):
+
+```ts
+{
+  milestones: [{ title: string, order: number }],            // 1..8
+  sessions: [{                                               // 1..20
+    title: string,
+    scheduledStart: string,                                  // ISO-8601 with offset
+    durationMinutes: number,                                 // 10..120
+    milestoneIndex: number,
+    minimumStart: { title: string, minutes: number },        // 2..15, required
+  }],
+  implementationIntention: { when: string, then: string },
+  reviewCadence: 'DAILY' | 'TWICE_WEEKLY' | 'WEEKLY',
+  rationale: string,
+}
+```
+
+The **guardrails** run over the model's output, the template, and the copy the
+user edited, identically: milestone orders are `0..n-1` with no gaps; every
+`milestoneIndex` is in range; every session falls between the start of today and
+the target date (or 14 days out without one); at most two sessions per local
+calendar day; the per-day total never exceeds `availableMinutesPerDay`; each
+`minimumStart` is strictly shorter than its session; sessions are in ascending
+order. A model plan that breaks one is treated as a schema failure — **nothing
+is stored**, because a plan the server had to correct is not the plan the user
+would be agreeing to.
+
+Applying creates, in **one transaction**: the outcome's `Plan` + v1 when it had
+none, one `work_milestones` row per milestone (orders continue from the
+outcome's current maximum, so a second plan appends), one `EVENT`-triggered
+`Routine` on the outcome's **current ACTIVE** plan version, and one `PLANNED`
+`WORK` commitment per session with `commitment_type = 'FOCUS_SESSION'` and its
+full / short / minimum versions. **No new `PlanVersion` is created** — sessions
+are commitments, not a change of strategy.
+
+| Status | Code | When |
+|--------|------|------|
+| 400 | `BAD_REQUEST` with `details.reason = "OUTCOME_NOT_WORK"` | The outcome is FAMILY or HEALTH. |
+| 400 | `BAD_REQUEST` with `details.reason = "TARGET_DATE_PAST"` | The target date is today or earlier. |
+| 400 | `BAD_REQUEST` with `details.reason = "PROPOSAL_INVALID"`, `details.rules[]` | The (edited) plan breaks a guardrail. Each rule is a readable sentence. |
+| 404 | `NOT_FOUND` | Unknown outcome or proposal, or one that is not the caller's. |
+| 409 | `CONFLICT` with `details.reason = "PROPOSAL_NOT_PENDING"` | Already applied, discarded or expired. An expired proposal is flipped to `EXPIRED` on this read. |
+| 412 | `AI_KEY_REQUIRED` | The caller has no OpenAI key. The one AI failure the user can fix. |
+| 503 | `SERVICE_UNAVAILABLE` with `details = { reason: "AI_UNAVAILABLE", code, retryable }` | The provider failed. `retryable` is true for `rate_limit`/`timeout`/`network`/`provider`; use the template route either way. |
+
+---
+
 ### Family
 
 The Family domain (epic E08). Every route here is a per-user resource: plain
