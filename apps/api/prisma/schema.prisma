@@ -36,6 +36,7 @@ model User {
   allowlistEntry         AllowedEmail?          @relation("AllowlistClaimedBy")
   deviceCodes            DeviceCode[]           @relation("UserDeviceCodes")
   storageObjects         StorageObject[]        @relation("UserStorageObjects")
+  mediaAttachments       MediaAttachment[]      @relation("UserMediaAttachments")
   personalAccessTokens   PersonalAccessToken[]  @relation("UserPersonalAccessTokens")
   credentialUpdates      Credential[]           @relation("CredentialUpdatedBy")
   notificationDeliveries NotificationDelivery[] @relation("UserNotificationDeliveries")
@@ -337,8 +338,9 @@ model StorageObject {
   updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  uploadedBy User?                @relation("UserStorageObjects", fields: [uploadedById], references: [id], onDelete: SetNull)
-  chunks     StorageObjectChunk[]
+  uploadedBy      User?                @relation("UserStorageObjects", fields: [uploadedById], references: [id], onDelete: SetNull)
+  chunks          StorageObjectChunk[]
+  mediaAttachment MediaAttachment?
 
   @@index([uploadedById])
   @@index([status])
@@ -2375,4 +2377,70 @@ model BodyWeightLog {
 
   @@unique([userId, dateLocal])
   @@map("body_weight_logs")
+}
+
+// =============================================================================
+// Media Attachments  (issue #74, epic #67)
+// =============================================================================
+//
+// A raw StorageObject knows WHAT was uploaded, not WHY. The product needs to
+// know that this video is a form check for that workout session, that this
+// photo shows the user's equipment, and what the coach said about it —
+// otherwise "the coach's notes on your last squat video" is not answerable
+// without re-deriving it from a chat log (VISION §14, PRD §10.9).
+
+/// Photo or video. Derived from MIME at creation, never sent by a client.
+enum MediaKind {
+  PHOTO
+  VIDEO
+}
+
+/// What the media is FOR. It selects the coaching prompt and, with it, the
+/// rules that prompt is held to — MEAL is the one that must never produce a
+/// calorie count (PRD §46, VISION §16).
+enum MediaPurpose {
+  WORKOUT_FORM
+  EQUIPMENT
+  MEAL
+  GENERAL
+}
+
+/// One upload, given a purpose and optionally a target, plus the coach's last
+/// structured verdict on it.
+model MediaAttachment {
+  id              String       @id @default(uuid()) @db.Uuid
+  userId          String       @map("user_id") @db.Uuid
+  storageObjectId String       @unique @map("storage_object_id") @db.Uuid
+  kind            MediaKind
+  purpose         MediaPurpose @default(GENERAL)
+
+  /// Polymorphic and deliberately NOT a foreign key: the things media points
+  /// at (`workout_session`, `commitment`, `outcome`, `coach_message`) live in
+  /// four tables, and a nullable FK per target would be four columns that are
+  /// null three times out of four. The legal values are a Zod enum at the API
+  /// boundary (`media-target-types.ts`), which is where a bad one can still be
+  /// refused with a readable message.
+  targetType String? @map("target_type")
+  targetId   String? @map("target_id") @db.Uuid
+
+  /// The validated `mediaAdviceSchema` output plus provenance (asked at, the
+  /// question, the invocation id, the prompt version, the model). Null until
+  /// somebody asks. Untyped in Prisma on purpose: the shape is enforced in one
+  /// place, `media/dto/media-advice.schema.ts`, and a second declaration here
+  /// would be a copy that drifts. The LATEST verdict overwrites; the history
+  /// is `ai_invocations`.
+  aiSummary Json? @map("ai_summary")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user          User          @relation("UserMediaAttachments", fields: [userId], references: [id], onDelete: Cascade)
+  /// `@unique` on the FK: one attachment per upload. Re-purposing means
+  /// uploading again, which is cheaper than reasoning about a photo that is
+  /// simultaneously a meal and a piece of equipment.
+  storageObject StorageObject @relation(fields: [storageObjectId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([targetType, targetId])
+  @@map("media_attachments")
 }

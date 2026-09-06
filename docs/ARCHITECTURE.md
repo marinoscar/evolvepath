@@ -447,6 +447,14 @@ Status updated: ready | failed
 - Part number, ETag, upload status
 - Enables resume capability
 
+**media_attachments** (epic #67):
+- The product-level view of an upload: what it is FOR (`purpose`), what it
+  belongs to (`target_type`/`target_id`, polymorphic and not a foreign key),
+  and the coach's last structured verdict (`ai_summary`)
+- `storage_object_id` is unique — one attachment per upload
+- Both foreign keys cascade, so media metadata cannot outlive its owner or
+  its bytes
+
 #### Module Structure
 
 ```
@@ -618,6 +626,23 @@ and the rejected alternatives.
 │ created_at         │
 │ updated_at         │
 └────────────────────┘
+         │ 1:1
+         ▼
+┌────────────────────────┐
+│   media_attachments    │
+├────────────────────────┤
+│ id (PK, UUID)          │
+│ user_id (FK)           │
+│ storage_object_id (FK, │
+│   UNIQUE)              │
+│ kind                   │
+│ purpose                │
+│ target_type            │
+│ target_id              │
+│ ai_summary (JSONB)     │
+│ created_at             │
+│ updated_at             │
+└────────────────────────┘
 
 ┌────────────────────────┐
 │    ai_invocations      │
