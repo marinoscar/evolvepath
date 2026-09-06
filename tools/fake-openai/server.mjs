@@ -178,6 +178,34 @@ function messageResponse(model, content) {
   };
 }
 
+/**
+ * A summary of the last `/v1/responses` body, for `/__debug/last`.
+ *
+ * Ids, counts and truncated URLs. Never bytes.
+ */
+let lastRequestSummary = {
+  schemaName: null,
+  imageCount: 0,
+  imageUrls: [],
+  textParts: 0,
+};
+
+function recordRequestSummary(body) {
+  const content = body?.input?.[0]?.content ?? [];
+  const images = Array.isArray(content)
+    ? content.filter((part) => part?.type === 'input_image')
+    : [];
+
+  lastRequestSummary = {
+    schemaName: body?.text?.format?.name ?? null,
+    imageCount: images.length,
+    imageUrls: images.map((part) => String(part.image_url ?? '').slice(0, 40)),
+    textParts: Array.isArray(content)
+      ? content.filter((part) => part?.type === 'input_text').length
+      : 0,
+  };
+}
+
 const server = createServer(async (req, res) => {
   requestCounter += 1;
 
@@ -193,6 +221,29 @@ const server = createServer(async (req, res) => {
   if (path === '/healthz') {
     res.writeHead(200, { 'content-type': 'text/plain' });
     res.end('ok');
+    log(200);
+    return;
+  }
+
+  // ---------------------------------------------------------------------------
+  // What the last request actually contained (issue #103, epic #67)
+  // ---------------------------------------------------------------------------
+  //
+  // "Every sampled frame reached the provider" is a claim about the REQUEST,
+  // not about anything the API or the browser can be asked afterwards — the
+  // attachment says four frames exist, and only this server knows whether four
+  // images were sent.
+  //
+  // IDS AND COUNTS ONLY. `imageUrls` is truncated to 40 characters per entry,
+  // which is enough to tell a `data:` URL from an `https://` one — the whole
+  // point of the `AI_ATTACHMENT_MODE` assertion — and not enough to be image
+  // bytes in a log.
+  //
+  // UNAUTHENTICATED, like `/healthz`, and that is fine for the same reason: this
+  // whole server trusts any `sk-test-` token and is never reachable from
+  // outside the Compose network.
+  if (path === '/__debug/last') {
+    send(res, 200, lastRequestSummary);
     log(200);
     return;
   }
@@ -225,6 +276,10 @@ const server = createServer(async (req, res) => {
 
   if (path === '/v1/responses' && req.method === 'POST') {
     const body = await readJson(req);
+
+    if (body !== null) {
+      recordRequestSummary(body);
+    }
 
     if (body === null) {
       sendError(res, 400, 'fake-openai: request body was not JSON');

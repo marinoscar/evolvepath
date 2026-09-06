@@ -38,9 +38,14 @@ export default defineConfig({
   // `depends_on: fake-openai: condition: service_healthy`, so the API container
   // does not start until the stand-in answers `/healthz` — by the time
   // `/api/health/live` responds, both are up.
+  //
+  // The `minio` and `e2e-media` overlays (#103, epic #67) join it for the same
+  // reason: `media-attachments.spec.ts` needs a real object store, and it
+  // needs `AI_VIDEO_MAX_FRAMES=4` so its frame-count assertion is a number
+  // rather than a range. Every other spec is unaffected by both.
   webServer: process.env.CI ? undefined : {
     command:
-      'cd ../../infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f fake-openai.compose.yml up',
+      'cd ../../infra/compose && docker compose -f base.compose.yml -f dev.compose.yml -f minio.compose.yml -f fake-openai.compose.yml -f e2e-media.compose.yml up',
     url: 'http://localhost:3535/api/health/live',
     reuseExistingServer: true,
     timeout: 120000,

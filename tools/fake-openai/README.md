@@ -134,3 +134,30 @@ curl -s -X POST localhost:8089/v1/responses \
   | jq -r '.output[0].content[0].text'
 # {"ok":true}
 ```
+
+## `GET /__debug/last` (issue #103, epic #67)
+
+What the last `/v1/responses` body actually contained:
+
+```json
+{
+  "schemaName": "media_advice",
+  "imageCount": 4,
+  "imageUrls": ["data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ"],
+  "textParts": 1
+}
+```
+
+It exists for one assertion nothing else in the stack can make: **"every
+sampled frame reached the provider"** is a claim about the request body. The
+attachment can say four frames *exist*; only this server knows whether four
+images were *sent*.
+
+`imageUrls` entries are truncated to 40 characters — enough to tell a `data:`
+URL from an `https://` one, which is the whole point of the
+`AI_ATTACHMENT_MODE` assertion, and not enough to be image bytes in a log.
+
+Unauthenticated, like `/healthz`, for the same reason: this server trusts any
+`sk-test-` token and is not reachable from outside the Compose network. The
+`e2e-media.compose.yml` overlay publishes port 8089 so the test runner — which
+is on the host — can reach it.
