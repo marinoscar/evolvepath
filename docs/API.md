@@ -3315,6 +3315,124 @@ routes stay owner-only.
 
 ---
 
+### Media Attachments
+
+**Requires Authentication.** The product-level view of an upload: what it is
+*for*, what it belongs to, how far along the processing pipeline it is, and what
+the coach said about it (epic #67, issue #83).
+
+**Every route answers `404` for a foreign id — never `403`.** That is the
+opposite of `/api/storage/objects`, deliberately. The storage API is generic and
+permission-based, so "you may not" is an honest answer there and admins reach
+other people's objects through `storage:*_any`. An attachment is a private
+product resource, and an answer that distinguishes "not yours" from "does not
+exist" tells a caller whether an id they do not own is real. Do not make one
+match the other.
+
+#### The attachment object
+
+```json
+{
+  "id": "uuid",
+  "storageObjectId": "uuid",
+  "kind": "VIDEO",
+  "purpose": "WORKOUT_FORM",
+  "targetType": "workout_session",
+  "targetId": "uuid",
+  "processingStatus": "ready",
+  "processingError": null,
+  "media": {
+    "mimeType": "video/mp4",
+    "size": "2048",
+    "width": 320,
+    "height": 240,
+    "durationMs": 2000,
+    "frameCount": 4
+  },
+  "aiSummary": null,
+  "createdAt": "2026-09-05T00:00:00.000Z",
+  "updatedAt": "2026-09-05T00:00:00.000Z"
+}
+```
+
+- `kind` is derived from the object's MIME type at creation — `image/*` →
+  `PHOTO`, `video/*` → `VIDEO`. A client never sends it: it is a fact about the
+  bytes, and a client that could claim otherwise would select the wrong
+  coaching prompt.
+- `purpose` is one of `WORKOUT_FORM`, `EQUIPMENT`, `MEAL`, `GENERAL`.
+- `processingStatus` collapses the **five** storage statuses into the three a
+  client can act on: `pending`/`uploading`/`processing` → `processing` (wait),
+  `ready` (ask the coach), `failed` (retry). Showing "pending" and "uploading"
+  as different things asks the user to care about a distinction that changes
+  nothing they can do.
+- `processingError` is the first `_processing.*_error` the pipeline recorded, so
+  a client can say *why* without reading `_processing` JSON itself.
+- `media.*` is read from `_processing['video-frames']` and
+  `_processing['image-normalize']`; every field is null until processing
+  finishes. `size` is a string — 64-bit values lose precision as JSON numbers.
+- `aiSummary` is the validated `mediaAdviceSchema` output plus provenance, or
+  `null` until somebody asks (`POST /:id/ask`).
+
+#### POST /api/media/attachments
+
+**Request Body:**
+```json
+{
+  "storageObjectId": "uuid",
+  "purpose": "WORKOUT_FORM",
+  "targetType": "workout_session",
+  "targetId": "uuid"
+}
+```
+
+`targetType` and `targetId` are all-or-nothing: half a target is not a target,
+because the index is on the pair and `targetId` alone is unqueryable. Legal
+target types are `workout_session`, `commitment`, `outcome`, `coach_message` —
+the value is checked here rather than by a foreign key, since the four live in
+four tables and not all of them exist yet.
+
+Attaching an object that is **still processing** is the normal case: the picker
+attaches the moment the upload completes and then polls.
+
+| Status | When |
+|---|---|
+| 201 | Created |
+| 400 | Not an image or video, processing already failed, or a half-specified target |
+| 404 | The storage object does not exist **or is not the caller's** |
+| 409 | This upload is already attached — one attachment per upload, so re-purposing means uploading again |
+
+#### GET /api/media/attachments
+
+Query: `targetType`, `targetId`, `purpose`, `page` (1), `pageSize` (20, max
+100). Returns the nested list shape (`{ items, meta }`), the caller's rows only,
+newest first.
+
+#### GET /api/media/attachments/:id
+
+The attachment. `404` if it is absent **or not the caller's**.
+
+#### DELETE /api/media/attachments/:id
+
+`204`. Removes the attachment, its storage object, and every derived object —
+the video's sampled frames, the normalized AI variant — by going through
+`ObjectsService.delete` rather than growing a second deletion story.
+
+#### GET /api/media/attachments/:id/preview
+
+Query: `variant` (`original` | `ai` | `frame`, default `original`),
+`frameIndex` (default 0).
+
+```json
+{ "data": { "url": "https://…", "expiresIn": 3600, "variant": "frame" } }
+```
+
+`variant` in the **response** says what was actually served: asking for `ai`
+when no normalized variant exists returns the original and says so, because a
+caller asking for a preview wants a picture. `400` when the media is not `ready`
+or the requested frame does not exist.
+
+---
+
 ### Health
 
 **Public endpoints** - Used for Kubernetes liveness/readiness probes.
