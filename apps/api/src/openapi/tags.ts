@@ -173,6 +173,13 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'One row per user, replaced whole.',
       },
       {
+        name: 'Onboarding',
+        description:
+          'The first-Path flow (PRD §19–§20): saved answers, the AI plan proposal, the ' +
+          'confidence check, and the one approval that turns a proposal into outcomes, plans, ' +
+          'routines and commitments.',
+      },
+      {
         name: 'Outcomes',
         description:
           'Meaningful results per domain (Work, Family, Health). Every row is owned by the ' +
