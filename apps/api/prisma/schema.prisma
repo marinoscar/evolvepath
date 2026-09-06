@@ -80,6 +80,10 @@ model User {
   weeklyReviews WeeklyReview[] @relation("UserWeeklyReviews")
   weeklyPlans   WeeklyPlan[]   @relation("UserWeeklyPlans")
 
+  // The Work domain (epic E07)
+  workMilestones           WorkMilestone[]           @relation("UserWorkMilestones")
+  workSessionPlanProposals WorkSessionPlanProposal[] @relation("UserWorkSessionPlanProposals")
+
   // The Health domain (epic E09)
   customExercises Exercise[]       @relation("UserCustomExercises")
   workoutPrograms WorkoutProgram[] @relation("UserWorkoutPrograms")
@@ -771,9 +775,9 @@ model Milestone {
   id     String @id @default(uuid()) @db.Uuid
   userId String @map("user_id") @db.Uuid
 
-  kind MilestoneKind
+  kind     MilestoneKind
   /// 1 for one-off kinds; n for the n-th FOUR_WEEKS or TEN_WORKOUTS.
-  sequence Int @default(1)
+  sequence Int           @default(1)
 
   /// Null for the cross-domain kinds. Reuses E02's `Domain`; there is no second
   /// copy of it.
@@ -1228,6 +1232,11 @@ model Outcome {
   plan        Plan?
   commitments Commitment[]
 
+  // The Work domain (epic E07): the deliverables this outcome breaks into, and
+  // the session plans proposed for it.
+  workMilestones           WorkMilestone[]
+  workSessionPlanProposals WorkSessionPlanProposal[]
+
   @@index([userId, domain])
   @@index([userId, state])
   @@map("outcomes")
@@ -1444,6 +1453,11 @@ model Commitment {
   /// already did against it.
   workoutTemplateId String? @map("workout_template_id") @db.Uuid
 
+  /// The work deliverable this focus session belongs to (epic E07). SetNull,
+  /// like every other link upward: deleting the milestone must not delete the
+  /// record of the work that was done against it.
+  workMilestoneId String? @map("work_milestone_id") @db.Uuid
+
   /// The ritual that materialized this occurrence, when it came from one.
   ritualId       String? @map("ritual_id") @db.Uuid
   /// Who the commitment is with. Context, never an axis of measurement.
@@ -1474,6 +1488,9 @@ model Commitment {
   // The Health domain (epic E09)
   workoutTemplate WorkoutTemplate? @relation(fields: [workoutTemplateId], references: [id], onDelete: SetNull)
   workoutSession  WorkoutSession?
+
+  // The Work domain (epic E07)
+  workMilestone WorkMilestone? @relation(fields: [workMilestoneId], references: [id], onDelete: SetNull)
 
   /// The profiles pointing at this row as their open restart (epic E11). A
   /// list because Prisma requires the back side of a nullable one-to-many; in
@@ -2563,4 +2580,94 @@ model MediaAttachment {
   @@index([userId, createdAt])
   @@index([targetType, targetId])
   @@map("media_attachments")
+}
+
+// =============================================================================
+// The Work domain — session planning (issue #108, epic E07)
+// =============================================================================
+//
+// THREE DECISIONS THAT ARE THE WHOLE POINT OF THIS SECTION.
+//
+// 1. THE MODEL IS `WorkMilestone`, NOT `Milestone`. E11 (#115) already owns
+//    `Milestone`/`milestones` for the things worth celebrating once — the
+//    fourth four-week stretch, the tenth workout. A work milestone is a
+//    DELIVERABLE inside one outcome ("the storyline exists"), reached and then
+//    superseded; the two would share nothing but a noun. The API still calls
+//    the field `milestoneId` on the wire, because in the Work context there is
+//    only one kind.
+//
+// 2. A PROPOSAL IS A ROW, AND THE PLAN IS NOT TOUCHED UNTIL `apply`. PRD §15:
+//    the AI never mutates a plan. `plan` holds what the planner proposed;
+//    `appliedPlan` holds the (possibly user-edited) copy that actually became
+//    commitments, so "what did the coach suggest?" and "what did I agree to?"
+//    stay two answerable questions after an edit.
+//
+// 3. NO NEW `PlanVersion` PER APPLIED PLAN. Sessions are commitments under the
+//    outcome's CURRENT active version, not a change of strategy; E06-04 owns
+//    version creation and `plan_change_proposals.changes` is typed
+//    `PlanChange[]`, which a session plan cannot ride on without breaking the
+//    coach's diff view.
+// =============================================================================
+
+/// Who wrote a session plan: the `planner` persona, or the deterministic
+/// fallback that keeps the feature working with the provider down (PRD §120).
+enum WorkSessionPlanSource {
+  AI
+  TEMPLATE
+}
+
+enum WorkSessionPlanStatus {
+  PROPOSED
+  APPLIED
+  DISCARDED
+  EXPIRED
+}
+
+/// A deliverable inside a work outcome (PRD §24). Ordered, and the order is
+/// unique per outcome so "milestone 2" means one thing.
+model WorkMilestone {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  outcomeId   String    @map("outcome_id") @db.Uuid
+  title       String
+  order       Int
+  targetDate  DateTime? @map("target_date") @db.Date
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user        User         @relation("UserWorkMilestones", fields: [userId], references: [id], onDelete: Cascade)
+  outcome     Outcome      @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
+  commitments Commitment[]
+
+  @@unique([outcomeId, order])
+  @@index([userId, outcomeId])
+  @@map("work_milestones")
+}
+
+/// One planner proposal for one outcome, waiting on the user's `Apply`.
+model WorkSessionPlanProposal {
+  id        String                @id @default(uuid()) @db.Uuid
+  userId    String                @map("user_id") @db.Uuid
+  outcomeId String                @map("outcome_id") @db.Uuid
+  source    WorkSessionPlanSource
+  status    WorkSessionPlanStatus @default(PROPOSED)
+
+  /// Validated by `workSessionPlanSchema` before it is written, and again
+  /// before it is applied. Untyped here for the same reason every other
+  /// contract in this schema is: one declaration, in the Zod file.
+  plan        Json
+  /// The copy that actually became commitments. Null until `apply`.
+  appliedPlan Json? @map("applied_plan")
+
+  /// The `ai_invocations` row this came from. Null for a template.
+  invocationId String?   @map("invocation_id") @db.Uuid
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz
+  appliedAt    DateTime? @map("applied_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user    User    @relation("UserWorkSessionPlanProposals", fields: [userId], references: [id], onDelete: Cascade)
+  outcome Outcome @relation(fields: [outcomeId], references: [id], onDelete: Cascade)
+
+  @@index([userId, outcomeId, status])
+  @@map("work_session_plan_proposals")
 }
