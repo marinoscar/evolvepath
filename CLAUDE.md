@@ -783,6 +783,17 @@ through `storage:*_any`.
 - `GET /api/media/attachments/{id}/preview?variant=&frameIndex=` - Signed URL. `variant` in the **response** says what was actually served: `ai` falls back to the original rather than failing
 - `POST /api/media/attachments/{id}/ask` - The coach's read of this photo or video. **Always 200 on the coaching path**: a provider failure, a missing key, or output that fails the contract is `{ ok: false, error }` (PRD §120), and `no_user_key` is the one the UI answers with a link to `/settings/ai-key`. The 4xx answers are about the MEDIA: 404 foreign, 409 still processing, 400 processing failed, 429 past ten a minute. Persists the validated advice plus its provenance on `aiSummary`
 
+### Progress (epic E11)
+Momentum, the consistency run, recovery and the evidence timeline. **There is no
+score, percentage or `/100` anywhere in this payload** (PRD P13, §54) — the
+engine compares ratios internally to detect a trend and deliberately does not
+serialise them. Deterministic and AI-free.
+- `GET /api/progress` - Three momentum states with their evidence sentences and a 4-week trend, the consistency run in **weeks** with `graceUsed`, `recovery.medianDays`, `independence.ratio` (`null` until E12 records reminders), milestones and the caller's confirmed memory insights
+
+Note: `GET /api/today` carries the same engine's summary — a state word and one
+sentence per domain. A failure there degrades to `INSUFFICIENT_DATA` and the day
+still returns 200; Progress is a secondary reading on a screen about the next hour.
+
 ### Best Self (current user)
 - `GET /api/me/best-self` - The caller's Best Self profile; `data: null` until saved
 - `PUT /api/me/best-self` - Replace it whole and stamp `lastReviewedAt` (no PATCH by design)
