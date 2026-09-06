@@ -3352,6 +3352,65 @@ set freely would be a way to make every move invisible to the detector.
 | 400 | `BAD_REQUEST` with `details.reason = "PROTECTED_RESCHEDULE_NOT_ALLOWED"` | `protected: true` with no recent urgency answer. |
 | 404 | `NOT_FOUND` | Unknown commitment, or one that is not the caller's. |
 
+#### The work week
+
+PRD §29. Deterministic and **AI-free** — E10's weekly reviewer reads these counts
+as its input, which is why they are computed here: a provider outage must change
+the words and never the numbers.
+
+| Method | Path | Returns |
+|--------|------|---------|
+| GET | `/api/work/summary?weekStart=YYYY-MM-DD` | 200 `WorkWeeklySummary` |
+
+`weekStart` is the user's local **Monday** and defaults to the current week —
+Monday-start everywhere in this product, as E08's family summary and E10's
+review already fixed.
+
+```ts
+WorkWeeklySummary = {
+  weekStart, weekEnd, timezone,
+  focusSessions: { planned, started, done, partial, abandoned,
+                   plannedMinutes, actualMinutes },
+  starts: { commitmentsDue, started, completed, startRate, completionRate },
+  outcomesCompleted: [{ outcomeId, title, completedAt }],
+  repeatedlyPostponed: [{ commitmentId, title, outcomeId, rescheduleCount, level }],
+  timeWindows: { morning|afternoon|evening: { planned, started, completed, successRate } },
+  bestWindow, worstWindow,       // null unless a window has >= 2 planned
+  distractionNoteCount,
+}
+```
+
+**Rates are `null`, not `0`, when nothing was planned.** "Nothing was planned"
+and "nothing got done" are different weeks, and the reviewer has to be able to
+tell them apart — a 0 for both produces "you completed 0% of your morning
+sessions" for a week with no morning sessions in it.
+
+Definitions worth knowing before reading a number:
+
+- **Due** — `scheduledStart` inside `[Monday 00:00, next Monday 00:00)` in the
+  user's own zone. Both edges come from `localDayBounds`, so a week containing a
+  DST change is 167 or 169 hours long.
+- **Started** — `startedAt` is set, **or** there is an `APP_FLOW started` or any
+  `TIMER` evidence row. Starting is counted separately from completing
+  (PRD §104), so a commitment somebody began and did not finish appears in
+  `starts.started` and not in `starts.completed`.
+- **`focusSessions.done/partial/abandoned`** — decided by the commitment's
+  **latest** session: somebody who abandoned at lunchtime and finished in the
+  evening finished. Every session's minutes still count towards `actualMinutes`.
+- **`repeatedlyPostponed`** — `rescheduleCount >= 2`, due in the week **or**
+  moved out of it. The most postponed commitment of a week is very often the one
+  that was pushed past its end, which is no longer "due". `level` is its rung on
+  the intervention ladder.
+- **Windows** bucket by the same morning / afternoon / evening boundaries the
+  ladder uses (`time-window.ts`, built on `greetingFor`), and `bestWindow` /
+  `worstWindow` ignore any window with fewer than two planned — below that a
+  rate is noise. A tie resolves to the earlier part of the day.
+
+| Status | Code | When |
+|--------|------|------|
+| 400 | `BAD_REQUEST` with `details.reason = "WEEK_START_NOT_MONDAY"` | A Tuesday. |
+| 400 | `BAD_REQUEST` with `details.reason = "INVALID_WEEK_START"` | Not a readable date. |
+
 ---
 
 ### Family
