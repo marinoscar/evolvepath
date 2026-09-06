@@ -118,8 +118,17 @@ export function stepsOf(row: Pick<Commitment, 'steps'>): CommitmentVersionView[]
  *
  * `now` is a parameter rather than `new Date()` so the timer's derived values
  * are reproducible in a test and identical across every card in one response.
+ *
+ * `avoidance` defaults to NULL and is filled in by the one caller that has an
+ * assessment to hand (`TodayService`). A mapper that fetched it would turn
+ * every action response into a second batch of queries, and a card rendered
+ * mid-action does not need a ladder reading.
  */
-export function toCommitmentCard(row: Commitment, now: Date = new Date()): CommitmentCard {
+export function toCommitmentCard(
+  row: Commitment,
+  now: Date = new Date(),
+  avoidance: CommitmentCard['avoidance'] = null,
+): CommitmentCard {
   const versions = versionsOf(row);
   const timerState = { activeSince: row.activeSince, activeSeconds: row.activeSeconds };
 
@@ -158,6 +167,7 @@ export function toCommitmentCard(row: Commitment, now: Date = new Date()): Commi
     decomposedFromId: row.decomposedFromId,
     steps: stepsOf(row),
     timer,
+    avoidance,
     availableActions: availableActionsFor(row),
   };
 }

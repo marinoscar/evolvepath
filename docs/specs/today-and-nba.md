@@ -183,9 +183,9 @@ by the **first matching rule**.
 | Mode | Rule | Constant |
 |---|---|---|
 | `RECOVER` | ≥ 3 days since any evidence, and the user has logged something before | `RECOVER_DAYS = 3` |
-| `CHALLENGE_PLAN` | the top candidate's routine failed ≥ 4 times in 14 days | `CHALLENGE_PLAN_FAILURES = 4` |
-| `DIAGNOSE` | the top candidate has `rescheduleCount ≥ 2` | `DIAGNOSE_RESCHEDULES = 2` |
-| `REDUCE` | check-in `PACKED`/`UNEXPECTED_PROBLEM`, or the chosen size exceeds the budget | — |
+| `CHALLENGE_PLAN` | the top candidate's routine failed ≥ 4 times in 14 days, **or** its avoidance level is ≥ 5 | `CHALLENGE_PLAN_FAILURES = 4`, `CHALLENGE_PLAN_LEVEL = 5` |
+| `DIAGNOSE` | the top candidate's avoidance level is ≥ 3 | `DIAGNOSE_LEVEL = 3` |
+| `REDUCE` | check-in `PACKED`/`UNEXPECTED_PROBLEM`, the chosen size exceeds the budget, **or** the avoidance level is ≥ 1 | `REDUCE_LEVEL = 1` |
 | `RECONNECT` | check-in `LOW_ENERGY` | — |
 | `CLARIFY` | the outcome states neither motivation nor a definition of done | — |
 | `REINFORCE` | ≥ 3 completions in 7 days with nothing missed | `REINFORCE_COMPLETIONS = 3` |
@@ -195,6 +195,23 @@ by the **first matching rule**.
 true at once for someone having a hard week, and the winner decides what the
 product says to them. The principle is: address the biggest thing first, and
 address a person before a plan.
+
+**`DIAGNOSE` and `CHALLENGE_PLAN` come from the ladder, not from a column
+(E07-03, #116).** They used to read `rescheduleCount ≥ 2` and a routine failure
+count directly. Both now read `avoidance.level`, the deterministic seven-rung
+assessment in `apps/api/src/work/avoidance/avoidance-detector.ts`, which is
+`null` for every non-`WORK` candidate — those keep the original rules unchanged.
+
+"Moved twice" is still exactly what produces level 3. What changed is that so do
+two skips plus a "later", and three days untouched, and none of those were
+visible to a single column. The full rule, its six signals and their thresholds
+are in [`work-domain.md`](work-domain.md); this screen reads its answer rather
+than keeping a seventh opinion about the same question.
+
+The level's own rationale — "moved 2 times, untouched for 4 days" — is
+**appended** to the mode's template sentence when the level is ≥ 1. The template
+says what to do; the ladder says why the product thinks so, with the counts in
+it.
 
 **A brand-new account never gets `RECOVER`.** Never having logged anything is not
 a lapse, and "welcome back" to someone who has not been anywhere is a bug the

@@ -2,12 +2,17 @@ import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
 import { CommitmentsModule } from '../commitments/commitments.module';
+import { SafetyModule } from '../coach/safety/safety.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { UserProfileModule } from '../user-profile/user-profile.module';
 import { WorkSessionPlanningController } from './planning/work-session-planning.controller';
 import { WorkSessionPlanningService } from './planning/work-session-planning.service';
 import { FocusSessionController } from './focus/focus-session.controller';
 import { FocusSessionService } from './focus/focus-session.service';
+import { AvoidanceService } from './avoidance/avoidance.service';
+import { AvoidanceSignalsService } from './avoidance/avoidance-signals.service';
+import { FrictionController } from './avoidance/friction.controller';
+import { FrictionService } from './avoidance/friction.service';
 
 /**
  * The Work domain: turning an outcome into sessions somebody actually starts
@@ -24,9 +29,22 @@ import { FocusSessionService } from './focus/focus-session.service';
   // service rather than re-implementing the status machine or the timer. That
   // import is the coupling, and it points one way — nothing in Commitments
   // knows this module exists.
-  imports: [PrismaModule, AiModule, UserProfileModule, CommitmentsModule],
-  controllers: [WorkSessionPlanningController, FocusSessionController],
-  providers: [WorkSessionPlanningService, FocusSessionService],
-  exports: [WorkSessionPlanningService, FocusSessionService],
+  // `SafetyModule` is here for one call: the user's free text about why
+  // something is hard goes through E06-06 BEFORE the coach sees it. PRD §88 —
+  // and the redirect path has to work when the provider is down, which is why
+  // it is a regex first and a persona second.
+  imports: [PrismaModule, AiModule, UserProfileModule, CommitmentsModule, SafetyModule],
+  controllers: [WorkSessionPlanningController, FocusSessionController, FrictionController],
+  providers: [
+    WorkSessionPlanningService,
+    FocusSessionService,
+    AvoidanceSignalsService,
+    AvoidanceService,
+    FrictionService,
+  ],
+  // `AvoidanceService` is exported for two readers: E05-01's Today service,
+  // which puts the assessment on every WORK card, and E07-05's weekly summary,
+  // which reports the ladder level of everything repeatedly postponed.
+  exports: [WorkSessionPlanningService, FocusSessionService, AvoidanceService],
 })
 export class WorkModule {}

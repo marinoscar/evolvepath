@@ -4,8 +4,10 @@ import { resolve } from 'node:path';
 import { INTERVENTION_MODES } from '../../src/today/nba/intervention-mode';
 import {
   CHALLENGE_PLAN_FAILURES,
-  DIAGNOSE_RESCHEDULES,
+  CHALLENGE_PLAN_LEVEL,
+  DIAGNOSE_LEVEL,
   RECOVER_DAYS,
+  REDUCE_LEVEL,
   REINFORCE_COMPLETIONS,
 } from '../../src/today/nba/intervention-mode';
 import {
@@ -79,7 +81,10 @@ describe('docs/specs/today-and-nba.md', () => {
     it.each([
       ['RECOVER_DAYS', RECOVER_DAYS],
       ['CHALLENGE_PLAN_FAILURES', CHALLENGE_PLAN_FAILURES],
-      ['DIAGNOSE_RESCHEDULES', DIAGNOSE_RESCHEDULES],
+      // E07-03 (#116) replaced the raw reschedule heuristic with the ladder.
+      ['DIAGNOSE_LEVEL', DIAGNOSE_LEVEL],
+      ['CHALLENGE_PLAN_LEVEL', CHALLENGE_PLAN_LEVEL],
+      ['REDUCE_LEVEL', REDUCE_LEVEL],
       ['REINFORCE_COMPLETIONS', REINFORCE_COMPLETIONS],
     ])('documents %s with its current value', (name, value) => {
       expect(doc).toContain(`${name} = ${value}`);

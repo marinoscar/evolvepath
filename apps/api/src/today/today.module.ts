@@ -6,6 +6,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { ActivityModule } from '../progress/comeback/activity.module';
 import { ProgressModule } from '../progress/progress.module';
 import { UserProfileModule } from '../user-profile/user-profile.module';
+import { WorkModule } from '../work/work.module';
 import { CHECK_IN_READER } from './check-in-reader';
 import { CheckInService } from './check-in/check-in.service';
 import { DayReflectionService } from './reflection/day-reflection.service';
@@ -32,6 +33,10 @@ import { TodayService } from './today.service';
     ProgressModule,
     // The check-in and the day reflection are behaviour (#112).
     ActivityModule,
+    // E07-03's ladder, for the `avoidance` field on every WORK card and the
+    // level the intervention mode now reads. One way: nothing in WorkModule
+    // knows this screen exists.
+    WorkModule,
   ],
   controllers: [TodayController],
   providers: [

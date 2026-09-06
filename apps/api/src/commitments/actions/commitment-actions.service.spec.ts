@@ -493,6 +493,83 @@ describe('CommitmentActionsService (#40)', () => {
         from: start.toISOString(),
         to,
         count: 1,
+        protected: false,
+      });
+    });
+
+    // E07-03 (#116): "something more urgent came up" is not avoidance, and
+    // counting it as such would push an honest user up the intervention ladder
+    // for having a job.
+    describe('a protected move (#116)', () => {
+      const answered = (over: Record<string, unknown> = {}) => {
+        prisma.commitment.findFirst.mockResolvedValue(row());
+        prisma.reflection.findFirst.mockResolvedValue({ id: 'reflection-1', ...over } as never);
+        commitments.transition.mockResolvedValue({
+          commitment: { id, status: 'RESCHEDULED' },
+          rescheduledTo: { id: replacementId },
+          evidence: null,
+        });
+        prisma.commitment.update.mockResolvedValue(
+          row({ id: replacementId, scheduledStart: new Date(to), rescheduleCount: 0 }),
+        );
+      };
+
+      it('leaves the count where it was', async () => {
+        answered();
+
+        const card = await service.reschedule(userId, id, {
+          scheduledStart: to,
+          protected: true,
+        } as never);
+
+        expect(prisma.commitment.update).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ rescheduleCount: 0 }) }),
+        );
+        expect(card.rescheduleCount).toBe(0);
+      });
+
+      it('marks the evidence and the audit row as protected', async () => {
+        answered();
+
+        await service.reschedule(userId, id, {
+          scheduledStart: to,
+          protected: true,
+        } as never);
+
+        const evidence = evidenceOf('rescheduled')!;
+        expect(JSON.parse(evidence.qualitativeValue as string).protected).toBe(true);
+      });
+
+      it('looks for the answer on this commitment, within a day', async () => {
+        answered();
+
+        await service.reschedule(userId, id, {
+          scheduledStart: to,
+          protected: true,
+        } as never);
+
+        expect(prisma.reflection.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({
+              userId,
+              commitmentId: id,
+              frictionTags: { has: 'SOMETHING_URGENT' },
+            }),
+          }),
+        );
+      });
+
+      it('refuses without the reflection — the flag is never taken on trust', async () => {
+        prisma.commitment.findFirst.mockResolvedValue(row());
+        prisma.reflection.findFirst.mockResolvedValue(null as never);
+
+        await expect(
+          service.reschedule(userId, id, { scheduledStart: to, protected: true } as never),
+        ).rejects.toMatchObject({
+          response: { details: { reason: 'PROTECTED_RESCHEDULE_NOT_ALLOWED' } },
+        });
+
+        expect(commitments.transition).not.toHaveBeenCalled();
       });
     });
 

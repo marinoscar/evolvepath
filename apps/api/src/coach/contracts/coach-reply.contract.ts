@@ -41,6 +41,12 @@ export const INTERVENTION_TYPES = [
   'REDUCE_SCOPE',
   'RECONNECT_REASON',
   'RECOVER',
+  // Appended by E07-03 (#116) for two of VISION §9's eight friction answers.
+  // The enum only ever GROWS: it is persisted on every coach message and is
+  // what E11 groups telemetry on, so an existing member is never renamed and
+  // never repurposed.
+  'PERFECTIONISM_REFRAME',
+  'PROTECTED_RESCHEDULE',
 ] as const;
 
 export type InterventionType = (typeof INTERVENTION_TYPES)[number];

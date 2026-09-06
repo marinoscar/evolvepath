@@ -42,7 +42,17 @@ export interface InterventionContext {
   hasAnyEvidence: boolean;
   /** MISSED + SKIPPED occurrences of the top candidate's routine, last 14 days. */
   routineFailuresLast14Days: number;
-  topRescheduleCount: number;
+  /**
+   * The top candidate's rung on E07-03's intervention ladder, or null for a
+   * non-WORK candidate.
+   *
+   * REPLACED the raw `topRescheduleCount` heuristic (#116). "Moved twice" is
+   * still what produces level 3 — but so do two skips plus a "later", and three
+   * days untouched, and none of those were visible to a single column. The
+   * ladder is one deterministic rule over six signals, and this screen reads its
+   * answer rather than keeping a seventh opinion.
+   */
+  avoidanceLevel: number | null;
   checkIn: 'NORMAL' | 'PACKED' | 'LOW_ENERGY' | 'UNEXPECTED_PROBLEM' | null;
   chosenMinutes: number;
   availableMinutesRemaining: number;
@@ -56,8 +66,17 @@ export interface InterventionContext {
 export const RECOVER_DAYS = 3;
 /** Four failures in a fortnight is the plan failing, not the person. */
 export const CHALLENGE_PLAN_FAILURES = 4;
-/** Moved twice is a pattern; moved once is a Tuesday. */
-export const DIAGNOSE_RESCHEDULES = 2;
+/**
+ * The ladder rungs each posture answers (E07-03, #116).
+ *
+ * 3 and 4 are FRICTION_DIAGNOSIS and ENVIRONMENT_CHANGE — the product has
+ * something to ASK. 5 and 6 are PLAN_CHALLENGE and GOAL_CHALLENGE, where
+ * telling somebody to try harder is the wrong move. 1 and 2 are activation and
+ * decomposition, which is the same advice REDUCE already gives.
+ */
+export const DIAGNOSE_LEVEL = 3;
+export const CHALLENGE_PLAN_LEVEL = 5;
+export const REDUCE_LEVEL = 1;
 /** Three wins in a week with nothing missed is worth saying out loud. */
 export const REINFORCE_COMPLETIONS = 3;
 
@@ -72,15 +91,24 @@ export function resolveInterventionMode(ctx: InterventionContext): InterventionM
     return 'RECOVER';
   }
 
-  if (ctx.routineFailuresLast14Days >= CHALLENGE_PLAN_FAILURES) return 'CHALLENGE_PLAN';
+  const level = ctx.avoidanceLevel;
 
-  if (ctx.topRescheduleCount >= DIAGNOSE_RESCHEDULES) return 'DIAGNOSE';
+  if (
+    ctx.routineFailuresLast14Days >= CHALLENGE_PLAN_FAILURES ||
+    (level !== null && level >= CHALLENGE_PLAN_LEVEL)
+  ) {
+    return 'CHALLENGE_PLAN';
+  }
 
-  // Either they said the day is full, or the arithmetic says it is.
+  if (level !== null && level >= DIAGNOSE_LEVEL) return 'DIAGNOSE';
+
+  // Either they said the day is full, the arithmetic says it is, or the ladder
+  // says the first step needs to be smaller — all three call for less.
   if (
     ctx.checkIn === 'PACKED' ||
     ctx.checkIn === 'UNEXPECTED_PROBLEM' ||
-    ctx.chosenMinutes > ctx.availableMinutesRemaining
+    ctx.chosenMinutes > ctx.availableMinutesRemaining ||
+    (level !== null && level >= REDUCE_LEVEL)
   ) {
     return 'REDUCE';
   }
