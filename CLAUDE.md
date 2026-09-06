@@ -1135,6 +1135,29 @@ Behaviours, not calories: no macro, no food database, no BMI, no goal weight.
 - `GET /api/health/weight?from=&to=` - Points, a rolling 7-day mean (`null` under two readings) and a delta. **No per-day judgment field exists** — PRD §47's promise is kept by the field's absence, not by client discipline
 - `DELETE /api/health/weight/{dateLocal}` - Idempotent (204)
 
+### Account (epic E13)
+The "Danger zone": erase your own data, optionally including your stored OpenAI key.
+- `GET /api/account/data-summary` - Per-table row counts a reset would erase, plus the exact confirmation phrase each scope requires
+- `POST /api/account/reset` - Erase your own data (`scope: 'data'`) or your data and stored OpenAI key (`scope: 'data_and_key'`); requires the matching typed phrase, **verified server-side**, `.trim()`-only and case-sensitively, before a single row is touched
+
+Both are `@Auth()` with no permissions and **accept no user id** — see the RBAC
+section below. **A data reset, not an account deletion**: your sign-in, OAuth
+identity, roles, `refresh_tokens` and `push_subscriptions` all survive either
+scope, and `audit_events`, `ai_invocations` and `notification_deliveries` are
+retained on the strength of their own schema comments (each says it must outlive
+a *deleted* account, and a reset is weaker than that). `personal_access_tokens`
+and `device_codes` **do** go: a PAT is a long-lived credential the user minted
+and a pending device code could mint a fresh one after the wipe.
+
+The delete order in `ACCOUNT_RESET_TABLES` is load-bearing for two reasons that
+fail differently — `SetNull` FKs (children before parents, or the reset leaves
+nulled-out orphans behind, **silently**) and `Restrict` FKs (custom `exercises`
+after `workout_programs` and `workout_sessions`, or the delete raises a
+foreign-key error). Uploaded files go through `ObjectsService.delete`, outside
+the transaction, never a raw `deleteMany`. See
+[`docs/specs/account-reset.md`](docs/specs/account-reset.md) for the full
+argument and the rejected alternatives.
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)
@@ -1154,6 +1177,18 @@ Behaviours, not calories: no macro, no food database, no BMI, no goal weight.
 - `allowlist:read/write` - Allowlist management (Admin only)
 - `storage:read/write` - Storage object access (own objects)
 - `storage:read_any/write_any/delete_any` - Storage object access (all objects, Admin only). Real, seeded to admin only, and consulted by `ObjectsService` since issue #71 — `read_any` and `write_any` were previously documented here and existed nowhere. Uploads themselves stay plain `@Auth()`: Viewer is the default EvolvePath role and every user uploads media
+
+**Account reset adds no permission strings.** Both `/api/account/*` routes are
+`@Auth()` with no permissions: every authenticated user owns their own data,
+exactly as they own their own AI key and their own commitments, and no route
+accepts a user id — `@CurrentUser()` is the only source of one, so there is no
+"reset another user's data" action for a permission to gate in the first place.
+An administrator cannot reach another user's data through this controller
+either, and that is enforced **structurally** rather than by a check: there is
+no permission to relax, because there is no parameter naming a target for a
+relaxed check to admit. Gating it would leave Viewer — the default role — unable
+to make a choice that is structurally theirs alone. See
+[`docs/specs/account-reset.md`](docs/specs/account-reset.md) §12.
 
 ## Database Tables
 

@@ -1640,6 +1640,89 @@ response shape is identical to `POST /ai-settings/test`.
 
 ---
 
+### Account
+
+The "Danger zone". The decisions behind this section — the delete order and the
+two arguments that fix it, what is deliberately retained, why storage deletion
+runs outside the transaction, and the rejected alternatives — are in
+[`docs/specs/account-reset.md`](specs/account-reset.md).
+
+Both routes are `@Auth()` with **no permissions** and **accept no user id**:
+`@CurrentUser()` is the only source of one, so there is no cross-user reset for
+a permission to gate, and an administrator cannot reach another user's data
+through this controller either. Erasing your own data is not a privilege; it is
+what owning the account already means.
+
+**This is a data reset, not an account deletion.** Both scopes keep the `users`
+row, its OAuth identity, its roles, its allowlist entry, its `refresh_tokens`
+and its `push_subscriptions` — you stay signed in, on every device. They also
+keep `audit_events`, `ai_invocations` and `notification_deliveries`, each of
+which carries a schema comment saying it must outlive a *deleted* account, and
+a reset is weaker than that.
+
+#### `GET /account/data-summary`
+
+What a reset would erase, and what you must type to authorise it. Read-only.
+
+```json
+{
+  "data": {
+    "counts": {
+      "commitments": 42,
+      "outcomes": 3,
+      "evidence_items": 118,
+      "coach_conversations": 2,
+      "storage_objects": 1,
+      "media_attachments": 1
+    },
+    "phrases": { "data": "DELETE MY DATA", "data_and_key": "DELETE EVERYTHING" }
+  }
+}
+```
+
+`counts` is keyed by database table name. Tables that cascade from one already
+listed — `coach_messages`, `set_logs`, `workout_templates`,
+`storage_object_chunks` — are deliberately not counted separately: they would
+double-count the same deletions.
+
+`phrases` is **served rather than hardcoded in a client**, so the string a
+client renders and the string the server checks have one declaration. A client
+that hardcoded them would silently lose its only confirmation gate the day
+either changed.
+
+#### `POST /account/reset`
+
+Erase your own data. **Irreversible.**
+
+```json
+{ "scope": "data", "confirmationPhrase": "DELETE MY DATA" }
+```
+
+| Scope | Phrase | Effect |
+|---|---|---|
+| `data` | `DELETE MY DATA` | Erases what you have built. Your stored OpenAI key is kept. |
+| `data_and_key` | `DELETE EVERYTHING` | The same, plus your stored OpenAI key. Your key at OpenAI itself is not touched. |
+
+Returns `{ scope, deleted, aiKeyRemoved }`, with `deleted` keyed exactly as
+`counts` above.
+
+**400** when the phrase does not match the scope, and **nothing is deleted**.
+The comparison is `.trim()`-only and **case-sensitive**: the point of a typed
+phrase is that it proves you reproduced the exact word "DELETE".
+
+The check is re-run on the server on every call. A disabled button in a browser
+is a convenience — this is the control, because nothing stops a direct POST from
+a script. A client should send **what the user actually typed**, not the phrase
+it read from `data-summary`: sending the canonical phrase back makes this check
+unfalsifiable from that client, so its own comparison silently becomes the only
+gate its users ever meet.
+
+Every reset writes one `account:reset` audit row carrying the scope and the
+per-table counts — table names and numbers, never a row's content — and sends
+the `account.data_reset` email, which is `mandatory` and cannot be turned off.
+
+---
+
 ### Onboarding
 
 The decisions behind this section — the nine screens, the guardrail rationale,
