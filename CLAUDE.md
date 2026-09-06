@@ -951,6 +951,7 @@ Behaviours, not calories: no macro, no food database, no BMI, no goal weight.
 - `workout_sessions` - One run of one template. Not the commitment: `commitment_id` is nullable and `SET NULL`, because a session can happen without one and must survive it
 - `set_logs` - One set as performed. `client_id` is minted by the phone and unique: it is the whole of PRD §121's offline story — a replayed queue raises P2002 instead of writing a second set
 - `body_weight_logs` - An optional weight entry (PRD §47). `date_local` is text in the user's timezone, like `daily_check_ins.date_local`: the day you weighed yourself is a calendar fact, not an instant
+- `media_attachments` - One upload given a purpose (`WORKOUT_FORM`, `EQUIPMENT`, `MEAL`, `GENERAL`), an optional polymorphic target, and the coach's last structured verdict in `ai_summary`. `storage_object_id` is `@unique` — one attachment per upload, so re-purposing means uploading again rather than a photo that is simultaneously a meal and a piece of equipment. Both FKs cascade: media metadata must not outlive its owner or its bytes. `target_type`/`target_id` are deliberately **not** foreign keys; the legal target types are a Zod enum at the API boundary
 - `user_profiles.notification_policy` - Caps (`dailyCap`, `weeklyCap`, `perCommitmentMax`) and `mutedCategories` for the coaching engine. Quiet hours are deliberately **not** here — they stay on the `quiet_hours_start/end` columns, so there is one answer to "when is this person asleep?"
 
 ## Access Control: Email Allowlist
