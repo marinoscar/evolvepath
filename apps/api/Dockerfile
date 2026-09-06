@@ -27,7 +27,13 @@ WORKDIR /app
 # megabytes of build-only files into the base stage that every later stage
 # inherits, including production, and it is what the failing `apk add` in #203
 # choked on.
-RUN apk add --no-cache openssl
+#
+# ffmpeg (which brings ffprobe) is here for the video-frames processor
+# (issue #79): a form-check video reaches the AI only as sampled frames, and
+# the sampler shells out to ffmpeg with an argv array. It lives in the BASE
+# stage so every later stage inherits it, production included — the processor
+# runs in the same process that serves requests.
+RUN apk add --no-cache openssl ffmpeg
 
 # -----------------------------------------------------------------------------
 # Dependencies stage

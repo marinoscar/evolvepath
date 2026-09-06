@@ -197,6 +197,34 @@ export default () => {
       ),
       mode: 'inline' as const,
     },
+
+    // Video → frames (issue #79, epic #67).
+    //
+    // The gateway can only send images, so the only way to give the coach a
+    // form-check video is a small set of representative frames — PRD §87's
+    // "smallest sufficient context", taken literally.
+    //
+    // `maxFrames` is CLAMPED rather than validated: an operator who types 100
+    // gets 16, not a boot failure, because the failure mode of too many frames
+    // is a bill rather than a broken deploy. `maxDurationSeconds` is a refusal,
+    // not a clamp: silently sampling the first two minutes of a ten-minute
+    // video would hand the coach frames of something the user did not ask
+    // about.
+    video: {
+      maxFrames: Math.min(
+        16,
+        Math.max(1, parseInt(process.env.AI_VIDEO_MAX_FRAMES || '8', 10) || 8),
+      ),
+      maxDurationSeconds: parseInt(
+        process.env.AI_VIDEO_MAX_SECONDS || '120',
+        10,
+      ),
+      // No env var: this is the size the vision models read comfortably, and
+      // an operator turning it up buys tokens rather than accuracy.
+      frameLongestEdge: 1024,
+      ffmpegPath: process.env.FFMPEG_PATH || 'ffmpeg',
+      ffprobePath: process.env.FFPROBE_PATH || 'ffprobe',
+    },
   },
 
   // Web push (VAPID) — issue #64, epic E12.

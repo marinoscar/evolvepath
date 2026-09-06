@@ -86,30 +86,32 @@ export class MyModule {}
 
 ### 3. Register Multiple Processors
 
-To register multiple processors, use the `multi: true` option:
+**NestJS has no `multi: true`.** This document told you it did for the life of
+this module, which is a large part of why zero processors were ever registered
+(issue #79). The token is bound to exactly one value; the supported way to
+register several processors is a factory that returns the **array**, which
+`ObjectProcessingService` already normalizes.
+
+The live registry is `storage-processors.module.ts`:
 
 ```typescript
 @Module({
+  imports: [PrismaModule, StorageProvidersModule],
   providers: [
+    VideoFramesProcessor,
     {
       provide: OBJECT_PROCESSOR,
-      useClass: ImageMetadataProcessor,
-      multi: true,
-    },
-    {
-      provide: OBJECT_PROCESSOR,
-      useClass: ThumbnailGenerator,
-      multi: true,
-    },
-    {
-      provide: OBJECT_PROCESSOR,
-      useClass: VirusScanner,
-      multi: true,
+      useFactory: (videoFrames: VideoFramesProcessor) => [videoFrames],
+      inject: [VideoFramesProcessor],
     },
   ],
+  exports: [OBJECT_PROCESSOR],
 })
 export class StorageProcessorsModule {}
 ```
+
+Adding a processor is two lines: one more provider and one more entry in the
+factory's parameter list and `inject` array.
 
 ## Processor Lifecycle
 
@@ -176,3 +178,55 @@ Common processor types:
 - **Content Analysis**: OCR, image recognition, content classification
 - **Security Scanning**: Virus scanning, content policy validation
 - **Indexing**: Extract searchable text, tags, or embeddings
+
+## Live Processors
+
+### `video-frames` (issue #79, epic #67)
+
+Turns an uploaded `video/*` object into evenly spaced JPEG frames, because the
+AI gateway can only send images and a form-check video is the most valuable
+media input the Health domain has (PRD §41, §45; §87's "smallest sufficient
+context").
+
+- **Claims**: `mimeType` starts with `video/` **and** `metadata.derivedFrom` is
+  absent. That second clause is what stops the pipeline re-entering itself —
+  every frame it writes is a `StorageObject` too.
+- **Frame count**: `min(AI_VIDEO_MAX_FRAMES, max(1, floor(durationMs / 500)))`,
+  sampled at the middle of each slice. A one-second clip gives two frames
+  rather than eight near-identical ones, and sampling at `t = 0` gives the
+  frame before the lift starts.
+- **Refuses** a video longer than `AI_VIDEO_MAX_SECONDS` rather than truncating
+  it: sampling the first two minutes of a ten-minute video hands the coach
+  frames of something the user did not ask about.
+- **Children**: each frame is a `StorageObject` with
+  `storageKey: derived/<parentId>/frame-<i>.jpg`, `status: 'ready'` (nothing
+  further is done to a frame, and emitting an upload event for one would
+  re-enter the pipeline), the parent's `uploadedById`, and
+  `metadata: { derivedFrom, frameIndex, timestampMs, width, height }`.
+  `ObjectsService.delete` removes them with the parent.
+- **Writes**:
+
+```json
+{
+  "_processing": {
+    "video-frames": {
+      "frames": [{ "objectId": "uuid", "timestampMs": 250 }],
+      "durationMs": 2000,
+      "width": 320,
+      "height": 240,
+      "frameCount": 4
+    }
+  }
+}
+```
+
+**The key is the processor's `name`.** `ObjectProcessingService` stores results
+at `allMetadata[processor.name]`, and `AiAttachmentResolverService` reads
+`_processing['video-frames']` — hyphen, exactly — to expand a video into image
+parts. Renaming the processor silently breaks every video the coach has been
+shown. The shape is documented alongside the resolver in
+[`docs/specs/ai-gateway.md`](../../../../../docs/specs/ai-gateway.md).
+
+Configuration: `AI_VIDEO_MAX_FRAMES` (8, clamped to 1–16), `AI_VIDEO_MAX_SECONDS`
+(120), `FFMPEG_PATH` / `FFPROBE_PATH` (`ffmpeg` / `ffprobe`). ffmpeg is
+installed in the API image's **base** stage, so production has it too.
