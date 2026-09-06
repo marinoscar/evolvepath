@@ -3036,6 +3036,72 @@ An oversize simple upload is aborted mid-stream, the partial object key is
 deleted, and the response is the same 400. A successful simple upload now
 records the real byte length in `size` — it used to persist `"0"` permanently.
 
+#### Per-user quota (issue #87)
+
+`STORAGE_USER_QUOTA_BYTES` (default 2 GiB, `0` disables) caps what one user may
+hold across every object they own — **derived children included**. Sampled
+video frames and normalized AI variants exist because the user uploaded
+something and are stored under their id; excluding them would let a quota be
+exceeded ninefold by uploading videos.
+
+An in-flight upload counts against it. A quota that only sees finished uploads
+is a quota you walk past by never calling `complete`. A `failed` object does
+not: those bytes are the deployment's to clean up, not the user's to pay for.
+
+`used + incoming === quota` is **allowed**. A limit you cannot reach is a
+different limit.
+
+##### GET /api/storage/quota
+
+```json
+{
+  "data": {
+    "usedBytes": "1048576",
+    "quotaBytes": "2147483648",
+    "remainingBytes": "2146435072"
+  }
+}
+```
+
+All three are strings — `size` is a `BigInt`. `quotaBytes` and `remainingBytes`
+are `null` when quotas are disabled, so a client renders "unlimited" rather than
+a meaningless progress bar. `remainingBytes` is clamped at `"0"` for a user who
+is already over quota, which happens whenever an operator lowers the ceiling.
+
+Both upload routes answer **413** past the quota, with a message naming used and
+quota bytes. On the simple path the check runs twice: once up front with nothing
+declared, and once with the counted bytes — at which point the object key is
+deleted before the 413 is returned. That is the only honest ordering when the
+length was never declared.
+
+#### Image normalization (issue #87)
+
+Every uploaded `image/*` object gets an EXIF-stripped, 1024 px JPEG sibling at
+`derived/<id>/ai.jpg`, recorded at
+`metadata._processing['image-normalize'].aiVariantObjectId`. The **original is
+never modified** — the user uploaded it and can download it.
+
+That variant is what the AI gateway sends. The original goes only when no
+variant exists, and then only if it fits under `AI_MAX_IMAGE_BYTES`; otherwise
+the attachment is a clear error rather than a request the provider refuses after
+the bandwidth is spent. Sending the original would ship the user's GPS
+coordinates to a third party (PRD §85, §86) and spend roughly fifty times the
+tokens on an image the model reads at 1024 px anyway.
+
+HEIC/HEIF is decoded first, because that is what an iPhone actually produces and
+libvips as shipped cannot read it.
+
+#### Attachment mode
+
+`AI_ATTACHMENT_MODE=inline` (default) puts base64 in the request body the user's
+own key pays for. `signed-url` hands the provider a short-lived GET
+(`AI_ATTACHMENT_SIGNED_URL_TTL`, 300 s) that it fetches itself — a much smaller
+request (PRD §118), at the cost of a credential that reaches this deployment's
+storage. In that mode `S3_PUBLIC_ENDPOINT` must be a host the **provider** can
+resolve; `http://minio:9000` cannot be, and the API logs a warning at boot
+rather than refusing, because a public MinIO behind a TLS-terminating proxy is a
+legitimate deployment this process cannot distinguish.
+
 #### Access to another user's objects
 
 Every storage route is plain `@Auth()`; **uploads are deliberately not gated on

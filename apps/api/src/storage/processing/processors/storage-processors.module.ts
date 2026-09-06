@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../../prisma/prisma.module';
 import { StorageProvidersModule } from '../../providers/storage-providers.module';
 import { OBJECT_PROCESSOR } from '../object-processor.interface';
+import { ImageNormalizeProcessor } from './image-normalize.processor';
 import { VideoFramesProcessor } from './video-frames.processor';
 
 /**
@@ -19,11 +20,15 @@ import { VideoFramesProcessor } from './video-frames.processor';
 @Module({
   imports: [PrismaModule, StorageProvidersModule],
   providers: [
+    ImageNormalizeProcessor,
     VideoFramesProcessor,
     {
       provide: OBJECT_PROCESSOR,
-      useFactory: (videoFrames: VideoFramesProcessor) => [videoFrames],
-      inject: [VideoFramesProcessor],
+      useFactory: (
+        imageNormalize: ImageNormalizeProcessor,
+        videoFrames: VideoFramesProcessor,
+      ) => [imageNormalize, videoFrames],
+      inject: [ImageNormalizeProcessor, VideoFramesProcessor],
     },
   ],
   exports: [OBJECT_PROCESSOR],

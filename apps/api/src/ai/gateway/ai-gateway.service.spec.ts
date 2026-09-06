@@ -115,7 +115,7 @@ describe('AiGatewayService', () => {
       expect(recorded().input).toEqual({
         instructions: 'Be brief.',
         input: 'hello',
-        attachments: [],
+        attachmentObjectIds: [],
         schemaName: 'coach_reply',
       });
       // The key is handed to the logger so an echoed copy cannot survive.
@@ -235,7 +235,7 @@ describe('AiGatewayService', () => {
         { type: 'image', mimeType: 'image/png', base64: 'QQ==' },
       ]);
       expect(recorded().attachmentCount).toBe(1);
-      expect(recorded().input.attachments).toEqual(['obj-1']);
+      expect(recorded().input.attachmentObjectIds).toEqual(['obj-1']);
     });
 
     it('surfaces a resolver failure as an attachment error', async () => {

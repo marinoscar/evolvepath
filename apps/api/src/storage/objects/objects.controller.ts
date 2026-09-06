@@ -228,6 +228,10 @@ export class ObjectsController {
     status: 400,
     description: 'MIME type not allowed or file too large',
   })
+  @ApiResponse({
+    status: 413,
+    description: 'This upload would take the caller past their storage quota',
+  })
   async initUpload(
     @Body(new ZodValidationPipe(initUploadSchema)) dto: InitUploadDto,
     @CurrentUser('id') userId: string,
@@ -326,6 +330,10 @@ export class ObjectsController {
   @ApiResponse({
     status: 400,
     description: 'MIME type not allowed or file too large',
+  })
+  @ApiResponse({
+    status: 413,
+    description: 'This upload took the caller past their storage quota',
   })
   async simpleUpload(
     @Req() req: FastifyRequest,

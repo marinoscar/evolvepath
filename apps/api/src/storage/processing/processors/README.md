@@ -230,3 +230,51 @@ shown. The shape is documented alongside the resolver in
 Configuration: `AI_VIDEO_MAX_FRAMES` (8, clamped to 1–16), `AI_VIDEO_MAX_SECONDS`
 (120), `FFMPEG_PATH` / `FFPROBE_PATH` (`ffmpeg` / `ffprobe`). ffmpeg is
 installed in the API image's **base** stage, so production has it too.
+
+### `image-normalize` (issue #87, epic #67)
+
+Writes an EXIF-stripped, 1024 px JPEG sibling of every uploaded photo. Three
+problems, one processor:
+
+1. **EXIF.** A phone photo carries GPS. Inlining it into a model request ships
+   the user's location to a third party for no product reason (PRD §85, §86).
+   The stripping is achieved by **not** calling `.withMetadata()` — the way to
+   break it is to add a line, not to remove one. `.rotate()` runs first, so the
+   orientation tag is *applied* before it is discarded; without that, stripping
+   metadata turns every portrait phone photo sideways.
+2. **Size.** A 12 MP JPEG is ~8 MiB, which is ~11 MiB of base64, for an image
+   the model reads at 1024 px anyway.
+3. **HEIC.** libvips as shipped does not decode it, so an iPhone photo would be
+   an unreadable attachment. `heic-convert` is pure WASM and slow (~1–2 s per
+   12 MP still) — acceptable off the request path, and not on it.
+
+- **Claims**: `mimeType` starts with `image/` and `metadata.derivedFrom` is
+  absent. That excludes video frames (already 1024 px and EXIF-free) and this
+  processor's own output.
+- **The original is never modified.** The user uploaded it and can download it;
+  this writes a sibling at `derived/<id>/ai.jpg`.
+- **Writes**:
+
+```json
+{
+  "_processing": {
+    "image-normalize": {
+      "aiVariantObjectId": "uuid",
+      "width": 1024,
+      "height": 683,
+      "sourceWidth": 3000,
+      "sourceHeight": 2000,
+      "sourceFormat": "jpeg",
+      "exifStripped": true
+    }
+  }
+}
+```
+
+`AiAttachmentResolverService` reads `aiVariantObjectId` and prefers it over the
+original. As with `video-frames`, the key IS the processor's `name` and there is
+no shared constant — renaming the processor silently sends full-size originals
+with their EXIF intact.
+
+Configuration: `AI_MAX_SOURCE_IMAGE_BYTES` (25 MiB) is the largest **original**
+it will decode, which is deliberately not `AI_MAX_IMAGE_BYTES`.

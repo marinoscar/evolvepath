@@ -51,6 +51,7 @@ import {
   isByteLimitExceeded,
 } from './byte-counter.stream';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
+import { StorageQuotaService } from './storage-quota.service';
 import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
 
 /**
@@ -81,6 +82,7 @@ export class ObjectsService {
     private readonly storageProvider: StorageProvider,
     private readonly config: ConfigService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly quota: StorageQuotaService,
   ) {}
 
   /**
@@ -96,6 +98,9 @@ export class ObjectsService {
     // multipart upload is initialized with the provider, or a rejected upload
     // still leaves an open multipart session on the bucket.
     this.assertUploadAllowed(mimeType, size, userId);
+    // Issue #87: checked before the provider is touched, so a rejected upload
+    // leaves no open multipart session behind.
+    await this.quota.assertCanStore(userId, size);
 
     // Get configuration
     const partSize = this.config.get<number>('storage.partSize', 10485760); // 10MB default
@@ -358,6 +363,10 @@ export class ObjectsService {
     // stream is still unread at this point, so nothing is written and nothing
     // needs cleaning up.
     this.assertUploadAllowed(mimetype, null, userId);
+    // Once at the start with nothing declared (the multipart part carries no
+    // trustworthy length), and once at the end with the counted bytes. Not on
+    // every chunk: that is an aggregate query per 64 KiB.
+    await this.quota.assertCanStore(userId, 0);
 
     const maxFileSize = this.getMaxFileSize();
 
@@ -397,6 +406,16 @@ export class ObjectsService {
         );
       }
 
+      throw error;
+    }
+
+    // The bytes are on the bucket now, so this check cannot refuse them into
+    // non-existence — it deletes the key and answers 413, which is the only
+    // honest ordering when the length was never declared.
+    try {
+      await this.quota.assertCanStore(userId, Number(counter.bytes));
+    } catch (error) {
+      await this.bestEffortDeleteKey(storageKey);
       throw error;
     }
 

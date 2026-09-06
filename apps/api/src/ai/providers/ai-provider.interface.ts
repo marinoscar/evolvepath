@@ -62,6 +62,18 @@ export type AiContentPart =
       mimeType: string;
       base64: string;
       detail?: AiImageDetail;
+    }
+  /**
+   * The signed-URL alternative (issue #87, `AI_ATTACHMENT_MODE=signed-url`).
+   *
+   * A separate variant rather than making `base64` optional: the two carry
+   * genuinely different things and a provider has to spell them differently.
+   * An optional field would let a part with neither compile.
+   */
+  | {
+      type: 'image_url';
+      url: string;
+      detail?: AiImageDetail;
     };
 
 /** One structured generation request. */
