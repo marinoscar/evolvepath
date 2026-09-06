@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useMatch, useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
   Divider,
@@ -40,6 +40,13 @@ export default function CoachPage() {
   const narrow = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
   const { conversationId } = useParams<{ conversationId: string }>();
+  // `/coach/new` is the narrow layout's empty conversation (issue #227). It
+  // has to be a ROUTE rather than a piece of component state: on this layout
+  // the composer is a screen, and a screen the Back button cannot leave — or
+  // a reload cannot restore — is not one. A conversation id is a uuid, so
+  // `new` can never collide with one, and the static segment outranks
+  // `/coach/:conversationId` in the route table regardless of order.
+  const composingNew = useMatch('/coach/new') !== null;
 
   const [prompts, setPrompts] = useState<SuggestedPrompt[]>([]);
   const {
@@ -97,7 +104,12 @@ export default function CoachPage() {
       items={conversations}
       activeId={conversationId}
       onSelect={(id) => navigate(`/coach/${id}`)}
-      onNew={() => navigate('/coach')}
+      // NOT `/coach`: on the narrow layout that is the route the user is
+      // already on, so the click was a no-op and the composer was
+      // unreachable — a phone user could never start a first conversation
+      // (issue #227). `/coach/new` is the same empty view the wide layout
+      // already shows beside the list, so both layouts land in one place.
+      onNew={() => navigate('/coach/new')}
       onDelete={(id) => {
         void remove(id);
         if (id === conversationId) navigate('/coach');
@@ -106,9 +118,9 @@ export default function CoachPage() {
   );
 
   if (narrow) {
-    // `/coach` is the list; `/coach/:id` is the conversation, full width, with
-    // a back arrow. One screen at a time.
-    if (!conversationId) {
+    // `/coach` is the list; `/coach/:id` and `/coach/new` are the
+    // conversation, full width, with a back arrow. One screen at a time.
+    if (!conversationId && !composingNew) {
       return (
         <Box sx={{ height: '100%' }}>
           <Stack
@@ -136,7 +148,10 @@ export default function CoachPage() {
             <ArrowBackIcon />
           </IconButton>
           <Typography variant="subtitle1" component="h1" noWrap>
-            {conversations.find((c) => c.id === conversationId)?.title ?? 'Coach'}
+            {composingNew
+              ? 'New conversation'
+              : (conversations.find((c) => c.id === conversationId)?.title ??
+                'Coach')}
           </Typography>
         </Stack>
         <Divider />
