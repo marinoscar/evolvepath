@@ -134,6 +134,28 @@ browser PUTs multipart parts straight to the object store: MinIO, not nginx, is
 the origin that has to allow it. On AWS S3 the equivalent is a bucket CORS rule
 that also lists `ETag` under `ExposeHeaders`.
 
+**`ETag` must be exposed, and this is the commonest real misconfiguration.**
+`completeResumableUpload` sends one ETag per part, and the browser can only read
+that response header if CORS says so. MinIO exposes it by default; an AWS bucket
+does not:
+
+```json
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": ["https://your-app.example"],
+      "AllowedMethods": ["PUT", "GET"],
+      "AllowedHeaders": ["*"],
+      "ExposeHeaders": ["ETag"]
+    }
+  ]
+}
+```
+
+Without it the upload appears to work — every part returns 200 — and then
+`complete` fails on a missing field. `putToSignedUrl` therefore fails loudly at
+the part instead, naming the CORS rule.
+
 ### Building images directly
 
 The `docker compose` commands above are unchanged. If you invoke `docker build`

@@ -677,6 +677,7 @@ above. Don't restate any of that here; extend those three instead.
 - `GET /api/storage/objects/:id/download` - Get signed download URL
 - `DELETE /api/storage/objects/:id` - Delete object
 - `PATCH /api/storage/objects/:id/metadata` - Update metadata
+- `GET /api/storage/objects/:id/upload/urls?from=&to=` - More presigned part URLs (max 50 per call). The init response carries only the first ten, which makes the resumable path a dead end for anything over 100 MiB without this
 - `GET /api/storage/quota` - Bytes used, the per-user ceiling and what is left. All three are **strings** (`size` is a BigInt); `quotaBytes`/`remainingBytes` are `null` when quotas are disabled, so a client renders "unlimited" rather than a meaningless bar
 
 ### Personal Access Tokens

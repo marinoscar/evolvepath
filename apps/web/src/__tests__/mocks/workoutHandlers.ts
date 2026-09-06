@@ -357,14 +357,11 @@ export function formCheckRequests(): ReadonlyArray<Record<string, unknown>> {
 }
 
 export const workoutHandlers = [
-  // The upload the three media flows go through. One object, ready at once —
-  // the real pipeline's processing states belong to E03.
-  http.post(`${API_BASE}/storage/objects`, () =>
-    HttpResponse.json(
-      { data: { id: 'object-1', name: 'clip.mp4', mimeType: 'video/mp4', status: 'ready' } },
-      { status: 201 },
-    ),
-  ),
+  // `POST /storage/objects` used to live here, answering one ready object,
+  // with a comment saying the real pipeline's processing states belonged to
+  // E03. They have landed (#91): `mediaHandlers` owns that route now, and it
+  // answers `processing` like the real API does. MSW takes the FIRST matching
+  // handler, so a second definition here would silently shadow it.
 
   http.post(`${API_BASE}/workouts/sessions/:id/form-check`, async ({ request }) => {
     state.formCheckRequests.push((await request.json()) as Record<string, unknown>);

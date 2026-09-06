@@ -58,6 +58,10 @@ import {
   DownloadUrlResponseDto,
 } from './dto/download-url-response.dto';
 import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
+import {
+  UploadUrlsQueryDto,
+  uploadUrlsQuerySchema,
+} from './dto/upload-urls-query.dto';
 
 @ApiTags('Storage')
 @Controller('storage/objects')
@@ -255,6 +259,37 @@ export class ObjectsController {
     @CurrentUser('id') userId: string,
   ): Promise<{ data: UploadStatusResponseDto }> {
     const result = await this.objectsService.getUploadStatus(objectId, userId);
+    return { data: result };
+  }
+
+  /**
+   * More presigned part URLs.
+   */
+  @Get(':id/upload/urls')
+  @ApiOperation({
+    summary: 'Get more presigned part URLs',
+    description:
+      'The init response carries only the first ten. A file over 100 MiB at ' +
+      'the default part size needs more, and without this route the resumable ' +
+      'path cannot complete. At most 50 per call.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid', description: 'Object ID' })
+  @ApiQuery({ name: 'from', required: true, type: Number, description: 'First part number (1-based)' })
+  @ApiQuery({ name: 'to', required: true, type: Number, description: 'Last part number, inclusive' })
+  @ApiResponse({ status: 200, description: 'Presigned URLs' })
+  @ApiResponse({ status: 400, description: 'Invalid range, or more than 50 parts requested' })
+  async getUploadUrls(
+    @Param('id', ParseUUIDPipe) objectId: string,
+    @Query(new ZodValidationPipe(uploadUrlsQuerySchema))
+    query: UploadUrlsQueryDto,
+    @CurrentUser('id') userId: string,
+  ): Promise<{ data: { presignedUrls: Array<{ partNumber: number; url: string }> } }> {
+    const result = await this.objectsService.getUploadUrls(
+      objectId,
+      userId,
+      query.from,
+      query.to,
+    );
     return { data: result };
   }
 

@@ -5,6 +5,7 @@ import { server } from './mocks/server';
 import { resetCoachState } from './mocks/coachHandlers';
 import { resetFamilyState } from './mocks/familyHandlers';
 import { resetHealthState } from './mocks/healthHandlers';
+import { resetMediaMocks } from './mocks/mediaHandlers';
 import { resetWorkoutState } from './mocks/workoutHandlers';
 import { resetMemoryState } from './mocks/memoryHandlers';
 import { resetPathState } from './mocks/pathHandlers';
@@ -234,6 +235,7 @@ afterEach(() => {
   resetPathState();
   resetFamilyState();
   resetHealthState();
+  resetMediaMocks();
   resetWorkoutState();
   resetCoachState();
   resetMemoryState();

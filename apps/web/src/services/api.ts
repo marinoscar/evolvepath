@@ -228,6 +228,158 @@ class ApiService {
   postForm<T>(endpoint: string, form: FormData, options?: RequestOptions) {
     return this.request<T>(endpoint, { ...options, method: 'POST', body: form });
   }
+
+  /**
+   * A multipart POST that reports upload progress (issue #91, epic #67).
+   *
+   * XHR RATHER THAN FETCH, and that is the whole reason this method exists
+   * alongside `postForm`. `fetch` has no upload progress event — the streams
+   * proposal that would give it one is not shipped anywhere this app runs — and
+   * a phone video is a multi-hundred-megabyte upload over a mobile connection.
+   * A progress bar is not decoration there; without one the user cannot tell a
+   * slow upload from a dead one.
+   *
+   * Everything else matches `request`: the bearer token, `withCredentials` for
+   * the refresh cookie, a single retry after a 401 refresh, and `ApiError`
+   * carrying the status so a caller can branch on 413.
+   */
+  async upload<T>(
+    endpoint: string,
+    form: FormData,
+    options: {
+      onProgress?: (loaded: number, total: number) => void;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<T> {
+    try {
+      return await this.sendXhr<T>(endpoint, form, options);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        const refreshed = await this.refreshToken();
+        if (refreshed) {
+          return this.sendXhr<T>(endpoint, form, options);
+        }
+      }
+      throw error;
+    }
+  }
+
+  private sendXhr<T>(
+    endpoint: string,
+    form: FormData,
+    options: {
+      onProgress?: (loaded: number, total: number) => void;
+      signal?: AbortSignal;
+    },
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_BASE_URL}${endpoint}`);
+      xhr.withCredentials = true;
+
+      if (this.accessToken) {
+        xhr.setRequestHeader('Authorization', `Bearer ${this.accessToken}`);
+      }
+      // NO Content-Type: the browser writes it with the multipart boundary,
+      // and a hand-written one omits the boundary.
+
+      if (options.onProgress && xhr.upload) {
+        xhr.upload.onprogress = (event) => {
+          options.onProgress?.(event.loaded, event.total);
+        };
+      }
+
+      options.signal?.addEventListener('abort', () => xhr.abort());
+
+      xhr.onload = () => {
+        let body: Record<string, unknown> = {};
+        try {
+          body = xhr.responseText ? JSON.parse(xhr.responseText) : {};
+        } catch {
+          body = {};
+        }
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(unwrapEnvelope<T>(body));
+          return;
+        }
+
+        notifyIfAiKeyRequired(xhr.status, body.code);
+        reject(
+          new ApiError(
+            (body.message as string) || 'Upload failed',
+            xhr.status,
+            body.code as string | undefined,
+            body.details,
+          ),
+        );
+      };
+
+      xhr.onerror = () =>
+        reject(new ApiError('Upload failed', 0));
+      xhr.onabort = () =>
+        reject(new ApiError('Upload cancelled', 0));
+
+      xhr.send(form);
+    });
+  }
+}
+
+/**
+ * PUT one part straight to the object store (issue #91, epic #67).
+ *
+ * A bare function rather than an `ApiService` method, because it must NOT
+ * carry a bearer token: the presigned URL IS the credential, and sending an
+ * Authorization header alongside it makes S3 reject the request as
+ * double-authenticated.
+ *
+ * Returns the `ETag`, which `complete` needs. That header has to be exposed by
+ * the object store's CORS configuration — MinIO does by default, AWS S3 needs
+ * `ExposeHeaders: [ETag]` on the bucket.
+ */
+export function putToSignedUrl(
+  url: string,
+  body: Blob,
+  options: {
+    onProgress?: (loaded: number, total: number) => void;
+    signal?: AbortSignal;
+  } = {},
+): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+
+    if (options.onProgress && xhr.upload) {
+      xhr.upload.onprogress = (event) =>
+        options.onProgress?.(event.loaded, event.total);
+    }
+
+    options.signal?.addEventListener('abort', () => xhr.abort());
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const eTag = xhr.getResponseHeader('ETag');
+        if (!eTag) {
+          reject(
+            new ApiError(
+              'The object store did not return an ETag. Its CORS configuration ' +
+                'must expose that header.',
+              xhr.status,
+            ),
+          );
+          return;
+        }
+        resolve(eTag);
+        return;
+      }
+      reject(new ApiError('Part upload failed', xhr.status));
+    };
+
+    xhr.onerror = () => reject(new ApiError('Part upload failed', 0));
+    xhr.onabort = () => reject(new ApiError('Upload cancelled', 0));
+
+    xhr.send(body);
+  });
 }
 
 /**
@@ -1662,6 +1814,15 @@ import type {
   MealCheckResult,
   MediaCheckResponse,
   StorageObjectSummary,
+  // Storage and media attachments (epic E03)
+  StorageObject,
+  StorageQuota,
+  InitUploadResponse,
+  MediaAttachment,
+  MediaPreview,
+  MediaListMeta,
+  MediaPurpose,
+  MediaTargetType,
 } from '../types';
 
 /** Upload one file and get the object the coaching endpoints refer to. */
@@ -1698,4 +1859,126 @@ export async function mealCheck(body: {
   question?: string;
 }): Promise<MediaCheckResponse<MealCheckResult>> {
   return api.post<MediaCheckResponse<MealCheckResult>>('/nutrition/meal-check', body);
+}
+
+// -----------------------------------------------------------------------------
+// Storage and media attachments (epic E03)
+// -----------------------------------------------------------------------------
+//
+// The ONLY place the web app names these endpoints. A route or field that moves
+// is reconciled here and in `types/index.ts`, and nowhere else.
+
+/** Simple upload, for anything under the 100 MiB multipart ceiling. */
+export async function uploadStorageObject(
+  file: File,
+  options?: {
+    onProgress?: (loaded: number, total: number) => void;
+    signal?: AbortSignal;
+  },
+): Promise<StorageObject> {
+  const form = new FormData();
+  form.append('file', file);
+  return api.upload<StorageObject>('/storage/objects', form, options ?? {});
+}
+
+export async function initResumableUpload(body: {
+  name: string;
+  size: number;
+  mimeType: string;
+}): Promise<InitUploadResponse> {
+  return api.post<InitUploadResponse>('/storage/objects/upload/init', body);
+}
+
+/** More presigned part URLs. The init response carries only the first ten. */
+export async function getResumableUploadUrls(
+  objectId: string,
+  from: number,
+  to: number,
+): Promise<{ presignedUrls: Array<{ partNumber: number; url: string }> }> {
+  return api.get<{ presignedUrls: Array<{ partNumber: number; url: string }> }>(
+    `/storage/objects/${objectId}/upload/urls?from=${from}&to=${to}`,
+  );
+}
+
+export async function completeResumableUpload(
+  objectId: string,
+  parts: Array<{ partNumber: number; eTag: string }>,
+): Promise<StorageObject> {
+  return api.post<StorageObject>(
+    `/storage/objects/${objectId}/upload/complete`,
+    { parts },
+  );
+}
+
+export async function abortResumableUpload(objectId: string): Promise<void> {
+  await api.delete<void>(`/storage/objects/${objectId}/upload/abort`);
+}
+
+export async function getStorageObjectDetail(
+  id: string,
+): Promise<StorageObject> {
+  return api.get<StorageObject>(`/storage/objects/${id}`);
+}
+
+export async function deleteStorageObject(id: string): Promise<void> {
+  await api.delete<void>(`/storage/objects/${id}`);
+}
+
+export async function getStorageDownloadUrl(
+  id: string,
+): Promise<{ url: string; expiresIn: number }> {
+  return api.get<{ url: string; expiresIn: number }>(
+    `/storage/objects/${id}/download`,
+  );
+}
+
+export async function getStorageQuota(): Promise<StorageQuota> {
+  return api.get<StorageQuota>('/storage/quota');
+}
+
+export async function createMediaAttachment(body: {
+  storageObjectId: string;
+  purpose: MediaPurpose;
+  targetType?: MediaTargetType;
+  targetId?: string;
+}): Promise<MediaAttachment> {
+  return api.post<MediaAttachment>('/media/attachments', body);
+}
+
+export async function listMediaAttachments(params?: {
+  targetType?: MediaTargetType;
+  targetId?: string;
+  purpose?: MediaPurpose;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ items: MediaAttachment[]; meta: MediaListMeta }> {
+  const query = new URLSearchParams();
+  if (params?.targetType) query.set('targetType', params.targetType);
+  if (params?.targetId) query.set('targetId', params.targetId);
+  if (params?.purpose) query.set('purpose', params.purpose);
+  if (params?.page) query.set('page', String(params.page));
+  if (params?.pageSize) query.set('pageSize', String(params.pageSize));
+
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return api.get<{ items: MediaAttachment[]; meta: MediaListMeta }>(
+    `/media/attachments${suffix}`,
+  );
+}
+
+export async function getMediaAttachment(id: string): Promise<MediaAttachment> {
+  return api.get<MediaAttachment>(`/media/attachments/${id}`);
+}
+
+export async function deleteMediaAttachment(id: string): Promise<void> {
+  await api.delete<void>(`/media/attachments/${id}`);
+}
+
+export async function getMediaPreviewUrl(
+  id: string,
+  variant: 'original' | 'ai' | 'frame' = 'original',
+  frameIndex = 0,
+): Promise<MediaPreview> {
+  return api.get<MediaPreview>(
+    `/media/attachments/${id}/preview?variant=${variant}&frameIndex=${frameIndex}`,
+  );
 }

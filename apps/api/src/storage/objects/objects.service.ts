@@ -180,6 +180,67 @@ export class ObjectsService {
   }
 
   /**
+   * Presigned PUT URLs for a RANGE of parts (issue #91, epic #67).
+   *
+   * `initUpload` returns the first ten. For anything over 100 MiB at the
+   * default 10 MiB part size that is a dead end: the client has no way to get
+   * URLs for parts 11 onward, so the resumable path — the only path that
+   * accepts a phone video — could not complete.
+   *
+   * Capped at 50 per call because each URL is an HMAC the process computes.
+   */
+  async getUploadUrls(
+    objectId: string,
+    userId: string,
+    from: number,
+    to: number,
+  ): Promise<{ presignedUrls: Array<{ partNumber: number; url: string }> }> {
+    const storageObject = await this.prisma.storageObject.findUnique({
+      where: { id: objectId },
+    });
+
+    if (!storageObject) {
+      throw new NotFoundException('Upload not found');
+    }
+
+    // Owner-only, like every other in-flight upload route. An admin override
+    // on somebody else's half-finished upload is not a thing anybody needs.
+    if (storageObject.uploadedById !== userId) {
+      throw new ForbiddenException('You do not own this upload');
+    }
+
+    if (!storageObject.s3UploadId) {
+      throw new BadRequestException('Upload ID not found');
+    }
+
+    if (to < from) {
+      throw new BadRequestException('`to` must not be smaller than `from`');
+    }
+
+    if (to - from + 1 > 50) {
+      throw new BadRequestException('At most 50 part URLs may be requested');
+    }
+
+    const partNumbers = Array.from(
+      { length: to - from + 1 },
+      (_, index) => from + index,
+    );
+
+    const presignedUrls = await Promise.all(
+      partNumbers.map(async (partNumber) => ({
+        partNumber,
+        url: await this.storageProvider.getSignedUploadUrl(
+          storageObject.storageKey,
+          storageObject.s3UploadId!,
+          partNumber,
+        ),
+      })),
+    );
+
+    return { presignedUrls };
+  }
+
+  /**
    * Get upload status and progress
    */
   async getUploadStatus(
