@@ -37,6 +37,7 @@ const ProgramBuilderPage = lazy(() => import('./pages/ProgramBuilderPage'));
 const WorkoutProgramPage = lazy(() => import('./pages/WorkoutProgramPage'));
 const WorkoutRunnerPage = lazy(() => import('./pages/WorkoutRunnerPage'));
 const CoachPage = lazy(() => import('./pages/CoachPage'));
+const MediaLibraryPage = lazy(() => import('./pages/MediaLibraryPage'));
 const ProgressPage = lazy(() => import('./pages/ProgressPage'));
 // Progress surfaces, not sixth destinations: `DESTINATION_ROUTES.progress`
 // already owns `/progress/*` by prefix, so the weekly review and its planning
@@ -195,6 +196,10 @@ function AppRoutes() {
                     `DESTINATION_ROUTES.coach` already owns the prefix, so the
                     rail lights up on both without a registry change. */}
                 <Route path="/coach/:conversationId" element={<CoachPage />} />
+                {/* Epic E03. Owned by the `coach` destination, so it has an
+                    active state and an AppBar title without becoming a sixth
+                    tab. */}
+                <Route path="/media" element={<MediaLibraryPage />} />
                   <Route path="/progress" element={<ProgressPage />} />
                   {/* Epic E10. `/progress/week` rather than `/review`: the
                       review IS the weekly view of progress, so it belongs under

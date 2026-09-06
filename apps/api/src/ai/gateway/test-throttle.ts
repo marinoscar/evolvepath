@@ -71,6 +71,13 @@ export const THROTTLE_LIMITS = {
    * sets in a row, but nothing about a photograph rewards a loop.
    */
   media_check: 10,
+  /**
+   * The generic "ask the coach about this" call (issue #96). Its own bucket
+   * rather than sharing `media_check`: they are different user actions on
+   * different screens, and one starving the other would look like a bug in
+   * whichever the user reached second.
+   */
+  media_ask: 10,
 } as const;
 
 

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
   Logger,
   NotFoundException,
@@ -14,6 +15,8 @@ import {
 } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { AiGatewayService } from '../ai/gateway/ai-gateway.service';
+import { TestThrottle } from '../ai/gateway/test-throttle';
 import { ObjectsService } from '../storage/objects/objects.service';
 import { isMimeTypeAllowed } from '../storage/objects/mime-allowlist';
 import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
@@ -27,6 +30,17 @@ import {
   MediaPreviewQueryDto,
   MediaPreviewVariant,
 } from './dto/media-attachment-response.dto';
+import {
+  AskAboutMediaResult,
+  mediaAdviceSchema,
+  type MediaAdvice,
+  type StoredMediaAdvice,
+} from './dto/media-advice.schema';
+import {
+  MEDIA_ANALYST_PROMPT_VERSION,
+  buildMediaAnalystInput,
+  buildMediaAnalystInstructions,
+} from './prompts/media-analyst.prompt';
 
 /** What an attachment may point at. Photos and video only. */
 const ATTACHABLE_MIME_PATTERNS = ['image/*', 'video/*'] as const;
@@ -68,7 +82,128 @@ export class MediaAttachmentsService {
     private readonly prisma: PrismaService,
     private readonly objects: ObjectsService,
     private readonly config: ConfigService,
+    private readonly ai: AiGatewayService,
+    private readonly throttle: TestThrottle,
   ) {}
+
+  /**
+   * Ask the coach about one piece of media (issue #96, epic #67).
+   *
+   * ALWAYS 200 on the coaching path. A provider failure, a missing key, or
+   * output that fails the contract is `{ ok: false, error }` — PRD §120: the
+   * deterministic product keeps working when the model does not, and an
+   * exception here would turn "the coach is unavailable" into "the page is
+   * broken". The 4xx answers are about the MEDIA, not the model: 404 for
+   * something that is not yours, 409 while it is still processing, 400 when
+   * processing failed, 429 past the rate limit.
+   */
+  async ask(
+    id: string,
+    userId: string,
+    question?: string,
+  ): Promise<AskAboutMediaResult> {
+    const attachment = await this.getOwned(id, userId);
+    const object = attachment.storageObject;
+
+    if (object.status === 'failed') {
+      throw new BadRequestException(
+        'This media could not be processed, so there is nothing to look at',
+      );
+    }
+
+    if (object.status !== 'ready') {
+      // 409 rather than 400: nothing is wrong, the answer is "not yet", and a
+      // client should poll rather than change the request.
+      throw new ConflictException('Media is still processing');
+    }
+
+    const decision = this.throttle.check('media_ask', userId);
+    if (!decision.allowed) {
+      throw new HttpException(
+        {
+          statusCode: 429,
+          message: `Too many requests. Try again in ${decision.retryAfterSeconds}s.`,
+        },
+        429,
+      );
+    }
+
+    const frames = this.videoFrames(object);
+    const askedAt = new Date().toISOString();
+
+    const result = await this.ai.invoke<MediaAdvice>({
+      persona: 'media_analyst',
+      userId,
+      promptVersion: MEDIA_ANALYST_PROMPT_VERSION,
+      instructions: buildMediaAnalystInstructions(attachment.purpose),
+      input: buildMediaAnalystInput({
+        purpose: attachment.purpose,
+        kind: attachment.kind,
+        question: question ?? null,
+        frameTimestampsMs: frames?.frames?.map((frame) => frame.timestampMs),
+        durationMs: frames?.durationMs ?? null,
+      }),
+      attachments: [
+        {
+          storageObjectId: attachment.storageObjectId,
+          // `low` for video: eight frames at full detail is eight times the
+          // token cost for a question about a movement, not a fine detail.
+          // A photo is one image and is worth reading properly.
+          detail: attachment.kind === 'VIDEO' ? 'low' : 'auto',
+        },
+      ],
+      schema: mediaAdviceSchema,
+      schemaName: 'media_advice',
+      maxOutputTokens: 800,
+    });
+
+    if (!result.ok) {
+      await this.audit(userId, 'media:ask', attachment.id, {
+        purpose: attachment.purpose,
+        hasQuestion: Boolean(question?.trim()),
+        ok: false,
+        errorCode: result.error.code,
+      });
+
+      return { ok: false, error: result.error };
+    }
+
+    const stored: StoredMediaAdvice = {
+      ...result.output,
+      askedAt,
+      question: question?.trim() || null,
+      invocationId: result.invocationId,
+      promptVersion: MEDIA_ANALYST_PROMPT_VERSION,
+      model: result.model,
+    };
+
+    await this.prisma.mediaAttachment.update({
+      where: { id: attachment.id },
+      data: { aiSummary: stored as unknown as Prisma.InputJsonValue },
+    });
+
+    await this.audit(userId, 'media:ask', attachment.id, {
+      purpose: attachment.purpose,
+      hasQuestion: Boolean(question?.trim()),
+      ok: true,
+      invocationId: result.invocationId,
+    });
+
+    return {
+      ok: true,
+      advice: result.output,
+      invocationId: result.invocationId,
+      model: result.model,
+      latencyMs: result.latencyMs,
+      askedAt,
+    };
+  }
+
+  /** The sampled-frame metadata, when this is a processed video. */
+  private videoFrames(object: StorageObject): VideoFramesMeta | null {
+    const processing = this.processingMetadata(object);
+    return (processing[VIDEO_FRAMES_KEY] as VideoFramesMeta | undefined) ?? null;
+  }
 
   async create(
     dto: CreateMediaAttachmentDto,

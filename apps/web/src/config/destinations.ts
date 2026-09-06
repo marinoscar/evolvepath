@@ -85,7 +85,11 @@ export const DESTINATION_ROUTES: Record<DestinationKey, readonly string[]> = {
   // than a sixth place to go. Listed explicitly because the path does not start
   // with `/path` — the label and the URL answer different questions.
   path: ['/path', '/health'],
-  coach: ['/coach'],
+  // `/media` belongs to Coach, not to a sixth destination: media is something
+  // you hand the coach, and the library is where you read what it said back
+  // (epic E03). A route owned by no destination has no active state and no
+  // AppBar title.
+  coach: ['/coach', '/media'],
   progress: ['/progress'],
   // `/settings`, not `/profile`. The destination is LABELLED Profile because
   // that is what PRD §11 calls it, but the route stays the settings hub so

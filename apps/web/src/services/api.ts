@@ -1821,6 +1821,7 @@ import type {
   MediaAttachment,
   MediaPreview,
   MediaListMeta,
+  MediaAskResult,
   MediaPurpose,
   MediaTargetType,
 } from '../types';
@@ -1981,4 +1982,20 @@ export async function getMediaPreviewUrl(
   return api.get<MediaPreview>(
     `/media/attachments/${id}/preview?variant=${variant}&frameIndex=${frameIndex}`,
   );
+}
+
+/**
+ * Ask the coach about one piece of media (issue #96, epic #67).
+ *
+ * The coaching path is ALWAYS 200: a provider failure comes back as
+ * `{ ok: false, error }`, so callers branch on the payload rather than
+ * catching. `ApiError` here means the MEDIA is wrong — 404, 409, 400, 429.
+ */
+export async function askAboutMedia(
+  id: string,
+  question?: string,
+): Promise<MediaAskResult> {
+  return api.post<MediaAskResult>(`/media/attachments/${id}/ask`, {
+    ...(question?.trim() ? { question: question.trim() } : {}),
+  });
 }

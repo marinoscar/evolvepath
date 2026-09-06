@@ -344,3 +344,39 @@ describe('the Health domain (epic E09)', () => {
     );
   });
 });
+
+describe('media advice (epic E03, issue #96)', () => {
+  it('answers a form question with a caution flag by default', () => {
+    const answer = matchScenario(
+      request('media_advice', 'Is my back rounding on the way up?'),
+    );
+
+    assert.ok(answer.summary.length > 0);
+    assert.ok(answer.advice.length > 0);
+    assert.equal(answer.safetyFlag.level, 'caution');
+  });
+
+  it('escalates to seek_professional when the user mentions pain', () => {
+    // Selected by what the USER TYPED, because the API calls this server and
+    // the browser does not — a Playwright spec cannot set a header on the
+    // request that matters.
+    const answer = matchScenario(
+      request('media_advice', 'I felt sharp pain and my knee gave way'),
+    );
+
+    assert.equal(answer.safetyFlag.level, 'seek_professional');
+  });
+
+  it('mentions no number at all for a meal', () => {
+    // A photograph of food invites a calorie count; PRD §46 is the answer to
+    // it, and a fixture that quietly produced one would make the e2e
+    // assertion pass against the wrong behaviour.
+    const answer = matchScenario(
+      request('media_advice', 'Is this a decent breakfast?'),
+    );
+
+    const text = JSON.stringify(answer);
+    assert.doesNotMatch(text, /\d/, 'a meal answer must contain no digits');
+    assert.doesNotMatch(text, /kcal|calorie|protein_g|carb|macro/i);
+  });
+});

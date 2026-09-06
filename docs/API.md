@@ -3500,6 +3500,69 @@ The attachment. `404` if it is absent **or not the caller's**.
 the video's sampled frames, the normalized AI variant — by going through
 `ObjectsService.delete` rather than growing a second deletion story.
 
+#### POST /api/media/attachments/:id/ask
+
+**Request Body:** `{ "question": "Is my back rounding on the way up?" }` —
+optional, trimmed, max 500 characters.
+
+**The coaching path is always `200`.** A provider failure, a missing key, or
+output that fails the contract comes back as a readable result, not an
+exception (PRD §120): the deterministic product keeps working when the model
+does not, and a 5xx here would turn "the coach is unavailable" into "the page
+is broken".
+
+```json
+{
+  "data": {
+    "ok": true,
+    "advice": {
+      "summary": "Your setup looks steady through the whole rep.",
+      "observations": ["Your feet stay under the bar."],
+      "advice": ["Brace hard before you unrack."],
+      "safetyFlag": { "level": "none", "reason": "" }
+    },
+    "invocationId": "uuid",
+    "model": "gpt-…",
+    "latencyMs": 1240,
+    "askedAt": "2026-09-06T00:00:00.000Z"
+  }
+}
+```
+
+```json
+{ "data": { "ok": false, "error": { "code": "no_user_key", "message": "…" } } }
+```
+
+`no_user_key` is the one failure the UI must handle by **linking to
+`/settings/ai-key`** rather than offering a retry: it is the user's to fix, and
+retrying without a key produces the same answer.
+
+`safetyFlag.level` is `none`, `caution` or `seek_professional`. A
+`seek_professional` answer is rendered with **fixed copy** — not the model's
+words — because the sentence a person reads when told to see a professional has
+to be the same sentence every time, including on the day the provider is having
+a bad one (PRD §45, §81). The model's `reason` is shown beside it, never
+instead of it.
+
+The advice is **persisted** on the attachment's `aiSummary`, together with
+`askedAt`, the question, the invocation id, the prompt version and the model —
+so reloading `/media` shows the same answer, and "which prompt said this?" is
+answerable without a join. A failure stores nothing: it must not overwrite a
+good previous answer.
+
+The **purpose selects the instructions**. `MEAL` forbids calories, macros,
+grams and any judgment of the user's body; `WORKOUT_FORM` forbids diagnosis and
+withholds cues on the `seek_professional` path; `EQUIPMENT` keeps claims to
+what is visible.
+
+| Status | When |
+|---|---|
+| 200 | The coach answered, **or** could not — read `ok` |
+| 400 | The media failed processing, or the question is over 500 characters |
+| 404 | Not found, or not the caller's |
+| 409 | The media is still processing — poll, do not change the request |
+| 429 | More than ten asks a minute |
+
 #### GET /api/media/attachments/:id/preview
 
 Query: `variant` (`original` | `ai` | `frame`, default `original`),
