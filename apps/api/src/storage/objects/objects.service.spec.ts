@@ -1186,4 +1186,65 @@ describe('ObjectsService', () => {
       expect(mockPrisma.storageObject.create).not.toHaveBeenCalled();
     });
   });
+  describe('getUploadUrls (issue #91)', () => {
+    const inFlight = {
+      ...mockStorageObject,
+      status: 'pending',
+      s3UploadId: 'upload-123',
+    };
+
+    it('signs exactly the requested range', async () => {
+      // The init response carries only the first ten. Without this route a
+      // file over 100 MiB at the default part size is a dead end: the client
+      // has no way to get URLs for parts 11 onward.
+      mockPrisma.storageObject.findUnique.mockResolvedValue(inFlight as any);
+      mockStorageProvider.getSignedUploadUrl.mockImplementation(
+        async (_key: string, _uploadId: string, partNumber: number) =>
+          `https://signed/part-${partNumber}`,
+      );
+
+      const result = await service.getUploadUrls(
+        mockStorageObject.id,
+        testUserId,
+        11,
+        13,
+      );
+
+      expect(result.presignedUrls).toEqual([
+        { partNumber: 11, url: 'https://signed/part-11' },
+        { partNumber: 12, url: 'https://signed/part-12' },
+        { partNumber: 13, url: 'https://signed/part-13' },
+      ]);
+    });
+
+    it('refuses more than 50 at a time', async () => {
+      // Each URL is an HMAC this process computes.
+      mockPrisma.storageObject.findUnique.mockResolvedValue(inFlight as any);
+
+      await expect(
+        service.getUploadUrls(mockStorageObject.id, testUserId, 1, 51),
+      ).rejects.toThrow('At most 50 part URLs');
+    });
+
+    it('refuses an inverted range', async () => {
+      mockPrisma.storageObject.findUnique.mockResolvedValue(inFlight as any);
+
+      await expect(
+        service.getUploadUrls(mockStorageObject.id, testUserId, 10, 5),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('stays owner-only, with no admin override', async () => {
+      // An admin override on somebody else's half-finished upload is not a
+      // thing anybody needs, and every other in-flight route agrees.
+      mockPrisma.storageObject.findUnique.mockResolvedValue({
+        ...inFlight,
+        uploadedById: 'somebody-else',
+      } as any);
+
+      await expect(
+        service.getUploadUrls(mockStorageObject.id, testUserId, 1, 2),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
 });

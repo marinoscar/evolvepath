@@ -3140,7 +3140,24 @@ routes stay owner-only.
 ```
 
 **Errors:** `400` when the MIME type is not allowed or `size` exceeds
-`MAX_FILE_SIZE`. Nothing is created and no multipart session is opened.
+`MAX_FILE_SIZE`; `413` past the caller's storage quota. Nothing is created and
+no multipart session is opened.
+
+#### GET /api/storage/objects/:id/upload/urls
+
+`?from=<n>&to=<m>` — more presigned PUT URLs, owner-only, at most **50 per
+call**.
+
+The init response above carries only the first ten. For anything over 100 MiB
+at the default 10 MiB part size that is a dead end: the client has no way to get
+URLs for parts 11 onward, so the resumable path — the only path that accepts a
+phone video — could not complete.
+
+```json
+{ "data": { "presignedUrls": [{ "partNumber": 11, "url": "https://…" }] } }
+```
+
+`400` on an inverted range or a request for more than 50.
 
 **Response:**
 ```json

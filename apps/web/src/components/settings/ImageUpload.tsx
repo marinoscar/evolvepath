@@ -1,16 +1,40 @@
 import { useState, useRef } from 'react';
 import { Button, Box, Typography, CircularProgress } from '@mui/material';
 import { CloudUpload as UploadIcon } from '@mui/icons-material';
-import { api } from '../../services/api';
+
+import {
+  getStorageDownloadUrl,
+  getStorageObjectDetail,
+  uploadStorageObject,
+} from '../../services/api';
 
 interface ImageUploadProps {
   onUpload: (url: string) => void;
   disabled?: boolean;
 }
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+/** Profile images are small; this is a friendlier limit than the server's. */
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
+/** Poll for `ready`: normalization (#87) runs before a download URL is legal. */
+const POLL_INTERVAL_MS = 1000;
+const POLL_ATTEMPTS = 15;
+
+/**
+ * Upload a custom profile image (rewritten by issue #91, epic #67).
+ *
+ * It previously posted a raw `fetch` to `/api/users/profile-image` — an
+ * endpoint that has never existed — bypassing `ApiService` and therefore token
+ * refresh and the error envelope with it. Nothing here worked; it merely
+ * failed quietly.
+ *
+ * NOTE ON WHAT `onUpload` RECEIVES: a **signed** download URL, with the
+ * lifetime `SIGNED_URL_EXPIRY` gives it (an hour by default). Persisting the
+ * storage object id and resolving it on read is the right model and is a
+ * deliberate follow-up, outside this epic — the props are unchanged so
+ * `ProfileSettings` is untouched either way.
+ */
 export function ImageUpload({ onUpload, disabled = false }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,13 +44,11 @@ export function ImageUpload({ onUpload, disabled = false }: ImageUploadProps) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!ALLOWED_TYPES.includes(file.type)) {
       setError('Please select a valid image file (JPEG, PNG, GIF, or WebP)');
       return;
     }
 
-    // Validate file size
     if (file.size > MAX_FILE_SIZE) {
       setError('File size must be less than 5MB');
       return;
@@ -36,30 +58,19 @@ export function ImageUpload({ onUpload, disabled = false }: ImageUploadProps) {
     setIsUploading(true);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      const object = await uploadStorageObject(file);
+      const ready = await waitForReady(object.id, object.status);
 
-      // Note: This endpoint would need to be implemented in the API
-      // For MVP, you could use a simple file storage or cloud service
-      const response = await fetch('/api/users/profile-image', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${api.getAccessToken()}`,
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Upload failed');
+      if (ready === 'failed') {
+        throw new Error('That image could not be processed.');
       }
 
-      const data = await response.json();
-      onUpload(data.url);
+      const { url } = await getStorageDownloadUrl(object.id);
+      onUpload(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to upload image');
     } finally {
       setIsUploading(false);
-      // Reset input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -92,4 +103,23 @@ export function ImageUpload({ onUpload, disabled = false }: ImageUploadProps) {
       )}
     </Box>
   );
+}
+
+/**
+ * A simple upload lands as `processing`, and `GET :id/download` answers 400
+ * until the pipeline finishes. Bounded, so a stuck object shows an error rather
+ * than a spinner that never stops.
+ */
+async function waitForReady(
+  objectId: string,
+  initialStatus: string,
+): Promise<string> {
+  let status = initialStatus;
+
+  for (let attempt = 0; attempt < POLL_ATTEMPTS && status === 'processing'; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    status = (await getStorageObjectDetail(objectId)).status;
+  }
+
+  return status;
 }

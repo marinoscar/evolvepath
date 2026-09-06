@@ -2346,3 +2346,118 @@ export interface MealCheckResult {
 export type MediaCheckResponse<T> =
   | { ok: true; result: T; storageObjectId: string; invocationId: string }
   | { ok: false; error: { code: string; message: string } };
+
+// -----------------------------------------------------------------------------
+// Storage and media attachments (epic E03)
+// -----------------------------------------------------------------------------
+
+export type StorageObjectStatus =
+  | 'pending'
+  | 'uploading'
+  | 'processing'
+  | 'ready'
+  | 'failed';
+
+export interface StorageObject {
+  id: string;
+  name: string;
+  /** BigInt on the wire, so a string here too. */
+  size: string;
+  mimeType: string;
+  status: StorageObjectStatus;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InitUploadResponse {
+  objectId: string;
+  uploadId: string;
+  partSize: number;
+  totalParts: number;
+  presignedUrls: Array<{ partNumber: number; url: string }>;
+}
+
+/**
+ * `quotaBytes` and `remainingBytes` are null when quotas are disabled — null
+ * rather than a very large number, so the picker renders nothing instead of a
+ * meaningless bar.
+ */
+export interface StorageQuota {
+  usedBytes: string;
+  quotaBytes: string | null;
+  remainingBytes: string | null;
+}
+
+export type MediaKind = 'PHOTO' | 'VIDEO';
+
+export type MediaPurpose = 'WORKOUT_FORM' | 'EQUIPMENT' | 'MEAL' | 'GENERAL';
+
+export type MediaTargetType =
+  | 'workout_session'
+  | 'commitment'
+  | 'outcome'
+  | 'coach_message';
+
+/** The three states a client can act on: wait, ask, retry. */
+export type MediaProcessingStatus = 'processing' | 'ready' | 'failed';
+
+/**
+ * The coach's structured read of one piece of media (epic E03, issue #96).
+ * Declared here so `MediaAttachment` is a complete type before the ask flow
+ * lands.
+ */
+export interface MediaAdvice {
+  summary: string;
+  observations: string[];
+  advice: string[];
+  safetyFlag?: {
+    level: 'none' | 'caution' | 'seek_professional';
+    reason: string;
+  };
+}
+
+/** What is stored on the attachment: the advice plus its provenance. */
+export type StoredMediaAdvice = MediaAdvice & {
+  askedAt: string;
+  question: string | null;
+  invocationId: string;
+  promptVersion: string;
+  model: string;
+};
+
+export interface MediaAttachment {
+  id: string;
+  storageObjectId: string;
+  kind: MediaKind;
+  purpose: MediaPurpose;
+  targetType: MediaTargetType | null;
+  targetId: string | null;
+  processingStatus: MediaProcessingStatus;
+  processingError: string | null;
+  media: {
+    mimeType: string;
+    size: string;
+    width: number | null;
+    height: number | null;
+    durationMs: number | null;
+    frameCount: number | null;
+  };
+  aiSummary: StoredMediaAdvice | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The nested list envelope `GET /media/attachments` returns. */
+export interface MediaListMeta {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+export interface MediaPreview {
+  url: string;
+  expiresIn: number;
+  variant: 'original' | 'ai' | 'frame';
+}
