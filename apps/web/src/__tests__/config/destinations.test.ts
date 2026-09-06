@@ -195,6 +195,13 @@ describe('destinations — segment-boundary matching', () => {
     }
   });
 
+  // Epic E11 (#119). The comeback flow replaces the navigation while somebody
+  // is restarting — full screen, outside `Layout`, like `/start/:commitmentId`.
+  it.each(['/comeback', '/comeback/done'])('leaves %s unowned', (path) => {
+    expect(UNOWNED_ROUTES).toContain(path);
+    expect(resolveActiveDestination(path)).toBeNull();
+  });
+
   it('lets Profile own the weekly rhythm settings page', () => {
     expect(resolveActiveDestination('/settings/weekly-rhythm')).toBe('profile');
   });

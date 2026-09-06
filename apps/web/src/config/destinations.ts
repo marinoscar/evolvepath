@@ -128,6 +128,11 @@ export const UNOWNED_ROUTES: readonly string[] = [
   // the navigation while a workout is happening, and "replace" is achieved by
   // never mounting it rather than by a gate that remembers to turn it off.
   '/workout/:sessionId',
+  // The comeback flow (#119, epic E11). PRD §57's three screens and the
+  // celebration replace the navigation while somebody is restarting; there is
+  // no rail and no bottom bar on them to highlight.
+  '/comeback',
+  '/comeback/done',
 ];
 
 /**

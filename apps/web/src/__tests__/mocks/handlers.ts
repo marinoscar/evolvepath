@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw';
 
 import { coachHandlers } from './coachHandlers';
+import { comebackHandlers } from './comebackHandlers';
 import { familyHandlers } from './familyHandlers';
 import { memoryHandlers } from './memoryHandlers';
 import { pathHandlers } from './pathHandlers';
@@ -635,6 +636,7 @@ export const handlers = [
   ...pathHandlers,
   ...todayHandlers,
   ...progressHandlers,
+  ...comebackHandlers,
   ...familyHandlers,
   ...coachHandlers,
   ...memoryHandlers,

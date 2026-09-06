@@ -34,6 +34,9 @@ Web Application Foundation with React UI + Node API + PostgreSQL. Production-gra
       src/
       src/components/path/  # Path screen components (Best Self, outcomes, plans, routines, commitments)
       src/components/progress/  # Progress screen (momentum cards, evidence timeline, consistency chart, milestone toast)
+      src/pages/ComebackPage.tsx      # The comeback flow: full screen, outside Layout
+      src/pages/ComebackDonePage.tsx  # "Back on Path." — the celebration and the next commitment
+      src/components/today/ComebackBanner.tsx  # "Welcome back. No catching up." above the next best action
       src/pwa/              # Service worker registration (production only)
       src/__tests__/
       build/                # Build-time Vite plugins (app-shell service worker)

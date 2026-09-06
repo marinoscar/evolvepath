@@ -17,6 +17,7 @@ import { useToday } from '../hooks/useToday';
 import { useTodayInsight } from '../hooks/useTodayInsight';
 import {
   createCommitment,
+  dismissComeback,
   getOutcomes,
   postDayReflection,
   recordNotificationInteraction,
@@ -39,6 +40,7 @@ import {
 import type { CommitmentFormValues } from '../utils/commitmentForm.schema';
 import { toCommitmentInput } from '../utils/commitmentForm.schema';
 import { CheckInChips } from '../components/today/CheckInChips';
+import ComebackBanner from '../components/today/ComebackBanner';
 import { QuickAddFab } from '../components/today/QuickAddFab';
 import { QuickAddSheet } from '../components/today/QuickAddSheet';
 import type { FamilyRowAction } from '../components/family/familyLabels';
@@ -485,6 +487,18 @@ export default function TodayPage() {
 
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 5 }}>
+            {/* Above the recommendation, because a returning user needs to know
+                they are not in trouble before they are told what to do (#119,
+                PRD §56). It lists nothing that was missed — the payload has no
+                field that could. */}
+            <ComebackBanner
+              comeback={today.comeback}
+              onDismiss={async () => {
+                await dismissComeback().catch(() => undefined);
+                await refresh();
+              }}
+            />
+
             <CheckInChips
               value={today.checkIn?.feel ?? null}
               disabled={checkIn.isSaving}

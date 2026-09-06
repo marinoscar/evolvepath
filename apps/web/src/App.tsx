@@ -40,6 +40,8 @@ const CoachPage = lazy(() => import('./pages/CoachPage'));
 const MediaLibraryPage = lazy(() => import('./pages/MediaLibraryPage'));
 const ProgressPage = lazy(() => import('./pages/ProgressPage'));
 const ProgressTimelinePage = lazy(() => import('./pages/ProgressTimelinePage'));
+const ComebackPage = lazy(() => import('./pages/ComebackPage'));
+const ComebackDonePage = lazy(() => import('./pages/ComebackDonePage'));
 // Progress surfaces, not sixth destinations: `DESTINATION_ROUTES.progress`
 // already owns `/progress/*` by prefix, so the weekly review and its planning
 // wizard need no registry entry (epic E10).
@@ -164,6 +166,12 @@ function AppRoutes() {
                     so there is no navigation to hide and none of the five
                     coupled breakpoint gates is touched. */}
                 <Route path="/workout/:sessionId" element={<WorkoutRunnerPage />} />
+                {/* The comeback flow (#119, epic E11). Full screen for the same
+                    reason as the two above: PRD §57's three screens replace the
+                    navigation, and a returning user should see one small thing
+                    rather than five ways to go and look at what they missed. */}
+                <Route path="/comeback" element={<ComebackPage />} />
+                <Route path="/comeback/done" element={<ComebackDonePage />} />
 
                 <Route
                   element={

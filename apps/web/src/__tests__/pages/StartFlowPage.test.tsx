@@ -26,13 +26,14 @@ import StartFlowPage from '../../pages/StartFlowPage';
 // other test in this file and fail that one, which is exactly why it is here.
 // =============================================================================
 
-function renderStart(id: string, query = '') {
+function renderStart(id: string, query = '', state?: unknown) {
   return render(
     <Routes>
       <Route path="/start/:commitmentId" element={<StartFlowPage />} />
       <Route path="/" element={<div data-testid="today-screen" />} />
+      <Route path="/comeback/done" element={<div data-testid="comeback-done" />} />
     </Routes>,
-    { wrapperOptions: { route: `/start/${id}${query}` } },
+    { wrapperOptions: { route: `/start/${id}${query}`, routeState: state } },
   );
 }
 
@@ -248,6 +249,22 @@ describe('StartFlowPage', () => {
 
       await waitFor(() => expect(getTodayState().commitments[0].status).toBe('COMPLETED'));
       expect(await screen.findByTestId('today-screen')).toBeInTheDocument();
+    });
+
+    // Epic E11 (#119). The comeback flow reuses this screen unchanged; the only
+    // thing it adds is where a finished session goes afterwards.
+    it('returns to `state.returnTo` when the caller named one', async () => {
+      const user = userEvent.setup();
+      seedCommitments(startedCard(600, 5));
+      renderStart('c1', '', { returnTo: '/comeback/done' });
+
+      await screen.findByTestId('countdown');
+      await user.click(screen.getByRole('button', { name: 'Done for now' }));
+
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: 'Done' }));
+
+      expect(await screen.findByTestId('comeback-done')).toBeInTheDocument();
     });
 
     it('records a partial finish as its own fact', async () => {
