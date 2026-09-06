@@ -31,6 +31,7 @@ import { CoachModule } from './coach/coach.module';
 import { SafetyModule } from './coach/safety/safety.module';
 import { FamilyModule } from './family/family.module';
 import { WeeklyModule } from './weekly/weekly.module';
+import { WorkModule } from './work/work.module';
 import { LoggerModule } from './common/logger/logger.module';
 import { TestAuthModule } from './test-auth/test-auth.module';
 
@@ -125,6 +126,7 @@ import configuration from './config/configuration';
     // domain, not another layer of it — and because the module deliberately
     // cannot reach `PlanVersionsService`.
     WeeklyModule,
+    WorkModule,
 
     // The AI coach (epic E06). Registered here from its first child so a
     // broken provider graph fails at boot rather than at the first chat turn;

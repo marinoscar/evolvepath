@@ -217,6 +217,13 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'version or day.',
       },
       {
+        name: 'Work',
+        description:
+          'Work-domain execution: session planning for an outcome, focus sessions with ' +
+          'TIMER evidence, avoidance assessment and friction diagnosis, and the weekly ' +
+          'summary.',
+      },
+      {
         name: 'Family',
         description:
           'Family members (minimal records), rituals, recurrence materialization, the ' +
