@@ -547,8 +547,140 @@ function workSessionPlan(input) {
   };
 }
 
+
+// ---------------------------------------------------------------------------
+// The first Path (epic E04, issue #107)
+// ---------------------------------------------------------------------------
+
+/**
+ * A first-week plan for whichever domains the user selected.
+ *
+ * DATES ARE COMPUTED AT REQUEST TIME, from the `today` the planner was given,
+ * for the same reason `workSessionPlan` does it: the API's guardrails reject
+ * anything outside `[today - 1, today + 8]` in the user's own zone, so a canned
+ * set of timestamps would pass on the day it was written and turn into a 503
+ * the following week — a failure that reads like a broken planner rather than a
+ * stale fixture.
+ *
+ * Times are NOON UTC, the one hour that lands on the same calendar day in every
+ * zone from UTC-11 to UTC+11. That keeps the first-week window satisfied
+ * without this server having to resolve a wall-clock time in an arbitrary
+ * timezone.
+ *
+ * `reduceLoad: true` in the input — which only the confidence path sends — makes
+ * it return one fewer routine with `reducedFromRequest: true`, so the e2e can
+ * prove PRD §72's loop end to end.
+ */
+function onboardingProposal(input) {
+  const today = /"today":"(\d{4}-\d{2}-\d{2})"/.exec(input)?.[1];
+  if (!today) return null;
+
+  const reduce = /"reduceLoad":true/.test(input);
+
+  // The domains the user actually chose, in the order the answers list them.
+  // A proposal naming a domain they did not select is rejected by the
+  // guardrails, so reading them back out is what makes this a fixture rather
+  // than a coin toss.
+  const selected = (/"domains":\[([^\]]*)\]/.exec(input)?.[1] ?? '')
+    .split(',')
+    .map((entry) => entry.replace(/[^A-Z_]/g, ''))
+    .filter((entry) => ['WORK', 'FAMILY', 'HEALTH'].includes(entry));
+
+  const domains = selected.length > 0 ? selected : ['WORK'];
+
+  // Minutes the user said they have. Split across the domains that share a day
+  // so no single day exceeds it — the guardrail the API checks last.
+  const budget = Number(/"weekdayMinutes":(\d+)/.exec(input)?.[1] ?? 45);
+  const minutes = Math.max(10, Math.min(25, Math.floor(budget / domains.length)));
+
+  const SPEC = {
+    WORK: {
+      identity: 'Someone who protects the work that matters',
+      outcome: 'Protect my most important work',
+      why: 'The day fills with other people\u2019s priorities unless the first hour is mine.',
+      success: 'Three mornings a week begin with the most important task.',
+      routine: 'Start the most important task before email',
+      trigger: 'Mon,Wed,Fri',
+      fallback: 'Open the task and write the first sentence',
+      short: '15 minutes on the most important task',
+    },
+    FAMILY: {
+      identity: 'Someone who is present with the people at the table',
+      outcome: 'Be present with the people I care about',
+      why: 'Attention is what they will remember, and it is the first thing work takes.',
+      success: 'Three evenings a week are phone-free.',
+      routine: 'Phone-free dinner',
+      trigger: 'Tue,Thu,Sun',
+      fallback: 'Ten minutes of undivided attention',
+      short: 'Phone-free for the first fifteen minutes',
+    },
+    HEALTH: {
+      identity: 'Someone who trains whether or not the week cooperates',
+      outcome: 'Train consistently',
+      why: 'Consistency is what changes, and it is what stops first when the week gets hard.',
+      success: 'Three sessions a week happen, even the short ones.',
+      routine: 'Strength session',
+      trigger: 'Mon,Wed,Sat',
+      fallback: 'A 10-minute walk',
+      short: 'A 15-minute session',
+    },
+  };
+
+  // One routine per domain, minus one when asked to reduce — never fewer than
+  // one, because the contract requires at least one commitment.
+  const withRoutines = reduce && domains.length > 1 ? domains.slice(0, -1) : domains;
+
+  const dayAfter = (offset) => {
+    const at = new Date(`${today}T12:00:00.000Z`);
+    at.setUTCDate(at.getUTCDate() + offset);
+    return at.toISOString();
+  };
+
+  return {
+    bestSelf: {
+      identityStatement: domains.map((d) => SPEC[d].identity).join('. ') + '.',
+      workIdentity: domains.includes('WORK') ? SPEC.WORK.identity : null,
+      familyIdentity: domains.includes('FAMILY') ? SPEC.FAMILY.identity : null,
+      healthIdentity: domains.includes('HEALTH') ? SPEC.HEALTH.identity : null,
+      sixMonthVision: /"sixMonthVision":"([^"]*)"/.exec(input)?.[1] ?? 'A steadier six months',
+    },
+    outcomes: domains.map((domain) => ({
+      domain,
+      title: SPEC[domain].outcome,
+      whyItMatters: SPEC[domain].why,
+      successDefinition: SPEC[domain].success,
+    })),
+    routines: withRoutines.map((domain) => ({
+      domain,
+      title: SPEC[domain].routine,
+      triggerType: 'WEEKDAYS',
+      triggerValue: SPEC[domain].trigger,
+      frequency: '3x per week',
+      idealMinutes: minutes,
+      minimumMinutes: 10,
+      fallbackBehavior: SPEC[domain].fallback,
+    })),
+    // One commitment per routine, on consecutive days inside the first week, so
+    // no single day carries more than one domain's minutes.
+    firstWeekCommitments: withRoutines.map((domain, index) => ({
+      domain,
+      title: SPEC[domain].routine,
+      scheduledStart: dayAfter(index + 1),
+      durationMinutes: minutes,
+      fullVersion: SPEC[domain].routine,
+      shortVersion: SPEC[domain].short,
+      minimumVersion: SPEC[domain].fallback,
+    })),
+    rationale: reduce
+      ? 'I took one thing out. What is left is what a difficult week can still carry.'
+      : 'Three behaviours at most, each with a version that survives a bad day.',
+    reducedFromRequest: reduce,
+  };
+}
+
 const SCENARIOS = {
   coach_reply: coachReply,
+  onboarding_proposal: onboardingProposal,
   work_session_plan: workSessionPlan,
   safety_decision: safetyDecision,
   insight_proposal: insightProposal,

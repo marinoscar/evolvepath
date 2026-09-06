@@ -334,7 +334,7 @@ export class OnboardingService {
     // Path that does not exist.
     await this.prisma.auditEvent.create({
       data: {
-        userId,
+        actorUserId: userId,
         action: 'onboarding:approved',
         targetType: 'user_profile',
         targetId: profile.id,

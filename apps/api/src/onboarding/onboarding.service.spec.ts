@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import type { UserProfile } from '@prisma/client';
+import { Prisma, type UserProfile } from '@prisma/client';
 
 import { OnboardingService } from './onboarding.service';
 import { buildTemplateProposal } from './onboarding-templates';
@@ -208,6 +208,12 @@ describe('OnboardingService', () => {
 
       expect(prisma.auditEvent.create).toHaveBeenCalledTimes(1);
       expect(prisma.auditEvent.create.mock.calls[0][0].data).toMatchObject({
+        // `actorUserId`, which is what the column is actually called — a
+        // mocked Prisma accepts any key, so this assertion is the only thing
+        // standing between a typo here and a 500 after the whole Path has
+        // already been written.
+        actorUserId: 'u1',
+        targetType: 'user_profile',
         action: 'onboarding:approved',
         meta: expect.objectContaining({ source: 'ai', outcomes: 3, routines: 3 }),
       });
@@ -256,6 +262,20 @@ describe('OnboardingService', () => {
       expect(error).toBeInstanceOf(ConflictException);
       expect(error.getResponse().details.reason).toBe('ONBOARDING_ALREADY_COMPLETED');
       expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('writes an audit row whose every key is a real column', async () => {
+      // A MOCKED PRISMA ACCEPTS ANY KEY, which is exactly how `userId` — a
+      // field `audit_events` does not have — reached a live database and 500ed
+      // AFTER the whole Path had been written. Checking the keys against the
+      // generated field enum is the cheapest thing that would have caught it.
+      await service.approve('u1', proposal(), MONDAY);
+
+      const columns = new Set(Object.keys(Prisma.AuditEventScalarFieldEnum));
+
+      for (const key of Object.keys(prisma.auditEvent.create.mock.calls[0][0].data)) {
+        expect(columns).toContain(key);
+      }
     });
 
     it('puts every selected domain into GROW', async () => {
