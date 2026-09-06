@@ -674,6 +674,13 @@ it lands, these three call sites swap component and keep their logic.
 2. **Same-Origin Hosting**: UI at `/`, API at `/api`, API reference at `/api/docs`
 3. **Security by Default**: All API endpoints require authentication unless explicitly public
 4. **API-First**: All business logic resides in the API layer
+5. **Route gates**: `ProtectedRoute → RequireAiKey → RequireOnboarding → Layout`;
+   exemptions `/activate`, `/setup/ai-key`, `/onboarding`. The order is
+   load-bearing and is documented in `apps/web/src/App.tsx`'s comment block —
+   step 8 of the wizard needs the key, so the key gate comes first; `/onboarding`
+   sits inside the key gate and outside the onboarding gate, because a gate that
+   redirected its own destination would loop forever. Gating is **UX only**;
+   every API route stays independently authorised.
 
 ## Key Commands
 

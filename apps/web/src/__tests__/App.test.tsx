@@ -100,6 +100,7 @@ function signInAs(
   permissions: string[],
   roles: string[] = ['viewer'],
   aiKeyConfigured = true,
+  onboardingCompleted = true,
 ) {
   server.use(
     http.get(`${API_BASE}/auth/me`, () =>
@@ -117,7 +118,7 @@ function signInAs(
             configured: aiKeyConfigured,
             hint: aiKeyConfigured ? '\u2022\u2022\u2022\u2022e2e1' : null,
           },
-          onboarding: { completed: true },
+          onboarding: { completed: onboardingCompleted },
         },
       }),
     ),
@@ -625,6 +626,100 @@ describe('App', () => {
       expect(
         await screen.findByRole('heading', { name: 'User Settings Hub' }, { timeout: 5000 }),
       ).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * The onboarding gate (issue #106, epic E04).
+   *
+   * The thing under test is the ORDER of the three gates in `App.tsx`, so every
+   * case is expressed as "which of the three destinations did this user land
+   * on": login, the key setup page, the wizard, or the shell. The real
+   * `AiKeySetupPage` and `OnboardingPage` are left unmocked so "the gate
+   * redirected here" is what is being observed.
+   */
+  describe('the onboarding gate', () => {
+    function renderAt(pathname: string) {
+      return render(
+        <MemoryRouter initialEntries={[pathname]}>
+          <App />
+        </MemoryRouter>,
+      );
+    }
+
+    const KEY_HEADING = 'Connect your OpenAI API key';
+    const WIZARD_HEADING = 'Become who you want to be.';
+
+    it.each(['/', '/settings', '/settings/ai-key', '/admin/settings'])(
+      'sends a keyed but un-onboarded user from %s to the wizard',
+      async (pathname) => {
+        signInAs(['user_settings:read', 'system_settings:read', 'users:read'], ['admin'], true, false);
+        renderAt(pathname);
+
+        expect(
+          await screen.findByRole('heading', { name: WIZARD_HEADING }, { timeout: 5000 }),
+        ).toBeInTheDocument();
+      },
+    );
+
+    it('leaves /onboarding itself reachable — a gate that redirected its own destination would loop', async () => {
+      signInAs(['user_settings:read'], ['viewer'], true, false);
+      renderAt('/onboarding');
+
+      expect(
+        await screen.findByRole('heading', { name: WIZARD_HEADING }, { timeout: 5000 }),
+      ).toBeInTheDocument();
+    });
+
+    it('leaves /activate reachable for an un-onboarded user', async () => {
+      signInAs(['user_settings:read'], ['viewer'], true, false);
+      renderAt('/activate');
+
+      await waitFor(
+        () => {
+          expect(screen.queryByRole('heading', { name: WIZARD_HEADING })).not.toBeInTheDocument();
+          expect(screen.queryByRole('heading', { name: KEY_HEADING })).not.toBeInTheDocument();
+        },
+        { timeout: 5000 },
+      );
+    });
+
+    it('THE KEY GATE WINS: a user with neither goes to the key page, from /onboarding too', async () => {
+      signInAs(['user_settings:read'], ['viewer'], false, false);
+      renderAt('/onboarding');
+
+      expect(
+        await screen.findByRole('heading', { name: KEY_HEADING }, { timeout: 5000 }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: WIZARD_HEADING })).not.toBeInTheDocument();
+    });
+
+    it('sends a keyless but onboarded user to the key page', async () => {
+      signInAs(['user_settings:read'], ['viewer'], false, true);
+      renderAt('/');
+
+      expect(
+        await screen.findByRole('heading', { name: KEY_HEADING }, { timeout: 5000 }),
+      ).toBeInTheDocument();
+    });
+
+    it('lets a keyed, onboarded user into the shell', async () => {
+      signInAs(['user_settings:read'], ['viewer'], true, true);
+      renderAt('/settings');
+
+      expect(
+        await screen.findByRole('heading', { name: 'User Settings Hub' }, { timeout: 5000 }),
+      ).toBeInTheDocument();
+    });
+
+    it('sends a completed user away from /onboarding', async () => {
+      signInAs(['user_settings:read'], ['viewer'], true, true);
+      renderAt('/onboarding');
+
+      await waitFor(
+        () => expect(screen.queryByRole('heading', { name: WIZARD_HEADING })).not.toBeInTheDocument(),
+        { timeout: 5000 },
+      );
     });
   });
 });

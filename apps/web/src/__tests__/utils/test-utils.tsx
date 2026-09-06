@@ -40,6 +40,12 @@ export interface MockUser {
    * page test render the setup page instead of the page under test.
    */
   aiKey: { configured: boolean; hint: string | null };
+  /**
+   * Epic E04 (#106). Required for the same reason: `RequireOnboarding` gates
+   * the shell on it, and a fixture without it would send every page test to
+   * the wizard instead of the page under test.
+   */
+  onboarding: { completed: boolean };
 }
 
 export const mockUser: MockUser = {
@@ -54,6 +60,10 @@ export const mockUser: MockUser = {
   // Configured, so a page test renders the page under test rather than the
   // AI-key setup gate (#29). A spec that wants the keyless state overrides it.
   aiKey: { configured: true, hint: '\u2022\u2022\u2022\u2022e2e1' },
+  // Epic E04 (#106). Onboarded, for the same reason `aiKey` is configured: a
+  // page spec should render the page under test, not `RequireOnboarding`'s
+  // redirect. A spec that wants the un-onboarded state overrides it.
+  onboarding: { completed: true },
 };
 
 export const mockAdminUser: MockUser = {
@@ -79,6 +89,9 @@ export const mockAdminUser: MockUser = {
   isActive: true,
   createdAt: new Date().toISOString(),
   aiKey: { configured: true, hint: '\u2022\u2022\u2022\u2022e2e1' },
+  // Gated exactly like everyone else (#106): an admin who has not onboarded is
+  // still a user of the product, and `/admin/*` is as empty for them as Today.
+  onboarding: { completed: true },
 };
 
 // Default mock providers
