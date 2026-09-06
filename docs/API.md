@@ -514,6 +514,16 @@ Authorization: Bearer <token>
 | `email` | string | Yes | Email address for test user |
 | `role` | enum | No | Role to assign: `admin`, `contributor`, `viewer` (default: `viewer`) |
 | `displayName` | string | No | Display name for the user |
+| `withAiKey` | boolean | No | Seed an OpenAI key so the login lands on the app rather than `/setup/ai-key` (epic #20). **Default false** — the keyless path is the one worth being able to reach by hand |
+| `withOnboarding` | boolean | No | Mark onboarding finished so the login lands on the app rather than `/onboarding` (epic E04). **Default true** — every pre-existing e2e spec expects to land on `/`, and none of them is about onboarding |
+
+Both booleans accept the form's `'on'`, JSON `true`, `'true'` and `'1'`.
+
+`withOnboarding` defaults to **true**, and an unchecked HTML checkbox sends
+nothing — so "absent" cannot mean both "the default" and "the user unticked
+it". `/testing/login` pairs its checkbox with a hidden `withOnboarding=false`
+**before** it (the standard HTML idiom) and this endpoint takes the **last**
+value when both arrive.
 
 **Response:** HTTP 302 redirect to `/auth/callback?token=<accessToken>&expiresIn=900`
 - Sets HttpOnly refresh token cookie (same as OAuth flow)
@@ -1631,6 +1641,10 @@ response shape is identical to `POST /ai-settings/test`.
 ---
 
 ### Onboarding
+
+The decisions behind this section — the nine screens, the guardrail rationale,
+the confidence loop, the approve transaction and the rejected alternatives — are
+in [`docs/specs/onboarding.md`](specs/onboarding.md).
 
 The first gate a signed-in user passes after the BYOK key setup (PRD §19–§20,
 epic E04). Every route is `@Auth()` and every one addresses the caller's own

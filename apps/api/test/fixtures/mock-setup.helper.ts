@@ -610,7 +610,80 @@ export function setupBaseMocks(): void {
     count: Array.isArray(data) ? data.length : 1,
   }));
 
+  // The profile row every login now touches (#107, epic E04).
+  //
+  // `withOnboarding` DEFAULTS TO TRUE on the test login, so `TestAuthService`
+  // reaches `UserProfileService` on every call — including the dozens of
+  // integration specs whose subject has nothing to do with onboarding. Without
+  // these three the upsert rejects and the login answers 500, which is a
+  // failure with no connection at all to what those specs are testing.
+  setupUserProfileMocks();
+
   // Mock $connect and $disconnect
   (prismaMock.$connect as jest.Mock).mockResolvedValue(undefined);
   (prismaMock.$disconnect as jest.Mock).mockResolvedValue(undefined);
+}
+
+/**
+ * A lazily-created `user_profiles` row per user, with the defaults the schema
+ * declares. Stateful so that `getOrCreate` → `update` → `findUnique` in one
+ * request reads back what the previous call wrote.
+ */
+function setupUserProfileMocks(): void {
+  const profiles = new Map<string, Record<string, unknown>>();
+
+  const defaults = (userId: string) => ({
+    id: `profile-${userId}`,
+    userId,
+    timezone: 'UTC',
+    locale: 'en',
+    onboardingStep: 'PROMISE',
+    onboardingCompletedAt: null,
+    coachingStyle: 'BALANCED',
+    weekdayMinutes: null,
+    quietHoursStart: null,
+    quietHoursEnd: null,
+    obstacles: [],
+    sixMonthVision: null,
+    selectedDomains: [],
+    domainReflections: null,
+    healthBaseline: null,
+    pendingProposal: null,
+    confidenceScore: null,
+    notificationPolicy: null,
+    weeklyReviewWeekday: 0,
+    weeklyReviewTime: '17:00',
+    comebackState: 'NONE',
+    comebackTrigger: null,
+    comebackOfferedAt: null,
+    comebackCommitmentId: null,
+    lastActiveAt: null,
+    lastSweepAt: null,
+    planReviewSuggestedAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  const of = (userId: string) => {
+    if (!profiles.has(userId)) profiles.set(userId, defaults(userId));
+    return profiles.get(userId)!;
+  };
+
+  (prismaMock.userProfile.upsert as jest.Mock).mockImplementation(
+    async ({ where }: any) => of(where.userId),
+  );
+
+  (prismaMock.userProfile.update as jest.Mock).mockImplementation(
+    async ({ where, data }: any) => {
+      const row = { ...of(where.userId), ...data };
+      profiles.set(where.userId, row);
+      return row;
+    },
+  );
+
+  // NOT stateful by default: `findUnique` is what `isOnboardingComplete` and
+  // every read path calls, and a spec that wants a specific profile overrides
+  // it. Returning the stored row here would make `GET /auth/me` in an unrelated
+  // spec depend on whether a login happened first.
+  (prismaMock.userProfile.findUnique as jest.Mock).mockResolvedValue(null);
 }

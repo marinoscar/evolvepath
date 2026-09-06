@@ -105,6 +105,33 @@ export default function TestLoginPage() {
               sx={{ mt: 1 }}
             />
 
+            {/*
+              Marks onboarding finished so the login lands on the app instead
+              of `/onboarding` (#107, epic E04).
+
+              CHECKED BY DEFAULT, the opposite of the key checkbox above, and
+              for the opposite reason: every pre-existing e2e spec expects to
+              land on `/` and none of them is about onboarding.
+
+              THE HIDDEN INPUT IS LOAD-BEARING. An unchecked HTML checkbox sends
+              nothing, so "absent" cannot mean both "the default" and "the user
+              unticked it". Pairing the checkbox with a hidden `false` before it
+              is the standard idiom: unticked sends `false`, ticked sends
+              `false` and `on`, and the DTO takes the LAST value.
+            */}
+            <input type="hidden" name="withOnboarding" value="false" />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  name="withOnboarding"
+                  value="on"
+                  defaultChecked
+                  data-testid="test-with-onboarding"
+                />
+              }
+              label="Mark onboarding complete (skip the wizard)"
+            />
+
             <Button
               type="submit"
               variant="contained"

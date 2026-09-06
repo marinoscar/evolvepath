@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { TestAuthService } from './test-auth.service';
 import { UserAiKeyService } from '../ai/user-key/user-ai-key.service';
+import { UserProfileService } from '../user-profile/user-profile.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { createMockPrismaService, MockPrismaService, mockPrismaTransaction } from '../../test/mocks/prisma.mock';
 import { TestLoginDto } from './dto/test-login.dto';
@@ -10,6 +11,7 @@ import { TestLoginDto } from './dto/test-login.dto';
 describe('TestAuthService', () => {
   let service: TestAuthService;
   let mockUserAiKey: { set: jest.Mock };
+  let mockUserProfile: { getOrCreate: jest.Mock; update: jest.Mock };
   let mockPrisma: MockPrismaService;
   let mockJwtService: jest.Mocked<JwtService>;
   let mockConfigService: jest.Mocked<ConfigService>;
@@ -79,6 +81,16 @@ describe('TestAuthService', () => {
         // `withAiKey` seeds an OpenAI key on the test user (#25). Absent from
         // every existing case's DTO, so it must not be called by default.
         { provide: UserAiKeyService, useValue: (mockUserAiKey = { set: jest.fn() }) },
+        // `withOnboarding` marks the profile done (#107, epic E04). Defaults to
+        // TRUE, so unlike `withAiKey` above this one IS called by default —
+        // which is the point: every pre-existing e2e spec keeps landing on `/`.
+        {
+          provide: UserProfileService,
+          useValue: (mockUserProfile = {
+            getOrCreate: jest.fn().mockResolvedValue({ onboardingCompletedAt: null }),
+            update: jest.fn().mockResolvedValue({}),
+          }),
+        },
       ],
     }).compile();
 
@@ -92,6 +104,7 @@ describe('TestAuthService', () => {
   describe('loginAsTestUser', () => {
     it('should create a new user if email does not exist', async () => {
       const dto: TestLoginDto = {
+        withOnboarding: true,
         email: 'newuser@example.com',
         role: 'viewer',
       };
@@ -129,6 +142,7 @@ describe('TestAuthService', () => {
 
     it('should find existing user if email exists', async () => {
       const dto: TestLoginDto = {
+        withOnboarding: true,
         email: 'existing@example.com',
         role: 'viewer',
       };
@@ -162,6 +176,7 @@ describe('TestAuthService', () => {
 
     it('should assign the specified role', async () => {
       const dto: TestLoginDto = {
+        withOnboarding: true,
         email: 'admin@example.com',
         role: 'admin',
       };
@@ -198,6 +213,7 @@ describe('TestAuthService', () => {
 
     it('should generate valid access token', async () => {
       const dto: TestLoginDto = {
+        withOnboarding: true,
         email: 'token@example.com',
         role: 'viewer',
       };
@@ -236,6 +252,7 @@ describe('TestAuthService', () => {
 
     it('should create refresh token in database', async () => {
       const dto: TestLoginDto = {
+        withOnboarding: true,
         email: 'refresh@example.com',
         role: 'viewer',
       };
@@ -313,6 +330,7 @@ describe('TestAuthService', () => {
 
     it('should work with contributor role', async () => {
       const dto: TestLoginDto = {
+        withOnboarding: true,
         email: 'contributor@example.com',
         role: 'contributor',
       };
@@ -344,8 +362,86 @@ describe('TestAuthService', () => {
       expect(result.user.roles).toContain('contributor');
     });
 
+    /**
+     * `withOnboarding` (#107, epic E04).
+     *
+     * The default is the interesting half: it is what keeps every pre-existing
+     * e2e spec landing on `/` rather than on the wizard.
+     */
+    describe('withOnboarding', () => {
+      function seedUser() {
+        const mockUser = {
+          id: 'user-onboarding',
+          email: 'onboard@example.com',
+          displayName: 'onboard',
+          providerDisplayName: null,
+          profileImageUrl: null,
+          providerProfileImageUrl: null,
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          userRoles: [{ role: mockViewerRole }],
+        };
+
+        mockPrisma.user.findUnique
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(mockUser as any);
+        mockPrisma.role.findUnique.mockResolvedValue(mockViewerRole as any);
+        mockPrisma.user.create.mockResolvedValue(mockUser as any);
+        mockPrisma.userRole.deleteMany.mockResolvedValue({ count: 0 });
+        mockPrisma.userRole.create.mockResolvedValue({} as any);
+        mockPrisma.refreshToken.create.mockResolvedValue({} as any);
+      }
+
+      it('marks the profile done by default', async () => {
+        seedUser();
+
+        await service.loginAsTestUser({
+          email: 'onboard@example.com',
+          role: 'viewer',
+          withOnboarding: true,
+        });
+
+        expect(mockUserProfile.update).toHaveBeenCalledWith(
+          'user-onboarding',
+          expect.objectContaining({
+            onboardingStep: 'DONE',
+            onboardingCompletedAt: expect.any(Date),
+          }),
+        );
+      });
+
+      it('leaves the profile fresh when the caller wants the wizard', async () => {
+        seedUser();
+
+        await service.loginAsTestUser({
+          email: 'onboard@example.com',
+          role: 'viewer',
+          withOnboarding: false,
+        });
+
+        expect(mockUserProfile.update).not.toHaveBeenCalled();
+      });
+
+      it('does not re-stamp a user who onboarded for real', async () => {
+        seedUser();
+        mockUserProfile.getOrCreate.mockResolvedValue({
+          onboardingCompletedAt: new Date('2026-01-01T00:00:00.000Z'),
+        });
+
+        await service.loginAsTestUser({
+          email: 'onboard@example.com',
+          role: 'viewer',
+          withOnboarding: true,
+        });
+
+        expect(mockUserProfile.update).not.toHaveBeenCalled();
+      });
+    });
+
     it('should use email prefix as displayName when not provided', async () => {
       const dto: TestLoginDto = {
+        withOnboarding: true,
         email: 'testuser@example.com',
         role: 'viewer',
       };
@@ -379,6 +475,7 @@ describe('TestAuthService', () => {
 
     it('should use provided displayName when specified', async () => {
       const dto: TestLoginDto = {
+        withOnboarding: true,
         email: 'custom@example.com',
         role: 'viewer',
         displayName: 'Custom Display Name',
@@ -413,6 +510,7 @@ describe('TestAuthService', () => {
 
     it('should normalize email to lowercase', async () => {
       const dto: TestLoginDto = {
+        withOnboarding: true,
         email: 'UPPERCASE@EXAMPLE.COM',
         role: 'viewer',
       };
@@ -450,6 +548,7 @@ describe('TestAuthService', () => {
 
     it('should throw error when role not found', async () => {
       const dto: TestLoginDto = {
+        withOnboarding: true,
         email: 'invalid@example.com',
         role: 'viewer',
       };
@@ -462,6 +561,7 @@ describe('TestAuthService', () => {
 
     it('should replace existing roles when logging in', async () => {
       const dto: TestLoginDto = {
+        withOnboarding: true,
         email: 'existing@example.com',
         role: 'admin',
       };
@@ -508,6 +608,7 @@ describe('TestAuthService', () => {
 
     it('should create user settings for new users', async () => {
       const dto: TestLoginDto = {
+        withOnboarding: true,
         email: 'newsettings@example.com',
         role: 'viewer',
       };
@@ -552,6 +653,7 @@ describe('TestAuthService', () => {
 
     it('should return correct expiresIn value', async () => {
       const dto: TestLoginDto = {
+        withOnboarding: true,
         email: 'expires@example.com',
         role: 'viewer',
       };

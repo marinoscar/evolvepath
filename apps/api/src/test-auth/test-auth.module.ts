@@ -7,6 +7,7 @@ import { TestAuthService } from './test-auth.service';
 import { AiModule } from '../ai/ai.module';
 import { CoachingNotificationsModule } from '../coaching-notifications/coaching-notifications.module';
 import { ProgressModule } from '../progress/progress.module';
+import { UserProfileModule } from '../user-profile/user-profile.module';
 
 @Module({
   imports: [
@@ -33,6 +34,10 @@ import { ProgressModule } from '../progress/progress.module';
 
     // `run-job comeback` drives the real sweep, not a stand-in for it (#112).
     ProgressModule,
+
+    // `withOnboarding` marks the profile done so an e2e login lands on the app
+    // rather than on the wizard (#107, epic E04).
+    UserProfileModule,
   ],
   controllers: [TestAuthController],
   providers: [TestAuthService],

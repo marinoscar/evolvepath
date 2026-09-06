@@ -15,6 +15,15 @@ export interface TestUserOptions {
    * keyless path asks for it explicitly.
    */
   withAiKey?: boolean;
+  /**
+   * Mark onboarding finished so the login lands on the app rather than on the
+   * `/onboarding` wizard (#107, epic E04).
+   *
+   * DEFAULTS TO `true`, matching the checkbox's own default this time — every
+   * pre-existing spec expects to land on `/`, and none of them is about
+   * onboarding. A spec that wants the wizard asks for it explicitly.
+   */
+  withOnboarding?: boolean;
 }
 
 /**
@@ -48,12 +57,23 @@ export async function loginAsTestUser(
     await page.check('[data-testid="test-with-ai-key"]');
   }
 
+  // Mark onboarding done unless the caller wants the wizard. CHECKED by
+  // default in the form, so this is an uncheck rather than a check.
+  const withOnboarding = options.withOnboarding ?? true;
+  if (!withOnboarding) {
+    await page.uncheck('[data-testid="test-with-onboarding"]');
+  }
+
   // Submit form
   await page.click('[data-testid="test-login-button"]');
 
-  // Wait for redirect to complete (auth callback, then either the app or the
-  // AI-key gate).
-  await page.waitForURL(withAiKey ? '/' : '/setup/ai-key', { timeout: 10000 });
+  // Wait for redirect to complete (auth callback, then the app or whichever
+  // gate catches this user first). THE KEY GATE WINS: a user with neither a
+  // key nor a Path lands on `/setup/ai-key`, because step 8 of the wizard
+  // needs the key.
+  const destination = !withAiKey ? '/setup/ai-key' : withOnboarding ? '/' : '/onboarding';
+
+  await page.waitForURL(destination, { timeout: 10000 });
 }
 
 /**
@@ -62,7 +82,7 @@ export async function loginAsTestUser(
 export async function loginAsAdmin(
   page: Page,
   email = 'admin@test.local',
-  options: Pick<TestUserOptions, 'withAiKey'> = {}
+  options: Pick<TestUserOptions, 'withAiKey' | 'withOnboarding'> = {}
 ): Promise<void> {
   await loginAsTestUser(page, { email, role: 'admin', ...options });
 }

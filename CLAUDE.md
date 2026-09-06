@@ -303,6 +303,35 @@ This section states the rules; that file explains why.
 See [`docs/specs/settings-ui.md`](docs/specs/settings-ui.md) for the full
 rationale, the rejected alternatives, and the accessibility requirements.
 
+## Onboarding: Best Self → first Path
+
+The nine screens, the proposal contract and its guardrails, the confidence loop,
+the template fallback, the approve transaction and the route gates have their own
+written contract in [`docs/specs/onboarding.md`](docs/specs/onboarding.md): every
+step with its PATCH body, the guardrail table with the reason for each rule, the
+`user_profiles` columns, the 409-not-no-op decision, and the rejected
+alternatives.
+
+Read it before changing anything under `apps/api/src/onboarding/`,
+`apps/web/src/components/onboarding/` or `apps/web/src/pages/OnboardingPage.tsx`.
+
+Three rules that are easy to break and expensive to rediscover:
+
+- **Answers are saved per step; the plan is not saved at all until it is
+  approved.** PRD §19 gives this five to eight minutes on a phone and a phone
+  locks, so nothing lives in React state or `localStorage`; and PRD §15 means
+  `outcomes`, `plans`, `routines` and `commitments` gain no rows until
+  `POST /onboarding/approve`. An integration spec counts those tables before and
+  after, because a claim about a write that does not happen is invisible to
+  every other kind of test.
+- **A guardrail violation is never corrected.** Model output that breaks one is
+  discarded whole and answered as a schema failure; a user's edit that breaks
+  one is a 400 naming the rule. A plan the server quietly fixed is a plan the
+  user approves believing the coach wrote it.
+- **`source` is read off the stored row, never the request body.** It is what
+  `plan_versions.created_by` is set from, and a client claiming `'ai'` would put
+  the coach's name on a plan it never wrote.
+
 ## Today and the next best action
 
 The Today screen, the deterministic next-best-action engine, the commitment

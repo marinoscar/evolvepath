@@ -8,6 +8,7 @@ import { SimulateIdleDto } from './dto/simulate-idle.dto';
 import { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { DEFAULT_USER_SETTINGS } from '../common/types/settings.types';
 import { UserAiKeyService } from '../ai/user-key/user-ai-key.service';
+import { UserProfileService } from '../user-profile/user-profile.service';
 
 export interface TestAuthTokenResponse {
   accessToken: string;
@@ -30,6 +31,7 @@ export class TestAuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly userAiKey: UserAiKeyService,
+    private readonly userProfile: UserProfileService,
   ) {}
 
   /**
@@ -219,6 +221,21 @@ export class TestAuthService {
         user.id,
         `sk-test-e2e-${randomBytes(12).toString('hex')}`,
       );
+    }
+
+    // Onboarding, marked done unless the caller wants the wizard (#107, epic
+    // E04). `onboardingCompletedAt` is what `isOnboardingComplete` reads, and
+    // it is what `RequireOnboarding` gates the shell on — setting the step
+    // alone would leave a user the API considers un-onboarded.
+    if (dto.withOnboarding) {
+      const profile = await this.userProfile.getOrCreate(user.id);
+
+      if (profile.onboardingCompletedAt == null) {
+        await this.userProfile.update(user.id, {
+          onboardingStep: 'DONE',
+          onboardingCompletedAt: new Date(),
+        });
+      }
     }
 
     this.logger.log(`Test login successful for user: ${user.email} with roles: ${roles.join(', ')}`);

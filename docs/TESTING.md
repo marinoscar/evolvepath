@@ -982,6 +982,40 @@ The rules it asserts are written down in
 cd tests/e2e && npx playwright test specs/work.spec.ts
 ```
 
+`specs/onboarding.spec.ts` (epic E04) covers PRD §102's acceptance list in one
+run: define the desired self, choose domains, receive / modify / approve a plan,
+pick a coaching style, answer the notification question, land on Today, and
+survive a reload.
+
+Two of its assertions are about things that do **not** happen. Case 1 reads
+`GET /api/commitments` **after** the proposal is on screen and finds **zero**
+rows, then finds three after `Start this Path` — PRD §15's promise that AI
+output waits on a human, which nothing but a count can see. Case 5 fails the
+propose call and drives the flow to completion anyway (PRD §120), then asserts
+the resulting `plan_versions.created_by` is `USER`: no coach wrote that plan, so
+no coach is credited with it.
+
+Two things about running it:
+
+- **`withOnboarding` on the test login defaults to `true`**, so every
+  pre-existing spec keeps landing on `/` rather than on the wizard. A spec that
+  wants the wizard passes `withOnboarding: false` to `loginAsTestUser`, which
+  unticks "Mark onboarding complete" on `/testing/login`. The key gate wins over
+  the onboarding gate, so a user with neither lands on `/setup/ai-key`.
+- **The spec never clicks `Allow notifications`.** The browser permission prompt
+  blocks a headless run; step 9 is always completed through `Not now`.
+
+The fake provider answers `onboarding_proposal` from
+`tools/fake-openai/scenarios/index.mjs`, computing its dates from the `today`
+the planner was given — a canned set of timestamps would pass on the day it was
+written and turn into a 503 the following week, a failure that reads like a
+broken planner rather than a stale fixture. The rules it asserts are written
+down in [`docs/specs/onboarding.md`](specs/onboarding.md).
+
+```bash
+cd tests/e2e && npx playwright test specs/onboarding.spec.ts
+```
+
 `specs/media-attachments.spec.ts` (epic E03) is the fifth, and it is the one
 that needs the **most infrastructure**: a phone upload becoming coach advice
 crosses MinIO, ffmpeg, sharp, the processing pipeline, the attachment API, the
