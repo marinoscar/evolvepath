@@ -42,6 +42,7 @@ function renderCoach(route = '/coach') {
   return render(
     <Routes>
       <Route path="/coach" element={<CoachPage />} />
+      <Route path="/coach/new" element={<CoachPage />} />
       <Route path="/coach/:conversationId" element={<CoachPage />} />
     </Routes>,
     { wrapperOptions: { route, user: mockAdminUser } },
@@ -287,6 +288,67 @@ describe('CoachPage (#86)', () => {
         screen.getByRole('button', { name: 'Back to conversations' }),
       ).toBeInTheDocument();
       expect(screen.queryByTestId('conversation-list')).not.toBeInTheDocument();
+    });
+
+    // Issue #227. The two tests above render `/coach` and `/coach/:id`
+    // DIRECTLY, which is why a bug that made the second unreachable from the
+    // first survived them: every phone assertion started at a URL no phone
+    // user could get to. These two press the button instead.
+    it('opens the composer from "New conversation" on a phone', async () => {
+      act(() => setViewportWidth(PHONE));
+      const user = userEvent.setup();
+
+      renderCoach();
+
+      await user.click(await screen.findByRole('button', { name: 'New conversation' }));
+
+      // The whole of the bug: this used to navigate to the route the user was
+      // already on, and nothing happened.
+      expect(await screen.findByLabelText('Message the coach')).toBeInTheDocument();
+      expect(screen.queryByTestId('conversation-list')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Back to conversations' }),
+      ).toBeInTheDocument();
+    });
+
+    it('sends a first message from that screen and lands on the new thread', async () => {
+      act(() => setViewportWidth(PHONE));
+      const user = userEvent.setup();
+
+      renderCoach();
+
+      await user.click(await screen.findByRole('button', { name: 'New conversation' }));
+      await user.type(
+        await screen.findByLabelText('Message the coach'),
+        'Where do I start?',
+      );
+      await user.click(screen.getByRole('button', { name: 'Send' }));
+
+      await waitFor(() =>
+        expect(
+          screen.getByText('Ten minutes now would keep the week alive.'),
+        ).toBeInTheDocument(),
+      );
+
+      // A user with no conversations can now get one, which is the property
+      // that was actually broken.
+      expect(coachState().conversations).toHaveLength(1);
+    });
+
+    it('goes back to the list from the new-conversation screen', async () => {
+      act(() => setViewportWidth(PHONE));
+      const user = userEvent.setup();
+
+      renderCoach();
+
+      await user.click(await screen.findByRole('button', { name: 'New conversation' }));
+      await user.click(
+        await screen.findByRole('button', { name: 'Back to conversations' }),
+      );
+
+      // The reason this is a route and not component state.
+      expect(await screen.findByTestId('conversation-list')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Message the coach')).not.toBeInTheDocument();
     });
   });
 
