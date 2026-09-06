@@ -41,6 +41,12 @@ import {
   MediaPreviewResponseDto,
   mediaPreviewQuerySchema,
 } from './dto/media-attachment-response.dto';
+import {
+  AskAboutMediaBodyDto,
+  AskAboutMediaDto,
+  AskAboutMediaResult,
+  askAboutMediaSchema,
+} from './dto/media-advice.schema';
 
 /**
  * `/media/attachments` — the product-level view of an upload (issue #83).
@@ -143,6 +149,35 @@ export class MediaAttachmentsController {
     @CurrentUser() user: RequestUser,
   ): Promise<void> {
     await this.media.delete(id, user);
+  }
+
+  @Post(':id/ask')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Ask the coach about this media',
+    description:
+      '**Always 200 on the coaching path.** A provider failure, a missing key ' +
+      'or output that fails the contract is `{ ok: false, error }` (PRD §120) ' +
+      '— the deterministic product keeps working when the model does not. The ' +
+      '4xx answers are about the MEDIA, not the model.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiBody({ type: AskAboutMediaBodyDto })
+  @ApiResponse({
+    status: 200,
+    description: 'The coach’s answer, or a readable failure',
+  })
+  @ApiResponse({ status: 400, description: 'The media failed processing' })
+  @ApiResponse({ status: 404, description: 'Not found, or not the caller’s' })
+  @ApiResponse({ status: 409, description: 'The media is still processing' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  async ask(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(askAboutMediaSchema)) dto: AskAboutMediaDto,
+    @CurrentUser('id') userId: string,
+  ): Promise<{ data: AskAboutMediaResult }> {
+    const result = await this.media.ask(id, userId, dto.question);
+    return { data: result };
   }
 
   @Get(':id/preview')

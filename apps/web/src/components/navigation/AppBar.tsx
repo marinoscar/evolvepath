@@ -114,6 +114,8 @@ const PRODUCT_DRILLDOWNS: ReadonlyArray<{ pattern: RegExp; title: string; upPath
   { pattern: /^\/health\/programs$/, title: 'Programs', upPath: '/health' },
   { pattern: /^\/health\/programs\/new$/, title: 'Build a program', upPath: '/health/programs' },
   { pattern: /^\/health\/programs\/[^/]+$/, title: 'Program', upPath: '/health/programs' },
+  // Epic E03. `/media` is reached from Coach, which owns the route.
+  { pattern: /^\/media$/, title: 'Media', upPath: '/coach' },
   { pattern: /^\/progress\/week$/, title: 'Your Week', upPath: '/progress' },
   { pattern: /^\/progress\/week\/plan$/, title: 'Plan next week', upPath: '/progress/week' },
 ];

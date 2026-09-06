@@ -2461,3 +2461,21 @@ export interface MediaPreview {
   expiresIn: number;
   variant: 'original' | 'ai' | 'frame';
 }
+
+/**
+ * The result of `POST /media/attachments/:id/ask`.
+ *
+ * A discriminated union rather than an optional `advice`, because the two
+ * branches are genuinely different screens: one renders the coach's answer and
+ * one renders a reason and a retry.
+ */
+export type MediaAskResult =
+  | {
+      ok: true;
+      advice: MediaAdvice;
+      invocationId: string;
+      model: string;
+      latencyMs: number;
+      askedAt: string;
+    }
+  | { ok: false; error: { code: string; message: string } };

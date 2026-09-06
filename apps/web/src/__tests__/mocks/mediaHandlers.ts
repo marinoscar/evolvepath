@@ -22,6 +22,12 @@ import type { MediaAttachment, StorageObject } from '../../types';
 
 const API_BASE = '*/api';
 
+/** What `POST /:id/ask` answers. Overridable per test. */
+interface AskOutcome {
+  status?: number;
+  body?: unknown;
+}
+
 interface MediaState {
   objects: Map<string, StorageObject>;
   attachments: Map<string, MediaAttachment>;
@@ -30,6 +36,10 @@ interface MediaState {
   quotaRemaining: string | null;
   /** Set by a test to make the next upload fail with this status. */
   nextUploadFailure: { status: number; message: string } | null;
+  /** Set by a test to control the next ask. */
+  askOutcome: AskOutcome | null;
+  /** Every question `POST /:id/ask` was sent, so a test can assert the wire. */
+  askQuestions: Array<string | undefined>;
 }
 
 const state: MediaState = {
@@ -38,6 +48,15 @@ const state: MediaState = {
   polls: new Map(),
   quotaRemaining: '2146435072',
   nextUploadFailure: null,
+  askOutcome: null,
+  askQuestions: [],
+};
+
+export const DEFAULT_ADVICE = {
+  summary: 'Your setup looks steady through the whole rep.',
+  observations: ['Your feet stay under the bar.'],
+  advice: ['Brace hard before you unrack.'],
+  safetyFlag: { level: 'none' as const, reason: '' },
 };
 
 let sequence = 0;
@@ -48,7 +67,49 @@ export function resetMediaMocks(): void {
   state.polls.clear();
   state.quotaRemaining = '2146435072';
   state.nextUploadFailure = null;
+  state.askOutcome = null;
+  state.askQuestions = [];
   sequence = 0;
+}
+
+/** Make the next ask answer this instead of the default advice. */
+export function setAskOutcome(outcome: AskOutcome | null): void {
+  state.askOutcome = outcome;
+}
+
+export function askQuestions(): ReadonlyArray<string | undefined> {
+  return state.askQuestions;
+}
+
+/** Put a ready attachment in the store, for a test that starts past upload. */
+export function seedAttachment(
+  overrides: Partial<MediaAttachment> = {},
+): MediaAttachment {
+  sequence += 1;
+  const attachment: MediaAttachment = {
+    id: `attachment-${sequence}`,
+    storageObjectId: `object-${sequence}`,
+    kind: 'PHOTO',
+    purpose: 'MEAL',
+    targetType: null,
+    targetId: null,
+    processingStatus: 'ready',
+    processingError: null,
+    media: {
+      mimeType: 'image/jpeg',
+      size: '1024',
+      width: 1024,
+      height: 683,
+      durationMs: null,
+      frameCount: null,
+    },
+    aiSummary: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    ...overrides,
+  };
+  state.attachments.set(attachment.id, attachment);
+  return attachment;
 }
 
 /** Make the next upload fail — a 413 for quota, a 400 for a refused type. */
@@ -260,6 +321,41 @@ export const mediaHandlers = [
 
     state.attachments.set(attachment.id, attachment);
     return HttpResponse.json({ data: attachment }, { status: 201 });
+  }),
+
+  http.post(`${API_BASE}/media/attachments/:id/ask`, async ({ request, params }) => {
+    const body = (await request.json()) as { question?: string };
+    state.askQuestions.push(body.question);
+
+    if (state.askOutcome) {
+      const outcome = state.askOutcome;
+      return HttpResponse.json(outcome.body ?? {}, {
+        status: outcome.status ?? 200,
+      });
+    }
+
+    const attachment = state.attachments.get(params.id as string);
+    if (attachment) {
+      attachment.aiSummary = {
+        ...DEFAULT_ADVICE,
+        askedAt: new Date().toISOString(),
+        question: body.question ?? null,
+        invocationId: 'inv-1',
+        promptVersion: 'media_analyst.v1',
+        model: 'gpt-test',
+      };
+    }
+
+    return HttpResponse.json({
+      data: {
+        ok: true,
+        advice: DEFAULT_ADVICE,
+        invocationId: 'inv-1',
+        model: 'gpt-test',
+        latencyMs: 120,
+        askedAt: new Date().toISOString(),
+      },
+    });
   }),
 
   http.get(`${API_BASE}/media/attachments/:id/preview`, ({ params, request }) => {

@@ -62,6 +62,8 @@ function attachment(overrides: Record<string, any> = {}) {
 describe('MediaAttachmentsService', () => {
   let prisma: ReturnType<typeof createMockPrismaService>;
   let objects: { delete: jest.Mock; getSignedUrlForKey: jest.Mock };
+  let ai: { invoke: jest.Mock };
+  let throttle: { check: jest.Mock };
   let service: MediaAttachmentsService;
 
   beforeEach(() => {
@@ -78,10 +80,15 @@ describe('MediaAttachmentsService', () => {
 
     (prisma.auditEvent.create as jest.Mock).mockResolvedValue({});
 
+    ai = { invoke: jest.fn() };
+    throttle = { check: jest.fn().mockReturnValue({ allowed: true }) };
+
     service = new MediaAttachmentsService(
       prisma as unknown as PrismaService,
       objects as unknown as ObjectsService,
       config,
+      ai as never,
+      throttle as never,
     );
   });
 
@@ -507,6 +514,189 @@ describe('MediaAttachmentsService', () => {
         }),
       );
       expect(result.meta.totalItems).toBe(1);
+    });
+  });
+  describe('ask (issue #96)', () => {
+    const okResult = {
+      ok: true as const,
+      output: {
+        summary: 'Your setup looks steady.',
+        observations: ['Feet under the bar'],
+        advice: ['Brace before you unrack'],
+        safetyFlag: { level: 'none' as const, reason: '' },
+      },
+      invocationId: 'inv-1',
+      model: 'gpt-test',
+      latencyMs: 120,
+    };
+
+    it('refuses while the media is still processing, with a 409', async () => {
+      // Nothing is wrong; the answer is "not yet", and a client should poll
+      // rather than change the request.
+      (prisma.mediaAttachment.findUnique as jest.Mock).mockResolvedValue(
+        attachment({ storageObject: storageObject({ status: 'processing' }) }),
+      );
+
+      await expect(service.ask('att-1', USER_ID)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(ai.invoke).not.toHaveBeenCalled();
+    });
+
+    it('refuses media whose processing failed, with a 400', async () => {
+      (prisma.mediaAttachment.findUnique as jest.Mock).mockResolvedValue(
+        attachment({ storageObject: storageObject({ status: 'failed' }) }),
+      );
+
+      await expect(service.ask('att-1', USER_ID)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('answers 404 for a foreign attachment before spending a token', async () => {
+      (prisma.mediaAttachment.findUnique as jest.Mock).mockResolvedValue(
+        attachment({ userId: OTHER_USER_ID }),
+      );
+
+      await expect(service.ask('att-1', USER_ID)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(ai.invoke).not.toHaveBeenCalled();
+    });
+
+    it('calls the media_analyst persona with the purpose’s own instructions', async () => {
+      (prisma.mediaAttachment.findUnique as jest.Mock).mockResolvedValue(
+        attachment({
+          purpose: 'MEAL',
+          kind: 'PHOTO',
+          storageObject: storageObject({ mimeType: 'image/jpeg' }),
+        }),
+      );
+      ai.invoke.mockResolvedValue(okResult);
+      (prisma.mediaAttachment.update as jest.Mock).mockResolvedValue({});
+
+      await service.ask('att-1', USER_ID, 'Is this a decent breakfast?');
+
+      expect(ai.invoke).toHaveBeenCalledWith(
+        expect.objectContaining({
+          persona: 'media_analyst',
+          promptVersion: 'media_analyst.v1',
+          schemaName: 'media_advice',
+          // A photo is one image and is worth reading properly.
+          attachments: [{ storageObjectId: 'obj-1', detail: 'auto' }],
+        }),
+      );
+      expect(ai.invoke.mock.calls[0][0].instructions.toLowerCase()).toContain(
+        'calorie',
+      );
+    });
+
+    it('sends video frames at low detail and names their timestamps', async () => {
+      // Eight frames at full detail is eight times the token cost for a
+      // question about a movement, not a fine detail.
+      (prisma.mediaAttachment.findUnique as jest.Mock).mockResolvedValue(
+        attachment({
+          storageObject: storageObject({
+            metadata: {
+              _processing: {
+                'video-frames': {
+                  frames: [
+                    { objectId: 'f-0', timestampMs: 250 },
+                    { objectId: 'f-1', timestampMs: 750 },
+                  ],
+                  durationMs: 1000,
+                },
+              },
+            },
+          }),
+        }),
+      );
+      ai.invoke.mockResolvedValue(okResult);
+      (prisma.mediaAttachment.update as jest.Mock).mockResolvedValue({});
+
+      await service.ask('att-1', USER_ID);
+
+      const call = ai.invoke.mock.calls[0][0];
+      expect(call.attachments[0].detail).toBe('low');
+      expect(call.input).toContain('0.3 s, 0.8 s');
+    });
+
+    it('persists the advice with its provenance', async () => {
+      (prisma.mediaAttachment.findUnique as jest.Mock).mockResolvedValue(
+        attachment(),
+      );
+      ai.invoke.mockResolvedValue(okResult);
+      (prisma.mediaAttachment.update as jest.Mock).mockResolvedValue({});
+
+      const result = await service.ask('att-1', USER_ID, 'Is my back rounding?');
+
+      expect(result).toMatchObject({ ok: true, invocationId: 'inv-1' });
+      const [{ data }] = (prisma.mediaAttachment.update as jest.Mock).mock
+        .calls[0];
+      expect(data.aiSummary).toMatchObject({
+        summary: 'Your setup looks steady.',
+        question: 'Is my back rounding?',
+        invocationId: 'inv-1',
+        promptVersion: 'media_analyst.v1',
+        model: 'gpt-test',
+      });
+      // Provenance without a join, so "which prompt said this?" is answerable
+      // from the row (PRD §128).
+      expect(typeof data.aiSummary.askedAt).toBe('string');
+    });
+
+    it('returns a provider failure as ok:false and stores NOTHING', async () => {
+      // PRD §120: an exception here would turn "the coach is unavailable" into
+      // "the page is broken", and would also overwrite a good previous answer
+      // with nothing.
+      (prisma.mediaAttachment.findUnique as jest.Mock).mockResolvedValue(
+        attachment(),
+      );
+      ai.invoke.mockResolvedValue({
+        ok: false,
+        error: { code: 'no_user_key', message: 'No key' },
+      });
+
+      const result = await service.ask('att-1', USER_ID);
+
+      expect(result).toEqual({
+        ok: false,
+        error: { code: 'no_user_key', message: 'No key' },
+      });
+      expect(prisma.mediaAttachment.update).not.toHaveBeenCalled();
+      expect(prisma.auditEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'media:ask',
+          meta: expect.objectContaining({ ok: false, errorCode: 'no_user_key' }),
+        }),
+      });
+    });
+
+    it('refuses past the rate limit', async () => {
+      (prisma.mediaAttachment.findUnique as jest.Mock).mockResolvedValue(
+        attachment(),
+      );
+      throttle.check.mockReturnValue({ allowed: false, retryAfterSeconds: 42 });
+
+      await expect(service.ask('att-1', USER_ID)).rejects.toMatchObject({
+        status: 429,
+      });
+      expect(ai.invoke).not.toHaveBeenCalled();
+    });
+
+    it('takes the throttle decision from its own bucket', async () => {
+      // Its own bucket rather than sharing E09's `media_check`: two different
+      // user actions on two different screens, and one starving the other
+      // would look like a bug in whichever the user reached second.
+      (prisma.mediaAttachment.findUnique as jest.Mock).mockResolvedValue(
+        attachment(),
+      );
+      ai.invoke.mockResolvedValue(okResult);
+      (prisma.mediaAttachment.update as jest.Mock).mockResolvedValue({});
+
+      await service.ask('att-1', USER_ID);
+
+      expect(throttle.check).toHaveBeenCalledWith('media_ask', USER_ID);
     });
   });
 });

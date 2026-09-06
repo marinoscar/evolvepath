@@ -734,6 +734,7 @@ through `storage:*_any`.
 - `GET /api/media/attachments/{id}` - One attachment. `processingStatus` collapses storage's five statuses into the three a client can act on (wait / ask / retry), and `media.*` saves every client from reading `_processing` JSON
 - `DELETE /api/media/attachments/{id}` - 204. Removes the attachment, the object and every derived object (frames, AI variant) through `ObjectsService.delete`
 - `GET /api/media/attachments/{id}/preview?variant=&frameIndex=` - Signed URL. `variant` in the **response** says what was actually served: `ai` falls back to the original rather than failing
+- `POST /api/media/attachments/{id}/ask` - The coach's read of this photo or video. **Always 200 on the coaching path**: a provider failure, a missing key, or output that fails the contract is `{ ok: false, error }` (PRD §120), and `no_user_key` is the one the UI answers with a link to `/settings/ai-key`. The 4xx answers are about the MEDIA: 404 foreign, 409 still processing, 400 processing failed, 429 past ten a minute. Persists the validated advice plus its provenance on `aiSummary`
 
 ### Best Self (current user)
 - `GET /api/me/best-self` - The caller's Best Self profile; `data: null` until saved
@@ -1332,7 +1333,9 @@ settings hub and the notification registry each make on their own axis
    caller decides.
 
    Live example of the smallest possible call: `AiAdminTestService`'s connection
-   probe (`apps/api/src/ai/connection-probe.ts`). The `weekly_reviewer` persona
+   probe (`apps/api/src/ai/connection-probe.ts`). Worked example of a **vision**
+   call, with attachments and per-purpose instructions:
+   `MediaAttachmentsService.ask` (`apps/api/src/media/`). The `weekly_reviewer` persona
    is called from exactly one place —
    `apps/api/src/weekly/weekly-review.service.ts` — and is the worked example of
    a caller that branches on `ok: false` into a deterministic template rather

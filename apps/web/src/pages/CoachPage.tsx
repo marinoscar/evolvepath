@@ -10,6 +10,7 @@ import {
   useTheme,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 
 import ConversationList from '../components/coach/ConversationList';
 import ConversationView from '../components/coach/ConversationView';
@@ -110,9 +111,19 @@ export default function CoachPage() {
     if (!conversationId) {
       return (
         <Box sx={{ height: '100%' }}>
-          <Typography variant="h5" component="h1" sx={{ px: 2, pt: 2 }}>
-            Coach
-          </Typography>
+          <Stack
+            direction="row"
+            sx={{ alignItems: 'center', justifyContent: 'space-between', px: 2, pt: 2 }}
+          >
+            <Typography variant="h5" component="h1">
+              Coach
+            </Typography>
+            {/* Epic E03's entry point. One line, so a user who has photographed
+                something can find where the answers live. */}
+            <IconButton aria-label="Media" onClick={() => navigate('/media')}>
+              <PhotoLibraryIcon />
+            </IconButton>
+          </Stack>
           {list}
         </Box>
       );
@@ -145,6 +156,14 @@ export default function CoachPage() {
           overflowY: 'auto',
         }}
       >
+        <Stack
+          direction="row"
+          sx={{ alignItems: 'center', justifyContent: 'flex-end', px: 1, pt: 1 }}
+        >
+          <IconButton aria-label="Media" onClick={() => navigate('/media')}>
+            <PhotoLibraryIcon />
+          </IconButton>
+        </Stack>
         {list}
       </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>{view}</Box>

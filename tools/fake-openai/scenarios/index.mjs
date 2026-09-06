@@ -365,6 +365,62 @@ function mealCheck() {
   };
 }
 
+/**
+ * The generic "ask the coach about this" answer (issue #96, epic E03).
+ *
+ * Two branches, both selected by what the USER TYPED, because that is the only
+ * thing a Playwright spec can influence — the API calls this server, the
+ * browser does not.
+ *
+ * The MEAL branch contains no number of any kind. A photograph of food invites
+ * a calorie count, PRD §46 is the answer to it, and a fixture that quietly
+ * produced one would make the e2e assertion pass against the wrong behaviour.
+ */
+function mediaAdvice(input) {
+  const seekProfessional = /pain|numb|gave way|instability/i.test(input);
+  const meal = /breakfast|meal|plate|eat|food/i.test(input);
+
+  if (seekProfessional) {
+    return {
+      summary: 'Something is happening at the bottom of the movement.',
+      observations: ['The left knee moves inward and the rep stalls.'],
+      advice: ['Stop here for today.'],
+      safetyFlag: {
+        level: 'seek_professional',
+        reason: 'You describe pain, and a joint that gives way under load.',
+      },
+    };
+  }
+
+  if (meal) {
+    return {
+      summary: 'A reasonable plate — there is a protein source and some colour.',
+      observations: [
+        'There is a clear protein source.',
+        'About a third of the plate is vegetables.',
+      ],
+      advice: ['Add something green to the other meals of the day too.'],
+      safetyFlag: { level: 'none', reason: '' },
+    };
+  }
+
+  return {
+    summary: 'Your setup looks steady through the whole rep.',
+    observations: [
+      'Your feet stay under the bar.',
+      'The bar path is close to vertical.',
+    ],
+    advice: [
+      'Brace hard before you unrack.',
+      'Stop one rep before the bar slows down.',
+    ],
+    safetyFlag: {
+      level: 'caution',
+      reason: 'Your back rounds slightly on the last rep.',
+    },
+  };
+}
+
 function progressionExplanation() {
   return {
     sentence: 'Two sessions at the top of the range and comfortable — 22.5 kg today.',
@@ -381,6 +437,7 @@ const SCENARIOS = {
   equipment_check: equipmentCheck,
   meal_check: mealCheck,
   progression_explanation: progressionExplanation,
+  media_advice: mediaAdvice,
 };
 
 /**
