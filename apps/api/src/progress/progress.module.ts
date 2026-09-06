@@ -13,6 +13,8 @@ import { ComebackController } from './comeback/comeback.controller';
 import { ComebackService } from './comeback/comeback.service';
 import { ComebackSweepTask } from './comeback/comeback-sweep.task';
 import { RestartWordingService } from './comeback/restart-wording.service';
+import { MilestonesModule } from './milestones/milestones.module';
+import { TimelineService } from './timeline/timeline.service';
 import { DomainWindowLoader } from './momentum/domain-window.loader';
 import { MomentumService } from './momentum/momentum.service';
 import { ProgressController } from './progress.controller';
@@ -37,6 +39,10 @@ import { ProgressService } from './progress.service';
     // Wording only. The restart itself is chosen by a pure function.
     AiModule,
     ActivityModule,
+    // Its own module, so `CommitmentsModule` can award a milestone the instant
+    // somebody starts something they had moved twice, without importing this
+    // one back (#115).
+    MilestonesModule,
   ],
   controllers: [ProgressController, ComebackController],
   providers: [
@@ -46,8 +52,15 @@ import { ProgressService } from './progress.service';
     ComebackService,
     ComebackSweepTask,
     RestartWordingService,
+    TimelineService,
     { provide: INDEPENDENCE_READER, useClass: NullIndependenceReader },
   ],
-  exports: [MomentumService, ProgressService, ComebackService, ComebackSweepTask],
+  exports: [
+    MomentumService,
+    ProgressService,
+    ComebackService,
+    ComebackSweepTask,
+    TimelineService,
+  ],
 })
 export class ProgressModule {}

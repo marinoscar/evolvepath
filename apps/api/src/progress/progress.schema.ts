@@ -62,11 +62,20 @@ export const weekStatSchema = z.object({
 });
 
 export const milestoneSchema = z.object({
-  id: z.string(),
+  id: z.string().uuid(),
   kind: z.string(),
-  title: z.string(),
+  /** The n-th of a repeatable kind; 1 for the one-off kinds. */
+  sequence: z.number().int(),
+  domain: domainSchema.nullable(),
   achievedAt: z.string().datetime(),
+  /** Null until the user has been shown it — PRD §77 celebrates once. */
+  acknowledgedAt: z.string().datetime().nullable(),
+  title: z.string(),
+  body: z.string(),
+  meta: z.record(z.string(), z.unknown()),
 });
+
+export type MilestonePayload = z.infer<typeof milestoneSchema>;
 
 export const progressResponseSchema = z.object({
   generatedAt: z.string().datetime(),
@@ -90,7 +99,7 @@ export const progressResponseSchema = z.object({
     completedWithoutReminder: z.number().int(),
     sampleSize: z.number().int(),
   }),
-  /** Empty until E11-03 (#115) detects any. */
+  /** The ten most recent, plus everything still unacknowledged (E11-03). */
   milestones: z.array(milestoneSchema),
   /** The caller's confirmed memory insights (E06-05), never the hidden ones. */
   insights: z.array(

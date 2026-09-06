@@ -17,6 +17,7 @@ import {
   type DecompositionProposal,
 } from '../decomposition/decomposition.schema';
 import { ActivityTrackerService } from '../../progress/comeback/activity-tracker.service';
+import { MilestonesService } from '../../progress/milestones/milestones.service';
 import { DecompositionService } from '../decomposition/decomposition.service';
 import type {
   CompleteActionDto,
@@ -63,6 +64,7 @@ export class CommitmentActionsService {
     private readonly commitments: CommitmentsService,
     private readonly decomposition: DecompositionService,
     private readonly activity: ActivityTrackerService,
+    private readonly milestones: MilestonesService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -708,6 +710,11 @@ export class CommitmentActionsService {
    * `record` is detached and swallows its own failures: a comeback offer that
    * is a day early is a kind sentence; a completion that 500s because a
    * bookkeeping write failed is the user's lost work.
+   *
+   * The milestone pass rides here too, and only on the two actions that can
+   * complete one instantly (#115): a start on something moved twice earns
+   * `FIRST_START_AFTER_POSTPONE` before any cron runs, and the tenth workout
+   * should be celebrated on the tenth workout rather than tomorrow at 04:00.
    */
   private async audit(
     userId: string,
@@ -720,5 +727,21 @@ export class CommitmentActionsService {
     });
 
     this.activity.record(userId);
+
+    if (MILESTONE_TRIGGERING_ACTIONS.has(action)) {
+      this.milestones.afterAction(userId);
+    }
   }
 }
+
+/**
+ * The actions that can complete a milestone the moment they happen.
+ *
+ * Not every action: a pause cannot earn anything, and evaluating on all nine
+ * would be eight wasted passes per session.
+ */
+const MILESTONE_TRIGGERING_ACTIONS = new Set([
+  'commitment:start',
+  'commitment:complete',
+  'commitment:partial',
+]);

@@ -10,6 +10,7 @@ import { localWeekBounds } from '../today/local-date';
 import { computeConsistencyRun } from './momentum/consistency-run';
 import type { Domain, MomentumResult } from './momentum/momentum-engine';
 import { WINDOW_DAYS } from './momentum/momentum-engine';
+import { MilestonesService } from './milestones/milestones.service';
 import { MomentumService } from './momentum/momentum.service';
 import { computeRecoveryLatency } from './momentum/recovery-latency';
 import type { MomentumPayload, ProgressResponse } from './progress.schema';
@@ -33,6 +34,7 @@ export class ProgressService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly momentum: MomentumService,
+    private readonly milestones: MilestonesService,
     @Inject(INDEPENDENCE_READER) private readonly independence: IndependenceReader,
   ) {}
 
@@ -43,9 +45,10 @@ export class ProgressService {
     const consistencyRun = computeConsistencyRun(loaded.history, now, loaded.timeZone);
     const recovery = computeRecoveryLatency(loaded.history);
 
-    const [independence, insights] = await Promise.all([
+    const [independence, insights, milestones] = await Promise.all([
       this.independence.read(userId, new Date(now.getTime() - 28 * 86_400_000), now),
       this.confirmedInsights(userId),
+      this.milestones.forProgress(userId),
     ]);
 
     return {
@@ -60,7 +63,7 @@ export class ProgressService {
       consistencyRun,
       recovery,
       independence,
-      milestones: [],
+      milestones,
       insights,
     };
   }

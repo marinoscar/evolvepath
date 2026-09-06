@@ -116,6 +116,13 @@ export class TestAuthController {
     const now = dto.now ? new Date(dto.now) : undefined;
     this.logger.log(`Running job '${dto.job}'${dto.now ? ` at ${dto.now}` : ''}`);
 
+    if (dto.job === 'milestones') {
+      const userId = await this.testAuthService.userIdForEmail(dto.email ?? '');
+      const awarded = await this.comebackSweep.evaluateMilestonesFor(userId, now);
+
+      return { job: dto.job, awarded: awarded.length };
+    }
+
     if (dto.job === 'comeback') {
       // Per-user rather than the whole sweep: a test asserting on one user's
       // offer must not race with the same job writing offers for every other

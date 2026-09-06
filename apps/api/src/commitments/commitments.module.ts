@@ -14,6 +14,7 @@ import { EvidenceService } from './evidence/evidence.service';
 import { ReflectionsController } from './reflections/reflections.controller';
 import { ReflectionsService } from './reflections/reflections.service';
 import { ActivityModule } from '../progress/comeback/activity.module';
+import { MilestonesModule } from '../progress/milestones/milestones.module';
 
 /**
  * The deterministic state machine every later epic mutates: what the user
@@ -48,6 +49,9 @@ import { ActivityModule } from '../progress/comeback/activity.module';
     // "When did this user last do something?" (#112). A two-import module, so
     // depending on it here cannot close a cycle back through ProgressModule.
     ActivityModule,
+    // A milestone must be true the moment the user earns it, not tomorrow at
+    // 04:00 (#115). Its own module, so this import cannot close a cycle.
+    MilestonesModule,
   ],
   controllers: [
     CommitmentsController,

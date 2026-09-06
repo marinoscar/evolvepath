@@ -72,6 +72,8 @@ model User {
   coachConversations  CoachConversation[]  @relation("UserCoachConversations")
   planChangeProposals PlanChangeProposal[] @relation("UserPlanChangeProposals")
   memoryInsights      MemoryInsight[]      @relation("UserMemoryInsights")
+  /// What this user has reached, once each (epic E11).
+  milestones          Milestone[]          @relation("UserMilestones")
   obstacles           Obstacle[]           @relation("UserObstacles")
 
   // The weekly loop (epic E10)
@@ -737,6 +739,63 @@ enum ComebackTrigger {
   REPEATED_MISSES
 
   @@map("comeback_trigger")
+}
+
+/// Something worth marking, once (issue #115, epic E11).
+///
+/// PRD §55's list. Two of these repeat and the rest do not, which is why the
+/// row carries a `sequence` rather than a boolean: the fourth four-week stretch
+/// is a different fact from the first, and "you have hit ten workouts" said
+/// twice is the confetti PRD §77 rules out.
+enum MilestoneKind {
+  FIRST_FULL_WEEK
+  FOUR_WEEKS
+  TEN_WORKOUTS
+  FIRST_COMEBACK
+  /// Dormant until E12 records which completions followed a reminder. The kind
+  /// exists now so the detector, the copy and the timeline are complete; no
+  /// detector can award it while `independence.ratio` is null.
+  REDUCED_REMINDERS
+  FIRST_START_AFTER_POSTPONE
+
+  @@map("milestone_kind")
+}
+
+/// One awarded milestone.
+///
+/// The unique `(user_id, kind, sequence)` index is the whole idempotency story:
+/// the detector runs after every start, every completion, every comeback and
+/// once a day, and `createMany({ skipDuplicates: true })` turns a re-award into
+/// a no-op at the database rather than in a code path somebody could forget.
+model Milestone {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  kind MilestoneKind
+  /// 1 for one-off kinds; n for the n-th FOUR_WEEKS or TEN_WORKOUTS.
+  sequence Int @default(1)
+
+  /// Null for the cross-domain kinds. Reuses E02's `Domain`; there is no second
+  /// copy of it.
+  domain Domain?
+
+  achievedAt DateTime @map("achieved_at") @db.Timestamptz
+
+  /// `{weeks}` | `{count}` | `{commitmentId}`. Ids and counts only — never free
+  /// text, so an operator reading an audit trail learns nothing about the plan.
+  meta Json?
+
+  /// Null until the user has seen it. PRD §77: a celebration is shown once.
+  acknowledgedAt DateTime? @map("acknowledged_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation("UserMilestones", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind, sequence])
+  @@index([userId, achievedAt(sort: Desc)])
+  @@index([userId, acknowledgedAt])
+  @@map("milestones")
 }
 
 model UserProfile {

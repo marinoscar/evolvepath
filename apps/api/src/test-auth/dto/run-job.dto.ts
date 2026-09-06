@@ -19,7 +19,7 @@ const runJobSchema = z.object({
    * ONE ROUTE, ONE ENUM — E11's comeback sweep is added here rather than as a
    * second `jobs/run` route, so a harness keeps learning one shape (#112).
    */
-  job: z.enum(['coaching-notifications', 'comeback']),
+  job: z.enum(['coaching-notifications', 'comeback', 'milestones']),
   now: z.iso.datetime().optional(),
   /**
    * Which user to run a per-user job for. Required by `comeback`, which sweeps

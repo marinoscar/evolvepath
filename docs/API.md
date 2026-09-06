@@ -2853,7 +2853,11 @@ path; a user reads their own Progress or nobody's.
   },
   "recovery": { "medianDays": 1.5, "samples": 4 },
   "independence": { "ratio": null, "completedWithoutReminder": 0, "sampleSize": 0 },
-  "milestones": [],
+  "milestones": [
+    { "id": "…", "kind": "FIRST_COMEBACK", "sequence": 1, "domain": null,
+      "achievedAt": "2026-03-05T18:00:00.000Z", "acknowledgedAt": null,
+      "title": "First comeback", "body": "You returned.", "meta": {} }
+  ],
   "insights": [
     { "id": "9c1…", "category": "PATTERN", "statement": "Mornings work better than evenings" }
   ]
@@ -2895,9 +2899,115 @@ followed a reminder. Null rather than zero, so a client can say "available once
 notifications learn your rhythm" instead of reporting a failure that has not
 been measured.
 
+---
+
+#### GET /progress/timeline
+**Requires Authentication** — what actually happened, newest first.
+
+Query: `from` (default `now − 28d`), `to` (default now), `domain`, `limit`
+(1–200, default 100), `cursor`. A range over **186 days** is a 400
+`RANGE_TOO_LARGE`, not a silent truncation: a client asking for two years is
+asking the wrong question, and quietly answering six months of it would look
+like the user's history had a hole in it.
+
+```json
+{
+  "items": [
+    { "id": "…", "at": "2026-03-05T07:42:00.000Z", "kind": "started_after_postpone", "significance": "notable",
+      "domain": "WORK", "title": "Started the proposal after 2 postponements", "detail": null,
+      "commitmentId": "…", "milestoneId": null },
+    { "id": "…", "at": "2026-03-04T19:10:00.000Z", "kind": "family_kept", "significance": "notable",
+      "domain": "FAMILY", "title": "Protected family dinner", "detail": null, "commitmentId": "…", "milestoneId": null },
+    { "id": "…", "at": "2026-03-04T07:05:00.000Z", "kind": "completed_fallback", "significance": "ordinary",
+      "domain": "HEALTH", "title": "Completed Upper A — minimum version", "detail": null, "commitmentId": "…", "milestoneId": null }
+  ],
+  "nextCursor": "MjAyNi0wMy0wNFQwNzowNTowMC4wMDBafGU3"
+}
+```
+
+**The mapping is a whitelist, not a rename.** PRD §76 asks for *meaningful*
+events. The evidence table also records `paused`, `continued`, `rescheduled` and
+`fallback_selected`; a timeline showing them would be a log rather than a story
+("paused at 14:32, continued at 14:41" is true and tells the user nothing they
+want to know about themselves). A row with no rule below produces no event.
+
+| Source row | `kind` | `significance` | Title |
+|---|---|---|---|
+| `completed` evidence | `completed` | ordinary | "Completed {title}" |
+| …with `versionUsed` SHORT/MINIMUM | `completed_fallback` | ordinary | "Completed {title} — minimum version" |
+| …in FAMILY | `family_kept` | notable | "Protected {title}" |
+| `partially_completed` evidence | `partially_completed` | ordinary | "Made progress on {title}" |
+| `started` evidence, `rescheduleCount ≥ 2` | `started_after_postpone` | notable | "Started {title} after {n} postponements" |
+| a success ending a run of misses in its domain | `returned_after_miss` | notable | "Returned to {Domain} plan after {k} missed" |
+| `plan:change_accepted` audit row | `plan_change_accepted` | notable | "Plan updated to v{n}" (detail = the version's rationale) |
+| `recovery` evidence | `comeback_completed` | notable | "Back on Path" |
+| a `milestones` row | `milestone` | milestone | the milestone's own copy |
+
+A **fallback completion is a completion** (PRD §44) — labelled, never
+diminished. A FAMILY completion is "protected", never "completed": VISION §12 is
+clear the family domain is not a scoreboard.
+
+`significance` is a property of the payload rather than of the API, so
+"significant" has one definition instead of one per screen. PRD §77's "avoid
+constant confetti": a client shows a `milestone` once as a toast, highlights a
+`notable`, and renders an `ordinary` plainly.
+
+The plan-change rationale is **joined from `plan_versions`, not copied into the
+audit meta** — PRD §80's reason belongs to the plan, and a second copy is the one
+that goes stale after an edit.
+
+Pagination is a `base64url` cursor of `at|id`. Ordering is newest-first with
+ties broken by id, which is what lets it promise no duplicates and no gaps.
+
+---
+
+#### GET /progress/milestones
+**Requires Authentication** — newest first, at most 50.
+`?unacknowledged=true` returns only what the user has not been shown yet.
+
+```json
+{
+  "items": [
+    { "id": "…", "kind": "TEN_WORKOUTS", "sequence": 2, "domain": "HEALTH",
+      "achievedAt": "2026-03-05T07:42:00.000Z", "acknowledgedAt": null,
+      "title": "20 workouts completed", "body": "Thirty days ago those were intentions.",
+      "meta": { "count": 20 } }
+  ]
+}
+```
+
+The six kinds (PRD §55), and when each is awarded:
+
+| Kind | Repeats | Awarded when |
+|---|---|---|
+| `FIRST_FULL_WEEK` | no | any week has ever succeeded |
+| `FOUR_WEEKS` | yes, `sequence n` | the consistency run reaches `4n` weeks |
+| `TEN_WORKOUTS` | yes, `sequence n` | `10n` HEALTH workout completions |
+| `FIRST_COMEBACK` | no | the first `recovery` evidence row |
+| `FIRST_START_AFTER_POSTPONE` | no | a start on something moved twice or more |
+| `REDUCED_REMINDERS` | no | independence ≥ 0.7 over ≥ 10 samples — **dormant until epic E12** measures it |
+
+`sequence` is why the two repeatable kinds are not booleans: the fourth
+four-week stretch is a genuinely different fact from the first, while "ten
+workouts" said twice is the confetti PRD §77 rules out. The unique
+`(user_id, kind, sequence)` index is the idempotency — the detector runs after
+every start, every completion, every comeback and once a day, and
+`createMany({ skipDuplicates: true })` turns a re-award into a no-op at the
+database rather than in a code path somebody could forget.
+
+`REDUCED_REMINDERS` cannot fire while `independence.ratio` is `null`, which it
+is until E12-06 supplies the reader. The kind exists now so the detector, the
+copy and the timeline are complete; no flag is needed to keep it quiet.
+
+#### POST /progress/milestones/{id}/ack
+**Requires Authentication** — marks it seen, so it is celebrated once. Idempotent;
+a foreign or unknown id answers 404, identically.
+
 | Status | Code | When |
 |--------|------|------|
+| 400 | `BAD_REQUEST` | `RANGE_TOO_LARGE` (over 186 days) or `BAD_CURSOR`. |
 | 401 | `UNAUTHORIZED` | No bearer token, or an expired one. |
+| 404 | `NOT_FOUND` | The milestone is unknown **or** belongs to another user. |
 
 ---
 
@@ -2985,7 +3095,7 @@ route; there is deliberately no comeback-specific timer.
 {
   "celebration": { "title": "Back on Path.", "body": "The important part was not that you missed. It was that you returned." },
   "evidenceId": "…",
-  "milestone": null,
+  "milestone": { "kind": "FIRST_COMEBACK", "…": "on the first return only, else null" },
   "nextCommitment": { "…": "a CommitmentCard, or null" },
   "planReviewSuggested": false
 }
