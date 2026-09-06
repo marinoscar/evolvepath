@@ -334,6 +334,43 @@ is truncated) and the pixel baseline.
 
 ---
 
+## 5b. Route gates
+
+Three questions, three layout routes, one order — declared in
+`apps/web/src/App.tsx` and each answered by exactly one component:
+
+| Order | Component | Question | Redirects to |
+|---|---|---|---|
+| 1 | `ProtectedRoute` | Is anyone signed in? | `/login` |
+| 2 | `RequireAiKey` (#29) | Do they have an OpenAI key? | `/setup/ai-key` |
+| 3 | `RequireOnboarding` (#106) | Do they have a first Path? | `/onboarding` |
+
+Exempt from all three below their own level: `/activate` (approving a device is
+a credential operation with nothing to do with AI or with a plan),
+`/setup/ai-key` (gate 2's own destination), and `/onboarding` (gate 3's own
+destination — it sits **inside** gate 2, because step 8 of the wizard asks the
+coach for a plan).
+
+Three consequences worth stating, because each is a decision rather than a
+side effect:
+
+- **`/settings/ai-key` is inside both gates.** An un-onboarded user manages
+  their key at `/setup/ai-key`; removing a key from the settings page sends
+  them back to setup, which is what that page's confirm dialog says will
+  happen.
+- **Admins are gated too — no role exemption.** An admin who has not onboarded
+  is still a user of the product, and `/admin/*` is as empty for them as Today.
+- **`NotificationProvider` stays inside gate 3**, so no SSE stream is opened
+  for a user still in the wizard. That is the one-mount-point rule in
+  `App.tsx` doing real work rather than being decoration.
+
+Gating is **UX, not authorization**. Every API route remains independently
+authorised; deleting any of the three would make the app confusing, not
+insecure. `docs/specs/onboarding.md` §Gating describes gate 3 from the
+onboarding side.
+
+---
+
 ## 6. Rejected alternatives
 
 **A tab strip per area.** Rejected: no per-section URL to link or bookmark, no
