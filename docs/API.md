@@ -538,6 +538,10 @@ and `@Auth()` — the job acts on real data across all users, so it needs a call
 { "job": "coaching-notifications", "now": "2026-09-08T18:00:00.000Z" }
 ```
 
+```json
+{ "job": "comeback", "email": "momentum@test.local" }
+```
+
 `now` simulates the clock. Every rule the coaching engine enforces is about time
 ("starts in twenty minutes", "inside quiet hours", "already sent today"), so a
 test that could only run at the real `now` would have to seed data relative to
@@ -553,7 +557,45 @@ not a test double of it.
 `skipped: true` means another run was already in progress and this one did
 nothing.
 
+`comeback` (epic E11) runs the inactivity sweep for **one named user** rather
+than everybody: a suite asserting on one user's offer must not race with the
+same job writing offers for every other seeded account. Its response is
+`{ job, closedCount, trigger, comebackState }`.
+
 Later epics add their jobs to the same enum rather than adding a second route.
+
+---
+
+#### POST /auth/test/simulate-idle
+
+Makes a user look as though they went quiet, so the comeback loop (epic E11) can
+be driven in a second instead of over four days. Non-production only, and
+`@Public()` like `login` above — it names the user by email, so an e2e can call
+it before it has a token.
+
+**Request:**
+
+```json
+{ "email": "momentum@test.local", "idleDays": 4 }
+```
+
+**Response 201:**
+
+```json
+{ "data": { "userId": "9c1…", "shiftedCommitments": 12, "shiftedEvidence": 7, "lastActiveAt": "2026-09-02T18:00:00.000Z" } }
+```
+
+**Why shift data rather than travel in time.** Every rule the comeback loop
+enforces is about elapsed time — three days of silence, four misses in a week,
+scheduled before the start of local today. A global clock seam would have to
+reach every service the sweep touches, and a test that moved it would be
+exercising a code path production never runs. Moving the user's own rows
+backwards instead — `last_active_at`, every commitment timestamp and every
+evidence timestamp, all by the same interval, so relative distances survive —
+keeps the sweep, the detector and the momentum engine running against the real
+clock, which is what the suite is meant to prove works.
+
+`idleDays` is 1–60. An unknown email is a **404**, not a silent no-op.
 
 ### Users
 
@@ -2856,6 +2898,130 @@ been measured.
 | Status | Code | When |
 |--------|------|------|
 | 401 | `UNAUTHORIZED` | No bearer token, or an expired one. |
+
+---
+
+### Comeback
+
+Returning after a pause (epic E11). PRD §56–§57, §109, §136; VISION §32–§33.
+
+**There is no route here that reports what the user missed, and there never
+should be.** That is the feature, not an omission. A person who disappears for
+four days is not met by a red overdue list: the sweep turns stale intentions
+into history, and this section offers exactly one small thing to do next.
+
+The sweep runs daily at 04:00 and **changes commitment status only** — every
+`evidence_items` row is left exactly as it was. Prior misses remain evidence
+(PRD §109); closing an intention is not editing a history. A `STARTED` row is
+never closed, because the transition matrix has no `STARTED → MISSED` and should
+not: something you began and did not finish is `PARTIALLY_COMPLETED` or
+`SKIPPED`, and only the user knows which.
+
+---
+
+#### GET /comeback
+**Requires Authentication** — the caller's own open loop.
+
+```json
+{
+  "state": "OFFERED",
+  "trigger": "INACTIVITY",
+  "offeredAt": "2026-09-06T04:00:00.000Z",
+  "idleDays": 4,
+  "closedCount": 3,
+  "planReviewSuggested": false,
+  "restart": { "id": "…", "title": "12-minute bodyweight circuit", "…": "a CommitmentCard" },
+  "recommendation": { "domain": "HEALTH", "reason": "You were keeping health going before the pause, so it is the easiest to rebuild." },
+  "alternatives": [
+    { "domain": "WORK", "title": "Morning focus block", "minutes": 10 }
+  ],
+  "wording": { "note": "No catching up. We start from today." }
+}
+```
+
+When `state` is `NONE`, everything but `state` and `planReviewSuggested` is null
+or empty. `closedCount` is a **count**, never a list.
+
+**How the one restart is chosen** — a pure function, in this order:
+
+1. Domains in `PAUSE` are excluded outright. The user put them down deliberately.
+2. Highest outcome importance.
+3. Tie → the domain with the most recent completion. VISION §32 rebuilds what was
+   already working; a return is not the moment to introduce a new habit.
+4. Tie → the fixed order `HEALTH, WORK, FAMILY`.
+
+The title is the routine's own fallback wording where it has one, and the
+duration is clamped to **10–15 minutes** — small enough to be winnable on the
+first day. A user with no active routine still gets an offer: a ten-minute walk,
+which needs no plan behind it.
+
+The coach may reword the title and note (`coach` persona, prompt version
+`comeback-restart.v1`). It never chooses the behaviour, the domain or the
+duration — those are already decided when it is called. Its output is checked
+against a banned-word list (`overdue`, `behind`, `failed`, `streak`, and
+"catching up" without its negation) and discarded whole on a match. Asking a
+model not to shame somebody is a request; checking is a guarantee, and the
+deterministic copy ships on every provider outage.
+
+---
+
+#### POST /comeback/choose
+**Requires Authentication** — `{ "domain": "WORK" }`. Cancels the offered
+restart through the transition matrix and creates one for the named domain.
+Returns the same `ComebackStatus`.
+
+- 409 `NO_COMEBACK_OFFER` when nothing is open
+- 400 `NO_RESTART_IN_DOMAIN` when that domain has no active routine to rebuild
+
+#### POST /comeback/start
+**Requires Authentication** — marks the loop `IN_PROGRESS`. The client then
+navigates to `/start/<restart.id>`, which is the ordinary full-screen execution
+route; there is deliberately no comeback-specific timer.
+
+#### POST /comeback/complete
+**Requires Authentication** — `{ "notes": "…" }` (optional).
+
+```json
+{
+  "celebration": { "title": "Back on Path.", "body": "The important part was not that you missed. It was that you returned." },
+  "evidenceId": "…",
+  "milestone": null,
+  "nextCommitment": { "…": "a CommitmentCard, or null" },
+  "planReviewSuggested": false
+}
+```
+
+The restart is completed through the ordinary commitment action service, so it
+earns the same `completed` evidence and audit row any other completion does — a
+comeback is a real thing the user did, not a special case in the history. One
+`recovery` row (`source: APP_FLOW`) is then written on top of it.
+
+**Idempotent by refusal**: a second call is a 409 `NO_COMEBACK_OFFER`, never a
+second recovery row.
+
+#### POST /comeback/dismiss
+**Requires Authentication** — 204. PRD §127: the user is allowed to decline being
+helped. Cancels the restart row and closes the loop; the next sweep may offer
+again.
+
+---
+
+**`planReviewSuggested`** is raised when the misses look like plan drift rather
+than a bad week — four or more misses in fourteen days, or five or more rows
+closed by one sweep. It is a **flag and a link**, never a plan change: PRD §15
+means nothing in this module writes a `PlanVersion`.
+
+**What counts as activity** (and so resets the three-day clock): a commitment
+acted on, evidence logged, a check-in, a day reflection, a coaching turn.
+Opening the app is not activity. PRD §57 counts behaviour, because a person who
+opens the app every morning and does nothing has not been active in any sense
+worth protecting them from a kind sentence over.
+
+| Status | Code | When |
+|--------|------|------|
+| 401 | `UNAUTHORIZED` | No bearer token, or an expired one. |
+| 400 | `BAD_REQUEST` | Zod rejected the body, or `NO_RESTART_IN_DOMAIN`. |
+| 409 | `CONFLICT` with `details.reason = "NO_COMEBACK_OFFER"` | There is no open loop. |
 
 ---
 

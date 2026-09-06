@@ -1352,6 +1352,48 @@ which runs **the same `runOnce` the cron calls**, not a stand-in. The optional
 happens "at the scheduled start" without sleeping. It returns
 `{ scanned, sent, suppressed, skipped }`.
 
+### Driving the comeback loop locally (epic E11)
+
+The inactivity sweep runs daily at 04:00 and its trigger is three days of
+silence, so neither the cron nor the real clock is any use to a test. Two
+non-production hooks stand in for both:
+
+```bash
+# 1. Make the user look as though they went quiet four days ago.
+curl -X POST -H 'content-type: application/json' \
+  -d '{"email":"momentum@test.local","idleDays":4}' \
+  http://localhost:3535/api/auth/test/simulate-idle
+
+# 2. Run the REAL sweep for that user, now.
+curl -X POST -H "Authorization: Bearer $T" -H 'content-type: application/json' \
+  -d '{"job":"comeback","email":"momentum@test.local"}' \
+  http://localhost:3535/api/auth/test/run-job
+# → {"job":"comeback","closedCount":3,"trigger":"INACTIVITY","comebackState":"OFFERED"}
+```
+
+`simulate-idle` shifts `last_active_at` and **every one of that user's
+commitment and evidence timestamps** backwards by the same interval, so relative
+distances survive and the sweep sees a coherent history rather than a doctored
+one. It is deliberately not a clock seam: a global `now` would have to reach
+every service the sweep touches, and a test that moved it would be exercising a
+code path production never runs.
+
+`run-job comeback` sweeps **one named user** rather than everybody, so a case
+asserting on one offer cannot race the same job writing offers for every other
+seeded account.
+
+Then check the two things the epic is actually about:
+
+```bash
+# No overdue flood: nothing PLANNED or READY survives before today.
+curl -s -H "Authorization: Bearer $T" \
+  "http://localhost:3535/api/commitments?from=<30d ago>&to=<start of today>&status=PLANNED,READY" \
+  | jq '.data | length'   # → 0
+
+# History untouched: the evidence count is identical before and after the sweep.
+psql … -c "SELECT count(*) FROM evidence_items;"
+```
+
 Twelve cases on both projects, covering PRD §108's acceptance list: the reminder
 → deep link → Start → completion path with its `SENT`/`OPENED`/`ACTIONED` rows;
 one decision per commitment however often the job runs; `ALREADY_DONE`,
