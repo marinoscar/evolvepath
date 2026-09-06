@@ -11,6 +11,13 @@ import type { AuthProvider as AuthProviderType } from '../../types';
 
 interface WrapperOptions {
   route?: string;
+  /**
+   * Router location state for the initial entry (epic E11, #119).
+   *
+   * `StartFlowPage` reads `state.returnTo` to decide where a finished session
+   * goes; without this a spec could only exercise the default.
+   */
+  routeState?: unknown;
   theme?: 'light' | 'dark';
   authenticated?: boolean;
   user?: MockUser | null;
@@ -115,6 +122,7 @@ function MockAuthProvider({
 function createWrapper(options: WrapperOptions = {}) {
   const {
     route = '/',
+    routeState,
     authenticated = true,
     user = mockUser,
     isLoading = false,
@@ -123,7 +131,9 @@ function createWrapper(options: WrapperOptions = {}) {
 
   return function Wrapper({ children }: { children: ReactNode }) {
     return (
-      <MemoryRouter initialEntries={[route]}>
+      <MemoryRouter
+        initialEntries={[routeState === undefined ? route : { pathname: route, state: routeState }]}
+      >
         <ThemeContextProvider>
           <CssBaseline />
           <MockAuthProvider

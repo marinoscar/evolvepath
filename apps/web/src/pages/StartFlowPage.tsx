@@ -11,7 +11,7 @@ import {
   Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { recordNotificationInteraction } from '../services/api';
 import {
   parseSentInteractionId,
@@ -48,6 +48,8 @@ export default function StartFlowPage() {
   const { commitmentId } = useParams<{ commitmentId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = (location.state as { returnTo?: string } | null)?.returnTo ?? '/';
   const session = useStartSession(commitmentId);
 
   /**
@@ -183,7 +185,11 @@ export default function StartFlowPage() {
 
     if (!card) return;
 
-    navigate('/', {
+    // Where a finished session goes. Defaults to Today, which is every existing
+    // caller and every deep link; the comeback flow (#119) sets it to its own
+    // celebration screen. A one-line generalisation rather than a second copy
+    // of this page.
+    navigate(returnTo, {
       replace: true,
       state: {
         toast: `Recorded: ${card.minutesSpent ?? 0} minutes on ${card.title}`,

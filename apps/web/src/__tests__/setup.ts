@@ -9,6 +9,7 @@ import { resetMediaMocks } from './mocks/mediaHandlers';
 import { resetWorkoutState } from './mocks/workoutHandlers';
 import { resetMemoryState } from './mocks/memoryHandlers';
 import { resetPathState } from './mocks/pathHandlers';
+import { resetComebackState } from './mocks/comebackHandlers';
 import { resetProgressState } from './mocks/progressHandlers';
 import { resetTodayState } from './mocks/todayHandlers';
 import { resetWeeklyState } from './mocks/weeklyHandlers';
@@ -242,6 +243,7 @@ afterEach(() => {
   resetMemoryState();
   resetTodayState();
   resetProgressState();
+  resetComebackState();
   resetWeeklyState();
   resetViewportWidth();
   mediaQueryListRegistry.clear();
